@@ -3,4 +3,43 @@
 @source not "./tailwindcss";
 @source not "./daisyui{,*}.mjs";
 
-@plugin "./daisyui.mjs";
+
+@plugin "./daisyui-theme.mjs" {
+  name: "resortease-light";
+  default: true;
+  prefersdark: false;
+  color-scheme: "light";
+  --color-base-100: #F7F5F8;
+  --color-base-200: #E5FCF5;
+  --color-base-300: #E1DDE3;
+  --color-base-content: oklch(20% 0 0);
+  --color-primary: #27233A;
+  --color-primary-content: oklch(96% 0.016 293.756);
+  --color-secondary: #949F5F;
+  --color-secondary-content: oklch(97% 0.013 236.62);
+  --color-accent: #3A2E39;
+  --color-accent-content: oklch(98% 0.019 200.873);
+  --color-neutral: #070707;
+  --color-neutral-content: oklch(98% 0 0);
+  --color-info: #1446A0;
+  --color-info-content: oklch(97% 0.014 254.604);
+  --color-success: #4CB944;
+  --color-success-content: oklch(98% 0.014 180.72);
+  --color-warning: #FFBC42;
+  --color-warning-content: oklch(14% 0 0);
+  --color-error: #A50104;
+  --color-error-content: oklch(98% 0.019 200.873);
+  --radius-selector: 0rem;
+  --radius-field: 0.25rem;
+  --radius-box: 2rem;
+  --size-selector: 0.3125rem;
+  --size-field: 0.21875rem;
+  --border: 1.5px;
+  --depth: 0;
+  --noise: 0;
+}
+
+
+@plugin "./daisyui.mjs" {
+     themes: "resortease-light" --default;
+};

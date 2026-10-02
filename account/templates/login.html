@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% load static %}
+    <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
+    <title>ResortEase | Login</title>
+</head>
+<body>
+    <main class="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
+      <div class="flex w-full max-w-sm flex-col gap-6">
+        <a href="/" class="font-bold flex items-center gap-2 self-center">
+          ResortEase
+        </a>
+        
+        <section class="card max-w-96 bg-base-100 bg-base-200 shadow-sm">
+          <div class="card-body">
+            <div class="w-full text-center">
+              <h1 class="text-2xl font-bold">
+                Welcome Back
+              </h1>
+              <p class="py-2">
+                Login with your Google or Email account
+              </p>
+
+              <button class="btn btn-active btn-primary w-full mt-5">
+                <img src="{% static 'icon/google-color-svgrepo-com.svg' %}" alt="Google Icon" class="mr-2 h-5 w-5" />
+                Login with Google
+              </button>
+            </div>
+            <div class="divider">Or continue with</div>
+            <form class="flex flex-col gap-4" action="/login/" method="post">
+              {% csrf_token %}
+              <fieldset class="fieldset">
+                <label class="label" for="username">Username</label>
+                <input type="text" id="username" name="username" class="input w-full" />
+              </fieldset>
+
+              <fieldset class="fieldset">
+                <label class="label flex justify-between" for="password">
+                  Password
+
+                  <a href="/forgot-password" class="label-text-alt link link-hover">
+                    Forgot password?
+                  </a>
+                </label>
+                <input type="password" id="password" name="password" class="input w-full"/>
+              </fieldset>
+
+              <button type="submit" class="btn btn-active btn-secondary w-full mt-5">
+                Login
+              </button>
+            </form>
+
+            <p class="text-center text-sm text-muted-foreground">
+              Don't have an account? 
+              <a class="link" href='/create-account'>Sign up</a>
+            </p>
+          </div>
+          
+        </section>
+
+        <div class="px-6 text-center text-sm">
+          By clicking login, you agree to our <a href="#" class="link">Terms of Service</a>
+          and <a href="#" class="link">Privacy Policy</a>.
+        </div>
+      </div>
+    </main>
+
+    {% if error %}
+      <div class="toast">
+        <div role="alert" class="alert alert-error">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>{{ error }}</span>
+        </div>
+      </div>
+
+      <script>
+        setTimeout(() => {
+          const toast = document.querySelector('.toast');
+          if (toast) {
+            toast.remove();
+          }
+        }, 5000);
+      </script>
+    {% endif %}
+</body>
+</html>
