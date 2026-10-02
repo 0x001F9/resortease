@@ -1,5 +1,3 @@
-import secrets
-
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.db import models
 from django.core.validators import RegexValidator
@@ -13,7 +11,7 @@ UsernameValidator = RegexValidator(
 )
 
 NameValidator = RegexValidator(
-    regex=r'^[a-zA-Z]+$',
+    regex=r'^[a-zA-Z ]+$',
     message="Invalid name."
 )
 
@@ -28,20 +26,23 @@ PhoneNumberCodeValidator = RegexValidator(
 )
 
 class UserManager(BaseUserManager):
-    def create_user(self, email, password=None, **extra):
-        user = self.model(email=self.normalize_email(email), **extra)
+    def create_user(self, email, first_name: str, last_name: str, password=None, **extra):
+        first_name = first_name.strip().title()
+        last_name = last_name.strip().title()
+
+        user = self.model(email=self.normalize_email(email), first_name=first_name, last_name=last_name, **extra)
         user.set_password(password)
         user.save(using=self._db)
 
         return user
     
-    def create_superuser(self, email, password=None, **extra):
+    def create_superuser(self, email, first_name: str, last_name: str, password=None, **extra):
         extra.setdefault('is_staff', True)
         extra.setdefault('is_superuser', True)
         extra.setdefault('is_active', True)
         extra.setdefault('role', User.Role.Employee)
 
-        return self.create_user(email=email,  password=password, **extra)
+        return self.create_user(email=email,  password=password, first_name=first_name, last_name=last_name, **extra)
 
 class User(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
@@ -67,9 +68,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     middle_name = models.CharField(max_length=100, validators=[NameValidator])
     last_name = models.CharField(max_length=100, validators=[NameValidator])
 
-    totp_secret = models.CharField(max_length=255, null=True)
-    is_2fa_enabled = models.BooleanField(null=False, default=False)
-
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -90,36 +88,3 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     class Meta:
         db_table = "users"
-
-# mfa session table
-class MFASession(models.Model):
-    class TypeMFA(models.TextChoices):
-        Email = "email", "Email"
-        TOTP = "totp", "TOTP"
-
-    class PurposeMFA(models.TextChoices):
-        Login = "login", "Login"
-        ResetPassword = "reset-password", "Reset Password"
-        ChangeEmail = "change-email", "Change Email"
-        ChangePhoneNumber = "change-phone-number", "Change Phone Number"
-        Sudo = "sudo", "Sudo"
-    
-    id = models.BigAutoField(primary_key=True)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    session = models.CharField(max_length=255, unique=True)
-    type = models.CharField(max_length=10, choices=TypeMFA.choices)
-    purpose = models.CharField(max_length=30, choices=PurposeMFA.choices)
-    mfa_code = models.CharField(max_length=6)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(default=timezone.now() + timedelta(minutes=5))
-    
-    class Meta:
-        db_table = "mfa_sessions"
-
-    def generate_mfa_code():
-        import secrets, string
-        digits = string.digits 
-        return ''.join(secrets.choice(digits) for _ in range(6))
-
-    

@@ -3,15 +3,20 @@ import secrets
 from django.shortcuts import render, redirect
 from django.views import View
 from django.contrib.auth import authenticate, login
-from account.models import MFASession, User
 from account.models import UsernameValidator
 from django.core.exceptions import ValidationError
 
 class LoginView(View):
     def get(self, request):
+        if request.user.is_authenticated:
+            return redirect('/')
+
         return render(request, 'login.html')
 
     def post(self, request):
+        if request.user.is_authenticated:
+            return redirect('/')
+
         username = request.POST.get('username')
         password = request.POST.get('password')
 
@@ -31,17 +36,6 @@ class LoginView(View):
         if user is None:
             return render(request, 'login.html', {'error': 'Invalid username or password.'}, status=401)
 
-        if not user.is_2fa_enabled:
-            login(request, user)
-            return redirect('/')
+        login(request, user)
 
-        # if user has 2fa enabled:
-        mfa = MFASession.objects.create(
-            user=user,
-            type=MFASession.TypeMFA.Email,
-            purpose=MFASession.PurposeMFA.Login,
-            session=secrets.token_urlsafe(32),
-            mfa_code=MFASession.generate_mfa_code()
-        )
-        
-        return redirect('/verify_mfa/' + mfa.session)
+        return redirect('/')
