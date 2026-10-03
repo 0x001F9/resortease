@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title|default:"ResortEase Dashboard" }}</title>
+    {% load static %}
+    <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
+    
+</head>
+<body>
+    {% block content %}
+    Default content
+    {% endblock %}
+</body>
+</html>

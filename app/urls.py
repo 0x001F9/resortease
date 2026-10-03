@@ -9,4 +9,5 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("login/", LoginView.as_view(), name="login"),
     path("account/", include("account.urls")),
+    path("dashboard/", include("dashboard.urls"))
 ]
