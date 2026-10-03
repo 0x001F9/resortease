@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title|default:"ResortEase" }}</title>
+    {% load static %}
+    <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
+</head>
+<body>
+    <header class='flex justify-between items-center p-4'>
+        <div class='flex items-center'>
+            <h1 class='text-xl font-bold'>
+                <a href="/" class='text-blue-500 hover:text-blue-700'>
+                    ResortEase
+                </a>
+            </h1>
+        </div>
+
+        <div class='flex items-center justify-end gap-2 text-sm'>
+            {% if user.is_authenticated %}
+                <div class="dropdown dropdown-end">
+                    <div class="avatar" role="button" tabindex="0">
+                        <div class="ring-primary ring-offset-base-100 w-[30px] rounded-full ring-1 ring-offset-2">
+                            <img alt="User" src="https://img.daisyui.com/images/profile/demo/spiderperson@192.webp" />
+                        </div>
+                    </div>
+                    <ul tabindex="-1" class="rounded-md mt-2 dropdown-content menu bg-base-200 rounded-box z-1 w-52 shadow-sm">
+                        {% if request.user.is_superuser %}
+                            <li><a href="/admin">Admin</a></li>
+                        {% endif %}
+                        
+                        {% if not request.user.is_normal_user %}
+                            <li><a href="/dashboard">Dashboard</a></li>
+                        {% endif %}
+
+                        <li><a>History</a></li>
+                        <li><a>Reservations</a></li>
+                        <li><a>Inquiry</a></li>
+
+                        <li><a>Settings</a></li>
+                        <form action="/account/logout/" method="post">
+                            {% csrf_token %}
+                            <li><button type="submit">Logout</button></li>
+                        </form>
+                    </ul>
+                </div>
+            {% else %}
+                <a href="/login" class='text-sm'>
+                    Sign In
+                </a>
+                <a href="/inquiry" class='btn btn-primary rounded-full'>
+                    Inquiry
+                </a>
+            {% endif %}
+        </div>
+    </header>
+    {% block content %}
+    Default content
+    {% endblock %}
+
+    <footer class='flex justify-center items-center p-4 py-8'>
+        &copy; 2026 ResortEase. All rights reserved.
+    </footer>
+</body>
+</html>

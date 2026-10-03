@@ -88,3 +88,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     class Meta:
         db_table = "users"
+
+    @property
+    def is_normal_user(self):
+        return self.role == self.Role.User

@@ -1,13 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    {% load static %}
-    <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
-</head>
-<body class="p-10">
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="p-10">
     <div class="collapse collapse-arrow bg-base-100 border border-base-300">
         <input type="radio" name="my-accordion-2" checked="checked" />
         <div class="collapse-title font-semibold">How do I create an account?</div>
@@ -23,5 +17,5 @@
         <div class="collapse-title font-semibold">How do I update my profile information?</div>
         <div class="collapse-content text-sm">Go to "My Account" settings and select "Edit Profile" to make changes.</div>
     </div>
-</body>
-</html>
+</main>
+{% endblock %}

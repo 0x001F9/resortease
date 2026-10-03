@@ -21,15 +21,9 @@
                 Welcome Back
               </h1>
               <p class="py-2">
-                Login with your Google or Email account
+                Login with your Email account
               </p>
-
-              <button class="btn btn-active btn-primary w-full mt-5">
-                <img src="{% static 'icon/google-color-svgrepo-com.svg' %}" alt="Google Icon" class="mr-2 h-5 w-5" />
-                Login with Google
-              </button>
             </div>
-            <div class="divider">Or continue with</div>
             <form class="flex flex-col gap-4" action="/login/" method="post">
               {% csrf_token %}
               <fieldset class="fieldset">
