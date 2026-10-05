@@ -6,10 +6,10 @@
     <title>{{ title|default:"ResortEase Dashboard" }}</title>
     {% load static %}
     <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
-    
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"></script>
 </head>
-<body>
-    <header class='flex justify-between items-center p-4 fixed w-full bg-white'>
+<body class="overflow-x-hidden">
+    <header class='flex justify-between items-center p-4 fixed w-full bg-white z-3'>
         <div class='flex items-center justify-center gap-2'>
             <button class="btn btn-ghost w-8 box-border p-1 md:hidden" id="open-aside">
                 <img
@@ -24,10 +24,16 @@
             </h1>
             <div class="divider md:divider-horizontal"></div>
 
-            <select class="select appearance-none select-sm bg-secondary text-white border-0 hidden md:block">
+            <select class="branch-select select appearance-none select-sm bg-secondary text-white border-0 hidden md:block">
                 <option disabled>Branch</option>
-                <option selected>Antipolo Branch</option>
-                <option>Cainta Branch</option>
+                {% for branch in request.branches %}
+                    <option
+                        {% if branch.slug == request.branch.slug %} selected {% endif %}
+                        value="{{ branch.slug }}"
+                    >
+                        {{ branch.name }}
+                    </option>
+                {% endfor %}
             </select>
         </div>
 
@@ -64,7 +70,7 @@
 
     <div class="flex">
         <aside 
-            class="duration-1000 bg-base-200 h-svh p-4 md:pt-22 md:max-w-60 md:w-full w-screen fixed md:static top-0 left-[-100vw]"
+            class="duration-1000 bg-base-200 h-svh p-4 md:pt-22 md:max-w-60 md:w-full w-screen fixed md:static top-0 left-[-100vw] z-50 md:z-0"
         >
             <div class="md:hidden mb-3 flex items-center">
                 <button class="btn btn-ghost w-8 box-border p-0 mr-3 md:hidden" id="close-aside">
@@ -74,39 +80,55 @@
                     />
                 </button>
 
-                <select class="select appearance-none select-sm w-full bg-secondary text-white border-0 md:hidden">
+                <select class="branch-select select appearance-none select-sm w-full bg-secondary text-white border-0 md:hidden">
                     <option disabled>Branch</option>
-                    <option selected>Antipolo Branch</option>
-                    <option>Cainta Branch</option>
+                    {% for branch in request.branches %}
+                        <option
+                            {% if branch.slug == request.branch.slug %} selected {% endif %}
+                            value="{{ branch.slug }}"
+                        >
+                            {{ branch.name }}
+                        </option>
+                    {% endfor %}
                 </select>
             </div>
 
             <p class="label block text-[12px] mb-3">
                 RESORT OPERATIONS
             </p>
+            {% url 'dashboard' request.branch.slug as dashboard_url %}
 
             <div class="flex flex-col gap-2">
-                <button class="btn w-full btn-active justify-start btn-primary">
-                    Dashboard
-                </button>
-                
-                <button class="btn w-full justify-start">
-                    Reservations & Bookings
-                </button>
-                
-                <button class="btn w-full justify-start">
-                    Inventory
-                </button>
-                
-                <button class="btn w-full justify-start">
-                    Facilities
-                </button>
+                <a href="/dashboard/{{ request.branch.slug }}/" class="aside-anchor">
+                    <button class="btn w-full justify-start">
+                        Dashboard
+                    </button>
+                </a>
+
+                <a class="aside-anchor">
+                    <button class="btn w-full justify-start">
+                        Reservations & Bookings
+                    </button>
+                </a>
+
+                <a class="aside-anchor">
+                    <button class="btn w-full justify-start">
+                        Inventory
+                    </button>
+                </a>
+
+                <a href="/dashboard/{{ request.branch.slug }}/facilities-and-maintenance/" class="aside-anchor">
+                     <button class="btn w-full justify-start">
+                        Facilities & Maintenance
+                    </button>
+                </a>
             </div>
         </aside>
-
-        {% block content %}
-        Default content
-        {% endblock %}
+        <div class="pt-22 flex-1">
+            {% block content %}
+            Default content
+            {% endblock %}
+        </div>
     </div>
 
     <script>
@@ -121,6 +143,18 @@
         close_button.onclick = () => {
             aside.style.left = '-100vw'
         }
+
+        document.querySelectorAll('.branch-select').forEach((select) => {
+            select.addEventListener('change', () => {
+                window.location.href = `/dashboard/${encodeURIComponent(select.value)}/facilities-and-maintenance/`
+            })
+        })
+
+        document.querySelectorAll('a.aside-anchor[href]').forEach((anchor) => {
+            if (anchor.pathname === window.location.pathname) {
+                anchor.querySelector('button')?.classList.add('btn-active', 'btn-primary')
+            }
+        })
     </script>
 </body>
 </html>

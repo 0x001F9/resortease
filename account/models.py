@@ -65,7 +65,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     avatar_url = models.CharField(max_length=255, null=True)
     first_name = models.CharField(max_length=100, validators=[NameValidator])
-    middle_name = models.CharField(max_length=100, validators=[NameValidator])
+    middle_name = models.CharField(max_length=100, null=True, validators=[NameValidator])
     last_name = models.CharField(max_length=100, validators=[NameValidator])
 
     updated_at = models.DateTimeField(auto_now=True)
@@ -92,3 +92,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_normal_user(self):
         return self.role == self.Role.User
+
+    @property
+    def is_user_superuser(self):
+        return self.role != self.Role.User and self.is_superuser
