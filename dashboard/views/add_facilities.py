@@ -16,6 +16,7 @@ class AddFacilitiesMaintenanceView(View):
             ).order_by("name"),
             "form_data": form_data or {},
             "errors": errors or {},
+            "hide_aside": True
         }
 
     def get(self, request):
@@ -42,6 +43,7 @@ class AddFacilitiesMaintenanceView(View):
             "description": request.POST.get("description", "").strip(),
         }
         errors = {}
+        
 
         if facility is None:
             errors["facility"] = "Select a facility in this branch."

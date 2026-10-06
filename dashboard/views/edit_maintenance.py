@@ -50,6 +50,7 @@ class EditFacilitiesMaintenanceView(View):
                 "status": maintenance.status,
             },
             "errors": {},
+            "hide_aside": True
         }
 
     def get(self, request, branch, maintenance_id):

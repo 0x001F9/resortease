@@ -1,0 +1,116 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-4xl">
+        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <a
+                href="/dashboard/{{ branch.slug }}/facilities-and-maintenance/"
+                class="btn btn-ghost btn-sm self-start"
+            >
+                <span aria-hidden="true">&larr;</span>
+                Facilities &amp; Maintenance
+            </a>
+            {% if can_manage or can_edit_details %}
+                <a
+                    href="/dashboard/{{ branch.slug }}/maintenance/{{ maintenance.pk }}/edit/"
+                    class="btn btn-primary btn-sm"
+                >
+                    Edit request
+                </a>
+            {% endif %}
+        </div>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-6 p-5 sm:p-8">
+                <header class="flex flex-col gap-4 border-b border-base-300 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-wide text-primary">
+                            Maintenance request #{{ maintenance.pk }}
+                        </p>
+                        <h1 class="mt-1 text-2xl font-bold sm:text-3xl">{{ maintenance.title }}</h1>
+                        <p class="mt-2 text-sm text-base-content/70">
+                            {{ maintenance.facility.name }} &middot; {{ branch.name }}
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <span class="badge badge-lg badge-outline">{{ maintenance.get_status_display }}</span>
+                        <span class="badge badge-lg badge-primary">{{ maintenance.get_priority_display }} priority</span>
+                    </div>
+                </header>
+
+                <section aria-labelledby="request-details-heading">
+                    <h2 id="request-details-heading" class="mb-3 text-lg font-semibold">Request details</h2>
+                    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div class="rounded-box bg-base-200 p-4">
+                            <dt class="text-sm text-base-content/65">Issue type</dt>
+                            <dd class="mt-1 font-medium">{{ maintenance.issue_type }}</dd>
+                        </div>
+                        <div class="rounded-box bg-base-200 p-4">
+                            <dt class="text-sm text-base-content/65">Facility</dt>
+                            <dd class="mt-1 font-medium">{{ maintenance.facility.name }}</dd>
+                            <dd class="text-sm text-base-content/70">
+                                {{ maintenance.facility.get_facility_type_display }}
+                                &middot;
+                                {{ maintenance.facility.get_status_display }}
+                            </dd>
+                        </div>
+                        <div class="rounded-box bg-base-200 p-4 sm:col-span-2">
+                            <dt class="text-sm text-base-content/65">Description</dt>
+                            <dd class="mt-1 whitespace-pre-line">{{ maintenance.description }}</dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <section aria-labelledby="request-timeline-heading">
+                    <h2 id="request-timeline-heading" class="mb-3 text-lg font-semibold">People &amp; timeline</h2>
+                    <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div class="rounded-box border border-base-300 p-4">
+                            <dt class="text-sm text-base-content/65">Issued by</dt>
+                            <dd class="mt-1 font-medium">
+                                {% if maintenance.issued_by %}
+                                    {% if maintenance.issued_by.first_name or maintenance.issued_by.last_name %}
+                                        {{ maintenance.issued_by.first_name }} {{ maintenance.issued_by.last_name }}
+                                    {% else %}
+                                        {{ maintenance.issued_by.username }}
+                                    {% endif %}
+                                {% else %}
+                                    Former user
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div class="rounded-box border border-base-300 p-4">
+                            <dt class="text-sm text-base-content/65">Reported</dt>
+                            <dd class="mt-1 font-medium">{{ maintenance.reported_at|date:"M j, Y, g:i a" }}</dd>
+                        </div>
+                        <div class="rounded-box border border-base-300 p-4">
+                            <dt class="text-sm text-base-content/65">Scheduled for</dt>
+                            <dd class="mt-1 font-medium">
+                                {% if maintenance.scheduled_for %}
+                                    {{ maintenance.scheduled_for|date:"M j, Y, g:i a" }}
+                                {% else %}
+                                    Not scheduled
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div class="rounded-box border border-base-300 p-4">
+                            <dt class="text-sm text-base-content/65">Completed</dt>
+                            <dd class="mt-1 font-medium">
+                                {% if maintenance.completed_at %}
+                                    {{ maintenance.completed_at|date:"M j, Y, g:i a" }}
+                                {% else %}
+                                    Not completed
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div class="rounded-box border border-base-300 p-4 sm:col-span-2">
+                            <dt class="text-sm text-base-content/65">Last updated</dt>
+                            <dd class="mt-1 font-medium">{{ maintenance.updated_at|date:"M j, Y, g:i a" }}</dd>
+                        </div>
+                    </dl>
+                </section>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

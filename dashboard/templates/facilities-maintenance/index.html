@@ -77,18 +77,31 @@
                     <th>Facility</th>
                     <th>Type</th>
                     <th>Issued by</th>
-                        <th>Status</th>
-                        <th>Priority</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
                 {% for issue in maintenance %}
                     <tr class="{% cycle 'bg-base-200' '' %}">
-                        <td>{{ issue.title }}</td>
+                        <td>
+                            <a
+                                href="/dashboard/{{ request.branch.slug }}/maintenance/{{ issue.pk }}/"
+                                class="link link-hover font-medium"
+                            >
+                                {{ issue.title }}
+                            </a>
+                        </td>
                         <td>{{ issue.facility.name }}</td>
                         <td>{{ issue.issue_type }}</td>
-                        <td>{{ issue.issued_by.username }}</td>
+                        <td>
+                            {% if issue.issued_by %}
+                                {{ issue.issued_by.username }}
+                            {% else %}
+                                Former user
+                            {% endif %}
+                        </td>
                         <td>{{ issue.get_status_display }}</td>
                         <td>{{ issue.get_priority_display }}</td>
                         <td>
@@ -103,7 +116,7 @@
                 {% empty %}
                     <tr><td colspan="7">No maintenance requests found.</td></tr>
                 {% endfor %}
-                </tbody>
+            </tbody>
         </table>
     </div>
 </main>
