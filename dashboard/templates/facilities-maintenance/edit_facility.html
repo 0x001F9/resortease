@@ -1,0 +1,129 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-3xl">
+        <a
+            href="/dashboard/{{ branch.slug }}/{{ facility.slug }}/"
+            class="btn btn-ghost btn-sm mb-4"
+        >
+            <span aria-hidden="true">&larr;</span>
+            Back to {{ facility.name }}
+        </a>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-5 p-5 sm:p-8">
+                <header>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">
+                        {{ branch.name }}
+                    </p>
+                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Edit facility details</h1>
+                    <p class="mt-2 text-sm text-base-content/70">
+                        Update the facility information and operational status.
+                    </p>
+                </header>
+
+                {% if errors %}
+                    <div role="alert" class="alert alert-error">
+                        <span>Please review the highlighted fields and try again.</span>
+                    </div>
+                {% endif %}
+
+                <form method="post" class="space-y-5">
+                    {% csrf_token %}
+
+                    <label class="form-control w-full">
+                        <span class="label">
+                            <span class="label-text font-medium">Facility name <span class="text-error">*</span></span>
+                        </span>
+                        <input
+                            type="text"
+                            name="name"
+                            value="{{ form_data.name }}"
+                            maxlength="150"
+                            required
+                            class="input input-bordered w-full {% if errors.name %}input-error{% endif %}"
+                        >
+                        {% if errors.name %}<span class="mt-1 text-sm text-error">{{ errors.name }}</span>{% endif %}
+                    </label>
+
+                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Facility type <span class="text-error">*</span></span>
+                            </span>
+                            <select
+                                name="facility_type"
+                                required
+                                class="select select-bordered w-full {% if errors.facility_type %}select-error{% endif %}"
+                            >
+                                {% for value, label in facility_types %}
+                                    <option value="{{ value }}" {% if form_data.facility_type == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.facility_type %}<span class="mt-1 text-sm text-error">{{ errors.facility_type }}</span>{% endif %}
+                        </label>
+
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Status <span class="text-error">*</span></span>
+                            </span>
+                            <select
+                                name="status"
+                                required
+                                class="select select-bordered w-full {% if errors.status %}select-error{% endif %}"
+                            >
+                                {% for value, label in facility_statuses %}
+                                    <option value="{{ value }}" {% if form_data.status == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.status %}<span class="mt-1 text-sm text-error">{{ errors.status }}</span>{% endif %}
+                        </label>
+                    </div>
+
+                    <label class="form-control w-full">
+                        <span class="label">
+                            <span class="label-text font-medium">Capacity <span class="text-error">*</span></span>
+                        </span>
+                        <input
+                            type="number"
+                            name="capacity"
+                            value="{{ form_data.capacity }}"
+                            min="0"
+                            max="2147483647"
+                            required
+                            class="input input-bordered w-full {% if errors.capacity %}input-error{% endif %}"
+                        >
+                        {% if errors.capacity %}<span class="mt-1 text-sm text-error">{{ errors.capacity }}</span>{% endif %}
+                    </label>
+
+                    <label class="form-control w-full">
+                        <span class="label"><span class="label-text font-medium">Description</span></span>
+                        <textarea
+                            name="description"
+                            rows="4"
+                            class="textarea textarea-bordered w-full"
+                        >{{ form_data.description }}</textarea>
+                    </label>
+
+                    <label class="form-control w-full">
+                        <span class="label"><span class="label-text font-medium">Notes</span></span>
+                        <textarea
+                            name="notes"
+                            rows="4"
+                            class="textarea textarea-bordered w-full"
+                        >{{ form_data.notes }}</textarea>
+                    </label>
+
+                    <div class="flex flex-col-reverse gap-3 border-t border-base-300 pt-5 sm:flex-row sm:justify-end">
+                        <a href="/dashboard/{{ branch.slug }}/{{ facility.slug }}/" class="btn btn-ghost">
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">Save changes</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

@@ -3,13 +3,19 @@
 {% block content %}
 <main class="px-4 py-6 sm:px-6 lg:px-8">
     <div class="mx-auto w-full max-w-5xl">
-        <div class="mb-5">
+        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
             <a
                 href="/dashboard/{{ branch.slug }}/facilities-and-maintenance/"
                 class="btn btn-ghost btn-sm"
             >
                 <span aria-hidden="true">&larr;</span>
                 Facilities &amp; Maintenance
+            </a>
+            <a
+                href="/dashboard/{{ branch.slug }}/{{ facility.slug }}/edit/"
+                class="btn btn-outline btn-sm"
+            >
+                Edit facility
             </a>
         </div>
 
