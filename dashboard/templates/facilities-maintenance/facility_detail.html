@@ -1,0 +1,116 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-5xl">
+        <div class="mb-5">
+            <a
+                href="/dashboard/{{ branch.slug }}/facilities-and-maintenance/"
+                class="btn btn-ghost btn-sm"
+            >
+                <span aria-hidden="true">&larr;</span>
+                Facilities &amp; Maintenance
+            </a>
+        </div>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-6 p-5 sm:p-8">
+                <header class="flex flex-col gap-4 border-b border-base-300 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-wide text-primary">
+                            {{ branch.name }}
+                        </p>
+                        <h1 class="mt-1 text-2xl font-bold sm:text-3xl">{{ facility.name }}</h1>
+                        {% if facility.description %}
+                            <p class="mt-2 max-w-2xl text-base-content/70">{{ facility.description }}</p>
+                        {% endif %}
+                    </div>
+                    <span class="badge badge-lg badge-outline">{{ facility.get_status_display }}</span>
+                </header>
+
+                <dl class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div class="rounded-box bg-base-200 p-4">
+                        <dt class="text-sm text-base-content/65">Capacity</dt>
+                        <dd class="mt-1 text-xl font-semibold">{{ facility.capacity }}</dd>
+                    </div>
+                    <div class="rounded-box bg-base-200 p-4">
+                        <dt class="text-sm text-base-content/65">Total revenue</dt>
+                        <dd class="mt-1 text-xl font-semibold">${{ total_revenue|floatformat:2 }}</dd>
+                    </div>
+                    <div class="rounded-box bg-base-200 p-4">
+                        <dt class="text-sm text-base-content/65">Repair requests</dt>
+                        <dd class="mt-1 text-xl font-semibold">{{ repairs|length }}</dd>
+                    </div>
+                </dl>
+
+                {% if facility.notes %}
+                    <section aria-labelledby="facility-notes-heading">
+                        <h2 id="facility-notes-heading" class="mb-2 text-lg font-semibold">Facility notes</h2>
+                        <p class="whitespace-pre-line text-base-content/80">{{ facility.notes }}</p>
+                    </section>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="mt-8" aria-labelledby="repair-history-heading">
+            <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                    <h2 id="repair-history-heading" class="text-2xl font-bold">Repair history</h2>
+                    <p class="mt-1 text-sm text-base-content/70">
+                        Maintenance requests and repairs recorded for this facility.
+                    </p>
+                </div>
+                <a href="/dashboard/{{ branch.slug }}/add-maintenance/" class="btn btn-primary btn-sm">
+                    Add maintenance request
+                </a>
+            </div>
+
+            <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Request</th>
+                            <th>Type</th>
+                            <th>Reported</th>
+                            <th>Completed</th>
+                            <th>Status</th>
+                            <th>Priority</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for repair in repairs %}
+                            <tr class="{% cycle 'bg-base-200' '' %}">
+                                <td>
+                                    <a
+                                        href="/dashboard/{{ branch.slug }}/maintenance/{{ repair.pk }}/"
+                                        class="link link-hover font-medium"
+                                    >
+                                        {{ repair.title }}
+                                    </a>
+                                </td>
+                                <td>{{ repair.issue_type }}</td>
+                                <td>{{ repair.reported_at|date:"M j, Y" }}</td>
+                                <td>
+                                    {% if repair.completed_at %}
+                                        {{ repair.completed_at|date:"M j, Y" }}
+                                    {% else %}
+                                        &mdash;
+                                    {% endif %}
+                                </td>
+                                <td><span class="badge badge-outline">{{ repair.get_status_display }}</span></td>
+                                <td>{{ repair.get_priority_display }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="6" class="py-8 text-center text-base-content/65">
+                                    No repair history has been recorded for this facility.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}
