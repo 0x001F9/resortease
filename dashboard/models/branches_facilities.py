@@ -21,6 +21,7 @@ class Branch(models.Model):
             ]
         }
     )
+    image_url = models.CharField(max_length=255, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

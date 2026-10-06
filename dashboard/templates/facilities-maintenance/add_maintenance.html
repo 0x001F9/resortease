@@ -1,0 +1,155 @@
+{% extends "../partials/layout.html" %}
+{% load static %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-3xl">
+        <a
+            href="/dashboard/{{ request.branch.slug }}/facilities-and-maintenance/"
+            class="btn btn-ghost btn-sm mb-4"
+        >
+            <span aria-hidden="true">&larr;</span>
+            Facilities &amp; Maintenance
+        </a>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-5 p-5 sm:p-8">
+                <header>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">
+                        Facilities &amp; Maintenance
+                    </p>
+                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Add maintenance request</h1>
+                    <p class="mt-2 text-sm text-base-content/70">
+                        Record an issue so your team can review and schedule the work.
+                    </p>
+                </header>
+
+                {% if not facilities %}
+                    <div role="alert" class="alert alert-warning">
+                        <span>No facilities are available for this branch. Add a facility before creating a maintenance request.</span>
+                    </div>
+                {% endif %}
+
+                <form method="post" class="space-y-5">
+                    {% csrf_token %}
+
+                    {% if errors %}
+                        <div role="alert" class="alert alert-error">
+                            <span>Please review the highlighted fields and try again.</span>
+                        </div>
+                    {% endif %}
+
+                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Facility <span class="text-error">*</span></span>
+                            </span>
+                            <select
+                                name="facility"
+                                class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}"
+                                required
+                                {% if not facilities %}disabled{% endif %}
+                            >
+                                <option value="" disabled {% if not form_data.facility %}selected{% endif %}>
+                                    Choose a facility
+                                </option>
+                                {% for facility in facilities %}
+                                    <option value="{{ facility.pk }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>
+                                        {{ facility.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.facility %}
+                                <span class="mt-1 text-sm text-error">{{ errors.facility }}</span>
+                            {% endif %}
+                        </label>
+
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Priority <span class="text-error">*</span></span>
+                            </span>
+                            <select name="priority" class="select select-bordered w-full {% if errors.priority %}select-error{% endif %}" required>
+                                <option value="low" {% if form_data.priority == "low" %}selected{% endif %}>Low</option>
+                                <option value="medium" {% if not form_data.priority or form_data.priority == "medium" %}selected{% endif %}>Medium</option>
+                                <option value="high" {% if form_data.priority == "high" %}selected{% endif %}>High</option>
+                                <option value="urgent" {% if form_data.priority == "urgent" %}selected{% endif %}>Urgent</option>
+                            </select>
+                            {% if errors.priority %}
+                                <span class="mt-1 text-sm text-error">{{ errors.priority }}</span>
+                            {% endif %}
+                        </label>
+                    </div>
+
+                    <label class="form-control w-full">
+                        <span class="label">
+                            <span class="label-text font-medium">Request title <span class="text-error">*</span></span>
+                        </span>
+                        <input
+                            type="text"
+                            name="title"
+                            maxlength="200"
+                            value="{{ form_data.title|default:'' }}"
+                            placeholder="e.g. Repair pool pump"
+                            class="input input-bordered w-full {% if errors.title %}input-error{% endif %}"
+                            required
+                        />
+                        {% if errors.title %}
+                            <span class="mt-1 text-sm text-error">{{ errors.title }}</span>
+                        {% endif %}
+                    </label>
+
+                    <label class="form-control w-full">
+                        <span class="label">
+                            <span class="label-text font-medium">Issue type <span class="text-error">*</span></span>
+                        </span>
+                        <input
+                            type="text"
+                            name="issue_type"
+                            maxlength="80"
+                            value="{{ form_data.issue_type|default:'' }}"
+                            placeholder="e.g. Plumbing, electrical, equipment"
+                            class="input input-bordered w-full {% if errors.issue_type %}input-error{% endif %}"
+                            required
+                        />
+                        {% if errors.issue_type %}
+                            <span class="mt-1 text-sm text-error">{{ errors.issue_type }}</span>
+                        {% endif %}
+                    </label>
+
+                    <label class="form-control w-full">
+                        <span class="label">
+                            <span class="label-text font-medium">Description <span class="text-error">*</span></span>
+                        </span>
+                        <textarea
+                            name="description"
+                            rows="5"
+                            placeholder="Describe the problem and any details that may help the maintenance team."
+                            class="textarea textarea-bordered w-full {% if errors.description %}textarea-error{% endif %}"
+                            required
+                        >{{ form_data.description|default:'' }}</textarea>
+                        {% if errors.description %}
+                            <span class="mt-1 text-sm text-error">{{ errors.description }}</span>
+                        {% endif %}
+                    </label>
+
+                    <div class="card-actions flex-col-reverse justify-end gap-3 border-t border-base-300 pt-5 sm:flex-row">
+                        <a
+                            href="/dashboard/{{ request.branch.slug }}/facilities-and-maintenance/"
+                            class="btn btn-ghost w-full sm:w-auto"
+                        >
+                            Cancel
+                        </a>
+                        <button
+                            type="submit"
+                            class="btn btn-primary w-full sm:w-auto"
+                            {% if not facilities %}disabled{% endif %}
+                        >
+                            Create request
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

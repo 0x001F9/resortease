@@ -20,5 +20,7 @@ class FacilitiesMaintenanceView(View):
             {
                 "facilities": facilities,
                 "facilities_count": len(facilities),
+                "maintenance": maintenance,
+                "maintenance_pending_count": maintenance.filter(status="pending").count()
             }
         )

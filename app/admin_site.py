@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.shortcuts import redirect
-from dashboard.models.branches_facilities import Branch, Facility
+from dashboard.models.branches_facilities import Branch, Facility, Maintenance
 
 class SuperUserAdmin(admin.AdminSite):
     def has_permission(self, request):
@@ -18,3 +18,4 @@ for model, model_admin in admin.site._registry.items():
 admin_site.register(get_user_model())
 admin_site.register(Branch)
 admin_site.register(Facility)
+admin_site.register(Maintenance)
