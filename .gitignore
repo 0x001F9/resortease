@@ -20,7 +20,9 @@ local_settings.py
 *.sqlite3
 *.db
 
+
 # Django media and static collected assets
+**/migrations/
 media/
 staticfiles/
 app/static/dist/

@@ -1,0 +1,193 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="p-4 md:p-6">
+    <div class="mb-6">
+        <p class="text-sm text-base-content/60">{{ request.branch.name }}</p>
+        <h1 class="text-3xl font-bold">Reservations &amp; Calendar</h1>
+        <p class="mt-1 text-base-content/70">Review guest reservations and facility availability.</p>
+        <a href="{% url 'create-reservation' request.branch.slug %}" class="btn btn-primary mt-4">
+            Create reservation
+        </a>
+    </div>
+
+    <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Reservation summary">
+        <article class="card bg-base-100 shadow-sm">
+            <div class="card-body p-5">
+                <h2 class="text-sm text-base-content/60">Total reservations</h2>
+                <p class="text-2xl font-bold">{{ total_reservations }}</p>
+            </div>
+        </article>
+        <article class="card bg-base-100 shadow-sm">
+            <div class="card-body p-5">
+                <h2 class="text-sm text-base-content/60">Awaiting confirmation</h2>
+                <p class="text-2xl font-bold">{{ pending_reservations }}</p>
+            </div>
+        </article>
+        <article class="card bg-base-100 shadow-sm">
+            <div class="card-body p-5">
+                <h2 class="text-sm text-base-content/60">Calendar bookings</h2>
+                <p class="text-2xl font-bold">{{ total_bookings }}</p>
+            </div>
+        </article>
+        <article class="card bg-base-100 shadow-sm">
+            <div class="card-body p-5">
+                <h2 class="text-sm text-base-content/60">Payments received (PHP)</h2>
+                <p class="text-2xl font-bold">₱{{ revenue|floatformat:2 }}</p>
+            </div>
+        </article>
+    </section>
+
+    <section class="mt-8 rounded-box border border-base-content/10 bg-base-100" aria-label="Facility calendar">
+        <div class="flex items-center justify-between border-b border-base-content/10 p-4">
+            <a
+                class="btn btn-ghost btn-sm"
+                href="?month={{ previous_month|date:'Y-m' }}&amp;q={{ search_query|urlencode }}&amp;status={{ selected_status|urlencode }}"
+                aria-label="Previous month"
+            >&larr; <span class="hidden sm:inline">Previous</span></a>
+            <h2 class="text-lg font-semibold">{{ calendar_month|date:"F Y" }}</h2>
+            <a
+                class="btn btn-ghost btn-sm"
+                href="?month={{ next_month|date:'Y-m' }}&amp;q={{ search_query|urlencode }}&amp;status={{ selected_status|urlencode }}"
+                aria-label="Next month"
+            ><span class="hidden sm:inline">Next</span> &rarr;</a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="table table-fixed">
+                <thead>
+                    <tr>
+                        <th class="text-center">Mon</th>
+                        <th class="text-center">Tue</th>
+                        <th class="text-center">Wed</th>
+                        <th class="text-center">Thu</th>
+                        <th class="text-center">Fri</th>
+                        <th class="text-center">Sat</th>
+                        <th class="text-center">Sun</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for week in weeks %}
+                        <tr>
+                            {% for day in week %}
+                                <td class="h-28 min-w-24 align-top {% if day.is_today %}bg-primary/5{% endif %}">
+                                    {% if day %}
+                                        <div class="mb-1 text-right">
+                                            <span class="{% if day.is_today %}badge badge-primary badge-sm{% endif %}">{{ day.date|date:"j" }}</span>
+                                        </div>
+                                        <div class="flex flex-col gap-1">
+                                            {% for entry in day.entries|slice:":3" %}
+                                                <div class="truncate rounded {% if entry.is_unavailable %}bg-error/20{% else %}bg-secondary/20{% endif %} px-1 py-0.5 text-xs" title="{{ entry.facility.name }}">
+                                                    {% if entry.is_unavailable %}
+                                                        Unavailable: {{ entry.facility.name }}
+                                                    {% else %}
+                                                        {{ entry.reservation.guest.first_name }} {{ entry.reservation.guest.last_name }}
+                                                    {% endif %}
+                                                </div>
+                                            {% endfor %}
+                                            {% if day.entries|length > 3 %}
+                                                <span class="text-xs text-base-content/60">+{{ day.entries|length|add:"-3" }} more</span>
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="mt-8 rounded-box border border-base-content/10 bg-base-100">
+        <div class="flex flex-col gap-4 border-b border-base-content/10 p-4 md:flex-row md:items-center md:justify-between">
+            <form method="get" class="flex flex-col gap-2 sm:flex-row">
+                <label class="input input-bordered flex items-center gap-2">
+                    <span class="sr-only">Search reservations</span>
+                    <input
+                        type="search"
+                        name="q"
+                        value="{{ search_query }}"
+                        placeholder="Guest, facility or reference"
+                        class="grow"
+                    >
+                </label>
+                <label>
+                    <span class="sr-only">Filter by status</span>
+                    <select name="status" class="select select-bordered w-full sm:w-auto">
+                        <option value="">All statuses</option>
+                        {% for value, label in status_choices %}
+                            <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <button class="btn btn-primary" type="submit">Apply</button>
+            </form>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Guest</th>
+                        <th>Facility</th>
+                        <th>Stay</th>
+                        <th>Party</th>
+                        <th>Booking reference</th>
+                        <th>Reservation status</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reservation in reservations %}
+                        <tr class="{% cycle 'bg-base-200' '' %}">
+                            <td>
+                                <div class="font-medium">{{ reservation.guest.first_name }} {{ reservation.guest.last_name }}</div>
+                                <div class="text-sm text-base-content/60">{{ reservation.guest.email }}</div>
+                            </td>
+                            <td>
+                                {% if reservation.facility %}
+                                    {{ reservation.facility.name }}
+                                {% else %}
+                                    <span class="text-base-content/60">Facility removed</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div>{{ reservation.starts_at|date:"M j, Y" }}</div>
+                                <div class="text-sm text-base-content/60">to {{ reservation.ends_at|date:"M j, Y" }}</div>
+                            </td>
+                            <td>{{ reservation.party_size }}</td>
+                            <td>
+                                {% if reservation.calendar_entry %}
+                                    <span class="font-mono text-sm">{{ reservation.calendar_entry.booking_reference|truncatechars:13 }}</span>
+                                {% else %}
+                                    <span class="text-base-content/50">Not booked</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge badge-warning">{{ reservation.get_status_display }}</span>
+                            </td>
+                            <td class="text-right">
+                                {% if reservation.calendar_entry.has_amount %}
+                                    ₱{{ reservation.calendar_entry.total_amount|floatformat:2 }}
+                                {% else %}
+                                    &mdash;
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="py-12 text-center text-base-content/60">
+                                {% if search_query or selected_status %}
+                                    No matching reservations found. Try changing your search or filters.
+                                {% else %}
+                                    There are no reservations for this branch yet.
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+{% endblock %}

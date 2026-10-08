@@ -1,0 +1,189 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-3xl">
+        <a
+            href="{% url 'reservations' request.branch.slug %}"
+            class="btn btn-ghost btn-sm mb-4"
+        >
+            <span aria-hidden="true">&larr;</span>
+            Reservations
+        </a>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-5 p-5 sm:p-8">
+                <header>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">
+                        {{ request.branch.name }}
+                    </p>
+                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Create reservation</h1>
+                    <p class="mt-2 text-sm text-base-content/70">
+                        Confirmed reservations are added to the calendar as bookings.
+                    </p>
+                </header>
+
+                {% if not facilities %}
+                    <div role="alert" class="alert alert-warning">
+                        <span>No facilities are available for this branch. Add a facility before creating a reservation.</span>
+                    </div>
+                {% endif %}
+                {% if not guests %}
+                    <div role="alert" class="alert alert-warning">
+                        <span>No active guest accounts are available to reserve.</span>
+                    </div>
+                {% endif %}
+
+                <form method="post" class="space-y-5">
+                    {% csrf_token %}
+
+                    {% if errors %}
+                        <div role="alert" class="alert alert-error">
+                            <span>Please review the highlighted fields and try again.</span>
+                        </div>
+                    {% endif %}
+
+                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Guest <span class="text-error">*</span></span>
+                            </span>
+                            <select
+                                name="guest"
+                                class="select select-bordered w-full {% if errors.guest %}select-error{% endif %}"
+                                required
+                                {% if not guests %}disabled{% endif %}
+                            >
+                                <option value="" disabled {% if not form_data.guest %}selected{% endif %}>
+                                    Choose a guest
+                                </option>
+                                {% for guest in guests %}
+                                    <option value="{{ guest.pk }}" {% if form_data.guest == guest.pk|stringformat:"s" %}selected{% endif %}>
+                                        {{ guest.first_name }} {{ guest.last_name }} ({{ guest.email }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.guest %}
+                                <span class="mt-1 text-sm text-error">{{ errors.guest }}</span>
+                            {% endif %}
+                        </label>
+
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Facility <span class="text-error">*</span></span>
+                            </span>
+                            <select
+                                name="facility"
+                                class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}"
+                                required
+                                {% if not facilities %}disabled{% endif %}
+                            >
+                                <option value="" disabled {% if not form_data.facility %}selected{% endif %}>
+                                    Choose a facility
+                                </option>
+                                {% for facility in facilities %}
+                                    <option value="{{ facility.pk }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>
+                                        {{ facility.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.facility %}
+                                <span class="mt-1 text-sm text-error">{{ errors.facility }}</span>
+                            {% endif %}
+                        </label>
+
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Starts <span class="text-error">*</span></span>
+                            </span>
+                            <input
+                                type="datetime-local"
+                                name="starts_at"
+                                value="{{ form_data.starts_at|default:'' }}"
+                                class="input input-bordered w-full {% if errors.starts_at %}input-error{% endif %}"
+                                required
+                            >
+                            {% if errors.starts_at %}
+                                <span class="mt-1 text-sm text-error">{{ errors.starts_at }}</span>
+                            {% endif %}
+                        </label>
+
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Ends <span class="text-error">*</span></span>
+                            </span>
+                            <input
+                                type="datetime-local"
+                                name="ends_at"
+                                value="{{ form_data.ends_at|default:'' }}"
+                                class="input input-bordered w-full {% if errors.ends_at %}input-error{% endif %}"
+                                required
+                            >
+                            {% if errors.ends_at %}
+                                <span class="mt-1 text-sm text-error">{{ errors.ends_at }}</span>
+                            {% endif %}
+                        </label>
+
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Party size <span class="text-error">*</span></span>
+                            </span>
+                            <input
+                                type="number"
+                                name="party_size"
+                                min="1"
+                                value="{{ form_data.party_size|default:'1' }}"
+                                class="input input-bordered w-full {% if errors.party_size %}input-error{% endif %}"
+                                required
+                            >
+                            {% if errors.party_size %}
+                                <span class="mt-1 text-sm text-error">{{ errors.party_size }}</span>
+                            {% endif %}
+                        </label>
+
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Status</span>
+                            </span>
+                            <select name="status" class="select select-bordered w-full {% if errors.status %}select-error{% endif %}">
+                                {% for value, label in status_choices %}
+                                    <option value="{{ value }}" {% if form_data.status == value or not form_data.status and value == "pending" %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.status %}
+                                <span class="mt-1 text-sm text-error">{{ errors.status }}</span>
+                            {% endif %}
+                        </label>
+                    </div>
+
+                    <label class="form-control w-full">
+                        <span class="label">
+                            <span class="label-text font-medium">Special requests</span>
+                        </span>
+                        <textarea
+                            name="special_requests"
+                            rows="4"
+                            placeholder="Add any guest requests or notes for this reservation."
+                            class="textarea textarea-bordered w-full"
+                        >{{ form_data.special_requests|default:'' }}</textarea>
+                    </label>
+
+                    <div class="card-actions flex-col-reverse justify-end gap-3 border-t border-base-300 pt-5 sm:flex-row">
+                        <a
+                            href="{% url 'reservations' request.branch.slug %}"
+                            class="btn btn-ghost w-full sm:w-auto"
+                        >Cancel</a>
+                        <button
+                            type="submit"
+                            class="btn btn-primary w-full sm:w-auto"
+                            {% if not facilities or not guests %}disabled{% endif %}
+                        >Create reservation</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

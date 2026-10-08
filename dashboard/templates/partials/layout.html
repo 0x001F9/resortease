@@ -108,13 +108,16 @@
                     </button>
                 </a>
 
-                <a class="aside-anchor">
+                <a 
+                    href="/dashboard/{{ request.branch.slug }}/reservations/" 
+                    class="aside-anchor"
+                >
                     <button class="btn w-full justify-start">
-                        Reservations & Bookings
+                        Reservations & Calendar
                     </button>
                 </a>
 
-                <a class="aside-anchor">
+                <a href="/dashboard/{{ request.branch.slug }}/inventory/" class="aside-anchor">
                     <button class="btn w-full justify-start">
                         Inventory
                     </button>
@@ -155,7 +158,12 @@
         })
 
         document.querySelectorAll('a.aside-anchor[href]').forEach((anchor) => {
-            if (anchor.pathname === window.location.pathname) {
+            const currentPath = window.location.pathname
+            const otherLinkPath = anchor.dataset.otherlink
+                ? new URL(anchor.dataset.otherlink, window.location.origin).pathname
+                : null
+
+            if (anchor.pathname === currentPath || otherLinkPath === currentPath) {
                 anchor.querySelector('button')?.classList.add('btn-active', 'btn-primary')
             }
         })
