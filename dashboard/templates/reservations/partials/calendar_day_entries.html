@@ -1,0 +1,86 @@
+<form method="dialog">
+    <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close">
+        &times;
+    </button>
+</form>
+<p class="text-sm font-semibold uppercase tracking-wide text-primary">Calendar entries</p>
+<h2 class="mt-1 text-2xl font-bold">{{ selected_day|date:"l, F j, Y" }}</h2>
+
+{% if entries %}
+    <ul class="mt-5 space-y-3" aria-label="Entries for this date">
+        {% for entry in entries %}
+            <li class="rounded-box border border-base-300 p-4">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        {% if entry.is_unavailable %}
+                            <p class="font-semibold text-error">Unavailable</p>
+                        {% else %}
+                            <p class="font-semibold">
+                                {{ entry.reservation.guest.first_name }} {{ entry.reservation.guest.last_name }}
+                            </p>
+                            <p class="text-sm text-base-content/70">
+                                {{ entry.reservation.get_status_display }} reservation
+                            </p>
+                        {% endif %}
+                        <p class="mt-1 text-sm">{{ entry.facility.name }}</p>
+                    </div>
+                    <span class="badge {% if entry.is_unavailable %}badge-error{% else %}badge-secondary{% endif %}">
+                        {{ entry.starts_at|date:"M j, H:i" }} – {{ entry.ends_at|date:"M j, H:i" }}
+                    </span>
+                </div>
+                <div class="mt-3 flex flex-wrap justify-end gap-2 border-t border-base-300 pt-3">
+                    <a
+                        class="btn btn-sm btn-outline"
+                        href="{% url 'edit-calendar-entry' request.branch.slug entry.pk %}"
+                    >Edit</a>
+                    <form
+                        method="post"
+                        action="{% url 'remove-calendar-entry' request.branch.slug entry.pk %}"
+                        onsubmit="return confirm('{% if entry.is_unavailable %}Remove this unavailable time?{% else %}Cancel this reservation and remove it from the calendar?{% endif %}')"
+                    >
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-error btn-outline" type="submit">
+                            {% if entry.is_unavailable %}Remove{% else %}Cancel booking{% endif %}
+                        </button>
+                    </form>
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <div class="alert mt-5">
+        <span>No entries are scheduled for this date.</span>
+    </div>
+{% endif %}
+
+{% if is_past_date %}
+    <div role="alert" class="alert alert-warning mt-6">
+        <span>Past dates are read-only. New entries can only be added for today or a future date.</span>
+    </div>
+{% elif is_unavailable %}
+    <div role="alert" class="alert alert-error mt-6">
+        <span>
+            {% if selected_facility %}
+                This facility is unavailable for the full day.
+            {% else %}
+                All facilities are unavailable for the full day.
+            {% endif %}
+            You can edit or remove the existing unavailable time above.
+        </span>
+    </div>
+{% else %}
+    <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <a
+            class="btn btn-outline"
+            href="{% url 'create-unavailable' request.branch.slug %}?date={{ selected_day|date:'Y-m-d' }}{% if selected_facility %}&amp;facility={{ selected_facility.pk }}{% endif %}"
+        >
+            Add unavailable time
+        </a>
+        <a
+            class="btn btn-primary"
+            href="{% url 'create-booking' request.branch.slug %}?date={{ selected_day|date:'Y-m-d' }}{% if selected_facility %}&amp;facility={{ selected_facility.pk }}{% endif %}"
+        >
+            Create booking
+        </a>
+    </div>
+{% endif %}

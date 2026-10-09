@@ -1,0 +1,28 @@
+<section class="rounded-box border border-base-300 bg-base-200/50 p-4">
+    <h2 class="font-semibold">
+        Entries for {{ selected_day|date:"l, F j" }}
+    </h2>
+    {% if date_entries %}
+        <ul class="mt-3 space-y-2">
+            {% for entry in date_entries %}
+                <li class="flex flex-wrap justify-between gap-2 rounded-box bg-base-100 p-3 text-sm">
+                    <span>
+                        {% if entry.is_unavailable %}
+                            <span class="font-medium text-error">Unavailable</span>
+                        {% else %}
+                            <span class="font-medium">
+                                {{ entry.reservation.guest.first_name }} {{ entry.reservation.guest.last_name }}
+                            </span>
+                        {% endif %}
+                        <span class="text-base-content/70">· {{ entry.facility.name }}</span>
+                    </span>
+                    <span class="text-base-content/70">
+                        {{ entry.starts_at|date:"M j, H:i" }}–{{ entry.ends_at|date:"M j, H:i" }}
+                    </span>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="mt-2 text-sm text-base-content/70">No entries are scheduled for this date yet.</p>
+    {% endif %}
+</section>

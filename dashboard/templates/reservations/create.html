@@ -23,6 +23,10 @@
                     </p>
                 </header>
 
+                {% if selected_day %}
+                    {% include "reservations/partials/date_entries_list.html" %}
+                {% endif %}
+
                 {% if not facilities %}
                     <div role="alert" class="alert alert-warning">
                         <span>No facilities are available for this branch. Add a facility before creating a reservation.</span>
@@ -34,6 +38,11 @@
                     </div>
                 {% endif %}
 
+                {% if is_past_date %}
+                    <div role="alert" class="alert alert-warning">
+                        <span>Past dates are read-only. Select today or a future date to add a reservation.</span>
+                    </div>
+                {% else %}
                 <form method="post" class="space-y-5">
                     {% csrf_token %}
 
@@ -182,6 +191,7 @@
                         >Create reservation</button>
                     </div>
                 </form>
+                {% endif %}
             </div>
         </section>
     </div>

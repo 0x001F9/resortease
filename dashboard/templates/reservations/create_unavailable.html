@@ -1,0 +1,211 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-3xl">
+        <a href="{% url 'reservations' request.branch.slug %}" class="btn btn-ghost btn-sm mb-4">
+            <span aria-hidden="true">&larr;</span>
+            Reservations &amp; calendar
+        </a>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-5 p-5 sm:p-8">
+                <header>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">{{ request.branch.name }}</p>
+                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Add unavailable time</h1>
+                    <p class="mt-2 text-sm text-base-content/70">
+                        Block a facility for the selected time. Blocks spanning multiple dates appear on every date they overlap.
+                    </p>
+                </header>
+
+                {% if selected_day %}
+                    {% include "reservations/partials/date_entries_list.html" %}
+                {% endif %}
+
+                {% if not facilities %}
+                    <div role="alert" class="alert alert-warning">
+                        <span>No facilities are available for this branch.</span>
+                    </div>
+                {% endif %}
+
+                {% if is_past_date %}
+                    <div role="alert" class="alert alert-warning">
+                        <span>Past dates are read-only. Select today or a future date to add unavailable time.</span>
+                    </div>
+                {% else %}
+                <form method="post" class="space-y-5">
+                    {% csrf_token %}
+                    {% if errors %}
+                        <div role="alert" class="alert alert-error">
+                            <span>Please review the highlighted fields and try again.</span>
+                        </div>
+                    {% endif %}
+
+                    <label class="form-control w-full">
+                        <span class="label">
+                            <span class="label-text font-medium">Facility <span class="text-error">*</span></span>
+                        </span>
+                        <select
+                            name="facility"
+                            class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}"
+                            required
+                            {% if not facilities %}disabled{% endif %}
+                        >
+                            <option value="" disabled {% if not form_data.facility %}selected{% endif %}>Choose a facility</option>
+                            {% for facility in facilities %}
+                                <option value="{{ facility.pk }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>
+                                    {{ facility.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% if errors.facility %}<span class="mt-1 text-sm text-error">{{ errors.facility }}</span>{% endif %}
+                    </label>
+
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Unavailable time</legend>
+                        <div class="flex flex-col gap-3 sm:flex-row">
+                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 p-3">
+                                <input
+                                    type="radio"
+                                    name="availability_type"
+                                    value="whole_day"
+                                    class="radio radio-primary"
+                                    {% if availability_type == "whole_day" %}checked{% endif %}
+                                >
+                                <span>Whole day</span>
+                            </label>
+                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 p-3">
+                                <input
+                                    type="radio"
+                                    name="availability_type"
+                                    value="specific_hours"
+                                    class="radio radio-primary"
+                                    {% if availability_type != "whole_day" %}checked{% endif %}
+                                >
+                                <span>Specific hours</span>
+                            </label>
+                        </div>
+                        {% if errors.availability_type %}
+                            <span class="mt-1 text-sm text-error">{{ errors.availability_type }}</span>
+                        {% endif %}
+                    </fieldset>
+
+                    <label
+                        id="whole-day-date-field"
+                        class="form-control w-full"
+                        {% if availability_type != "whole_day" %}hidden{% endif %}
+                    >
+                        <span class="label">
+                            <span class="label-text font-medium">Date <span class="text-error">*</span></span>
+                        </span>
+                        <input
+                            type="date"
+                            name="selected_date"
+                            id="unavailable-selected-date"
+                            value="{{ selected_date }}"
+                            class="input input-bordered w-full {% if errors.selected_date %}input-error{% endif %}"
+                            {% if availability_type == "whole_day" %}required{% else %}disabled{% endif %}
+                        >
+                        {% if errors.selected_date %}<span class="mt-1 text-sm text-error">{{ errors.selected_date }}</span>{% endif %}
+                    </label>
+
+                    <div
+                        id="unavailable-time-range"
+                        class="grid grid-cols-1 gap-5 sm:grid-cols-2"
+                        {% if availability_type == "whole_day" %}hidden{% endif %}
+                    >
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Starts <span class="text-error">*</span></span>
+                            </span>
+                            <input
+                                type="datetime-local"
+                                name="starts_at"
+                                value="{{ form_data.starts_at|default:'' }}"
+                                class="input input-bordered w-full {% if errors.starts_at %}input-error{% endif %}"
+                                {% if availability_type != "whole_day" %}required{% endif %}
+                                {% if availability_type == "whole_day" %}disabled{% endif %}
+                            >
+                            {% if errors.starts_at %}<span class="mt-1 text-sm text-error">{{ errors.starts_at }}</span>{% endif %}
+                        </label>
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Ends <span class="text-error">*</span></span>
+                            </span>
+                            <input
+                                type="datetime-local"
+                                name="ends_at"
+                                value="{{ form_data.ends_at|default:'' }}"
+                                class="input input-bordered w-full {% if errors.ends_at %}input-error{% endif %}"
+                                {% if availability_type != "whole_day" %}required{% endif %}
+                                {% if availability_type == "whole_day" %}disabled{% endif %}
+                            >
+                            {% if errors.ends_at %}<span class="mt-1 text-sm text-error">{{ errors.ends_at }}</span>{% endif %}
+                        </label>
+                    </div>
+
+                    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                        <a href="{% url 'reservations' request.branch.slug %}" class="btn btn-ghost">Cancel</a>
+                        <button class="btn btn-primary" type="submit" {% if not facilities %}disabled{% endif %}>
+                            Save unavailable time
+                        </button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+</main>
+<script>
+    const availabilityOptions = document.querySelectorAll(
+        'input[name="availability_type"]'
+    )
+    const timeRange = document.getElementById("unavailable-time-range")
+    const timeInputs = timeRange?.querySelectorAll('input[type="datetime-local"]')
+    const selectedDate = document.getElementById("unavailable-selected-date")
+    const wholeDayDateField = document.getElementById("whole-day-date-field")
+
+    function updateAvailabilityFields() {
+        const wholeDay = document.querySelector(
+            'input[name="availability_type"]:checked'
+        )?.value === "whole_day"
+
+        if (timeRange) {
+            timeRange.hidden = wholeDay
+        }
+        if (wholeDayDateField) {
+            wholeDayDateField.hidden = !wholeDay
+        }
+        if (selectedDate) {
+            selectedDate.disabled = !wholeDay
+            selectedDate.required = wholeDay
+        }
+        timeInputs?.forEach((input) => {
+            input.disabled = wholeDay
+            input.required = !wholeDay
+        })
+
+        if (
+            wholeDay
+            && selectedDate?.value
+            && timeInputs?.length === 2
+        ) {
+            const [year, month, day] = selectedDate.value.split("-").map(Number)
+            const nextDate = new Date(year, month - 1, day)
+            nextDate.setDate(nextDate.getDate() + 1)
+            const nextDateValue = [
+                nextDate.getFullYear(),
+                String(nextDate.getMonth() + 1).padStart(2, "0"),
+                String(nextDate.getDate()).padStart(2, "0"),
+            ].join("-")
+            timeInputs[0].value = `${selectedDate.value}T00:00`
+            timeInputs[1].value = `${nextDateValue}T00:00`
+        }
+    }
+
+    availabilityOptions.forEach((option) => {
+        option.addEventListener("change", updateAvailabilityFields)
+    })
+    updateAvailabilityFields()
+</script>
+{% endblock %}

@@ -1,4 +1,7 @@
+from datetime import date
+
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -9,18 +12,43 @@ from account.decoration.role_required import normal_user_not_allowed
 from account.models import User
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.models import Calendar, Facility, Reservation
+from dashboard.views.calendar_entries import (
+    get_entries_for_day,
+    has_calendar_conflict,
+    is_past_date,
+)
 
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
 @method_decorator(check_branch_dashboard, name="dispatch")
 class CreateReservationView(View):
     template_name = "reservations/create.html"
+    auto_confirm = False
 
     def get_form_context(self, request, form_data=None, errors=None):
+        form_data = form_data or {}
+        facilities = Facility.objects.filter(branch=request.branch).order_by(
+            "name"
+        )
+        selected_facility_id = request.GET.get("facility") or form_data.get(
+            "facility", ""
+        )
+        selected_facility = (
+            facilities.filter(pk=selected_facility_id).first()
+            if selected_facility_id.isdecimal()
+            else None
+        )
+        if selected_facility is not None:
+            form_data.setdefault("facility", str(selected_facility.pk))
+        date_value = request.GET.get("date", "") or form_data.get(
+            "starts_at", ""
+        )[:10]
+        try:
+            selected_day = date.fromisoformat(date_value)
+        except ValueError:
+            selected_day = None
         return {
-            "facilities": Facility.objects.filter(
-                branch=request.branch
-            ).order_by("name"),
+            "facilities": facilities,
             "guests": User.object.filter(
                 role=User.Role.User,
                 is_active=True,
@@ -28,13 +56,38 @@ class CreateReservationView(View):
             "status_choices": Reservation.Status.choices,
             "form_data": form_data or {},
             "errors": errors or {},
+            "selected_day": selected_day,
+            "selected_facility": selected_facility,
+            "is_past_date": (
+                is_past_date(selected_day) if selected_day else False
+            ),
+            "date_entries": (
+                get_entries_for_day(
+                    request.branch, selected_day, selected_facility
+                )
+                if selected_day
+                else []
+            ),
+            "hide_aside": True,
         }
 
     def get(self, request, *args, **kwargs):
+        selected_date = request.GET.get("date", "")
+        initial_form_data = {}
+        try:
+            selected_day = date.fromisoformat(selected_date)
+        except ValueError:
+            pass
+        else:
+            initial_form_data = {
+                "starts_at": f"{selected_day.isoformat()}T09:00",
+                "ends_at": f"{selected_day.isoformat()}T10:00",
+                "status": Reservation.Status.CONFIRMED,
+            }
         return render(
             request,
             self.template_name,
-            self.get_form_context(request),
+            self.get_form_context(request, initial_form_data),
         )
 
     def post(self, request, *args, **kwargs):
@@ -48,7 +101,11 @@ class CreateReservationView(View):
         starts_at_value = request.POST.get("starts_at", "").strip()
         ends_at_value = request.POST.get("ends_at", "").strip()
         party_size_value = request.POST.get("party_size", "").strip()
-        status = request.POST.get("status", Reservation.Status.PENDING)
+        status = (
+            Reservation.Status.CONFIRMED
+            if self.auto_confirm
+            else request.POST.get("status", Reservation.Status.PENDING)
+        )
         special_requests = request.POST.get("special_requests", "").strip()
 
         form_data = {
@@ -88,6 +145,23 @@ class CreateReservationView(View):
 
         if starts_at is not None and ends_at is not None and ends_at <= starts_at:
             errors["ends_at"] = "The end date and time must be after the start."
+        if (
+            starts_at is not None
+            and timezone.localtime(starts_at).date() < timezone.localdate()
+        ):
+            errors["starts_at"] = "Reservations cannot be added to a past date."
+        if (
+            facility is not None
+            and starts_at is not None
+            and ends_at is not None
+            and ends_at > starts_at
+            and status
+            in {Reservation.Status.CONFIRMED, Reservation.Status.COMPLETED}
+            and has_calendar_conflict(facility, starts_at, ends_at)
+        ):
+            errors["starts_at"] = (
+                "This facility already has an entry during that time."
+            )
 
         try:
             party_size = int(party_size_value)
@@ -133,4 +207,15 @@ class CreateReservationView(View):
                     ends_at=ends_at,
                     status=calendar_status,
                 )
-        return redirect("reservations", branch=request.branch.slug)
+        reservations_url = reverse(
+            "reservations",
+            kwargs={"branch": request.branch.slug},
+        )
+        return redirect(
+            f"{reservations_url}?month={timezone.localtime(starts_at).strftime('%Y-%m')}"
+        )
+
+
+class CreateBookingView(CreateReservationView):
+    template_name = "reservations/create_booking.html"
+    auto_confirm = True

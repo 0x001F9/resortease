@@ -38,19 +38,46 @@
         </article>
     </section>
 
-    <section class="mt-8 rounded-box border border-base-content/10 bg-base-100" aria-label="Facility calendar">
-        <div class="flex items-center justify-between border-b border-base-content/10 p-4">
-            <a
-                class="btn btn-ghost btn-sm"
-                href="?month={{ previous_month|date:'Y-m' }}&amp;q={{ search_query|urlencode }}&amp;status={{ selected_status|urlencode }}"
-                aria-label="Previous month"
-            >&larr; <span class="hidden sm:inline">Previous</span></a>
-            <h2 class="text-lg font-semibold">{{ calendar_month|date:"F Y" }}</h2>
-            <a
-                class="btn btn-ghost btn-sm"
-                href="?month={{ next_month|date:'Y-m' }}&amp;q={{ search_query|urlencode }}&amp;status={{ selected_status|urlencode }}"
-                aria-label="Next month"
-            ><span class="hidden sm:inline">Next</span> &rarr;</a>
+    <section
+        class="mt-8 rounded-box border border-base-content/10 bg-base-100"
+        aria-label="Facility calendar"
+        hx-target="#calendar-day-dialog-content"
+        hx-swap="innerHTML"
+    >
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-base-content/10 p-4">
+            <div class="flex items-center gap-2">
+                <a
+                    class="btn btn-ghost btn-sm"
+                    href="?month={{ previous_month|date:'Y-m' }}&amp;q={{ search_query|urlencode }}&amp;status={{ selected_status|urlencode }}&amp;facility={{ selected_facility.pk|default:'' }}"
+                    aria-label="Previous month"
+                >&larr; <span class="hidden sm:inline">Previous</span></a>
+                <h2 class="text-lg font-semibold">{{ calendar_month|date:"F Y" }}</h2>
+                <a
+                    class="btn btn-ghost btn-sm"
+                    href="?month={{ next_month|date:'Y-m' }}&amp;q={{ search_query|urlencode }}&amp;status={{ selected_status|urlencode }}&amp;facility={{ selected_facility.pk|default:'' }}"
+                    aria-label="Next month"
+                ><span class="hidden sm:inline">Next</span> &rarr;</a>
+            </div>
+            <form method="get" class="flex items-center gap-2">
+                <input type="hidden" name="month" value="{{ calendar_month|date:'Y-m' }}">
+                <input type="hidden" name="q" value="{{ search_query }}">
+                <input type="hidden" name="status" value="{{ selected_status }}">
+                <label for="calendar-facility" class="text-sm font-medium">Facility</label>
+                <select
+                    id="calendar-facility"
+                    name="facility"
+                    class="select select-bordered select-sm"
+                    onchange="this.form.submit()"
+                >
+                    <option value="">All facilities</option>
+                    {% for facility in facilities %}
+                        <option
+                            value="{{ facility.pk }}"
+                            {% if selected_facility.pk == facility.pk %}selected{% endif %}
+                        >{{ facility.name }}</option>
+                    {% endfor %}
+                </select>
+            </form>
         </div>
         <div class="overflow-x-auto">
             <table class="table table-fixed">
@@ -69,12 +96,21 @@
                     {% for week in weeks %}
                         <tr>
                             {% for day in week %}
-                                <td class="h-28 min-w-24 align-top {% if day.is_today %}bg-primary/5{% endif %}">
+                                <td class="h-28 min-w-24 align-top p-0 {% if day.is_today %}bg-primary/5{% endif %}">
                                     {% if day %}
-                                        <div class="mb-1 text-right">
+                                    <button
+                                        type="button"
+                                        class="flex h-28 w-full flex-col p-2 text-left hover:bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary {% if day.is_unavailable %}border border-error/40 bg-error/10{% endif %}"
+                                        hx-get="{% url 'calendar-day-entries' request.branch.slug %}?date={{ day.date|date:'Y-m-d' }}{% if selected_facility %}&amp;facility={{ selected_facility.pk }}{% endif %}"
+                                        aria-label="{% if day.is_unavailable %}View unavailable entries for{% else %}View calendar entries for{% endif %} {{ day.date|date:'l, F j, Y' }}"
+                                    >
+                                        <span class="mb-1 w-full text-right">
                                             <span class="{% if day.is_today %}badge badge-primary badge-sm{% endif %}">{{ day.date|date:"j" }}</span>
-                                        </div>
-                                        <div class="flex flex-col gap-1">
+                                        </span>
+                                        {% if day.is_unavailable %}
+                                            <span class="badge badge-error badge-sm mb-1">Not available</span>
+                                        {% endif %}
+                                        <div class="flex w-full flex-col gap-1">
                                             {% for entry in day.entries|slice:":3" %}
                                                 <div class="truncate rounded {% if entry.is_unavailable %}bg-error/20{% else %}bg-secondary/20{% endif %} px-1 py-0.5 text-xs" title="{{ entry.facility.name }}">
                                                     {% if entry.is_unavailable %}
@@ -88,6 +124,7 @@
                                                 <span class="text-xs text-base-content/60">+{{ day.entries|length|add:"-3" }} more</span>
                                             {% endif %}
                                         </div>
+                                        </button>
                                     {% endif %}
                                 </td>
                             {% endfor %}
@@ -97,6 +134,12 @@
             </table>
         </div>
     </section>
+    <dialog id="calendar-day-dialog" class="modal">
+        <div id="calendar-day-dialog-content" class="modal-box max-w-xl"></div>
+        <form method="dialog" class="modal-backdrop">
+            <button aria-label="Close calendar entries">close</button>
+        </form>
+    </dialog>
 
     <section class="mt-8 rounded-box border border-base-content/10 bg-base-100">
         <div class="flex flex-col gap-4 border-b border-base-content/10 p-4 md:flex-row md:items-center md:justify-between">
@@ -114,7 +157,6 @@
                 <label>
                     <span class="sr-only">Filter by status</span>
                     <select name="status" class="select select-bordered w-full sm:w-auto">
-                        <option value="">All statuses</option>
                         {% for value, label in status_choices %}
                             <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -190,4 +232,15 @@
         </div>
     </section>
 </main>
+<script>
+    document.body.addEventListener("htmx:afterSwap", (event) => {
+        const dialog = document.getElementById("calendar-day-dialog")
+        if (
+            event.detail.target.id === "calendar-day-dialog-content"
+            && !dialog.open
+        ) {
+            dialog.showModal()
+        }
+    })
+</script>
 {% endblock %}

@@ -1,6 +1,6 @@
 import calendar
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from datetime import date, timedelta
 
 from django.db.models import CharField, Q, Sum
 from django.db.models.functions import Cast
@@ -11,7 +11,8 @@ from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.decorations.branch_check import check_branch_dashboard
-from dashboard.models import Calendar, Payment, Reservation
+from dashboard.models import Calendar, Facility, Payment, Reservation
+from dashboard.views.calendar_entries import is_day_fully_unavailable
 
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
@@ -42,12 +43,14 @@ class ReservationsCalendarView(View):
         )
         status_choices = Reservation.Status.choices
 
-        selected_status = request.GET.get("status", "")
+        selected_status = request.GET.get(
+            "status",
+            Reservation.Status.PENDING,
+        )
         valid_statuses = {value for value, _label in status_choices}
-        if selected_status in valid_statuses:
-            reservations = reservations.filter(status=selected_status)
-        else:
-            selected_status = ""
+        if selected_status not in valid_statuses:
+            selected_status = Reservation.Status.PENDING
+        reservations = reservations.filter(status=selected_status)
 
         search_query = request.GET.get("q", "").strip()
         if search_query:
@@ -60,11 +63,33 @@ class ReservationsCalendarView(View):
                 | Q(booking_reference_text__icontains=search_query)
             )
 
-        calendar_entries = Calendar.objects.filter(
-            facility__branch=request.branch,
-            starts_at__date__lt=next_month,
-            ends_at__date__gte=calendar_month,
-        ).select_related("facility", "reservation__guest")
+        facilities = list(
+            Facility.objects.filter(branch=request.branch).order_by("name")
+        )
+        selected_facility_id = request.GET.get("facility", "")
+        selected_facility = next(
+            (
+                facility
+                for facility in facilities
+                if str(facility.pk) == selected_facility_id
+            ),
+            None,
+        )
+        month_start = timezone.make_aware(
+            datetime.combine(calendar_month, time.min)
+        )
+        month_end = timezone.make_aware(
+            datetime.combine(next_month, time.min)
+        )
+        calendar_entries = list(
+            Calendar.objects.filter(
+                facility__branch=request.branch,
+                starts_at__lt=month_end,
+                ends_at__gt=month_start,
+            )
+            .exclude(status=Calendar.Status.CANCELLED)
+            .select_related("facility", "reservation__guest")
+        )
         entries_by_day = {}
         for entry in calendar_entries:
             starts_on = max(
@@ -72,7 +97,9 @@ class ReservationsCalendarView(View):
                 calendar_month,
             )
             ends_on = min(
-                timezone.localtime(entry.ends_at).date(),
+                timezone.localtime(
+                    entry.ends_at - timedelta(microseconds=1)
+                ).date(),
                 next_month - timedelta(days=1),
             )
             day = starts_on
@@ -89,11 +116,30 @@ class ReservationsCalendarView(View):
             for day_number in week:
                 if day_number:
                     day = calendar_month.replace(day=day_number)
+                    day_start = timezone.make_aware(
+                        datetime.combine(day, time.min)
+                    )
+                    day_end = timezone.make_aware(
+                        datetime.combine(day + timedelta(days=1), time.min)
+                    )
+                    day_entries = entries_by_day.get(day, [])
                     calendar_week.append(
                         {
                             "date": day,
-                            "entries": entries_by_day.get(day, []),
+                            "entries": [
+                                entry
+                                for entry in day_entries
+                                if selected_facility is None
+                                or entry.facility_id == selected_facility.pk
+                            ],
                             "is_today": day == today,
+                            "is_unavailable": is_day_fully_unavailable(
+                                day_entries,
+                                facilities,
+                                day_start,
+                                day_end,
+                                selected_facility,
+                            ),
                         }
                     )
                 else:
@@ -106,7 +152,7 @@ class ReservationsCalendarView(View):
         total_bookings = Calendar.objects.filter(
             facility__branch=request.branch,
             reservation__isnull=False,
-        ).count()
+        ).exclude(status=Calendar.Status.CANCELLED).count()
         revenue = Payment.objects.filter(
             calendar_entry__facility__branch=request.branch,
             status=Payment.Status.SUCCEEDED,
@@ -125,6 +171,8 @@ class ReservationsCalendarView(View):
                 "previous_month": previous_month,
                 "next_month": next_month,
                 "weeks": weeks,
+                "facilities": facilities,
+                "selected_facility": selected_facility,
                 "total_reservations": branch_reservations.count(),
                 "pending_reservations": branch_reservations.filter(
                     status=Reservation.Status.PENDING
