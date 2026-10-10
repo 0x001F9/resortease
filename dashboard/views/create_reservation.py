@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, time, timedelta, timezone as datetime_timezone
+from decimal import Decimal, InvalidOperation
 
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -18,6 +19,36 @@ from dashboard.views.calendar_entries import (
     has_calendar_conflict,
     is_past_date,
 )
+
+RATE_PACKAGE_DURATIONS = {
+    "22hours": timedelta(hours=22),
+    "morning": timedelta(hours=9),
+    "evening": timedelta(hours=11),
+}
+
+
+def get_package_end(rate_package, starts_at, days):
+    if rate_package == "24hours":
+        duration = timedelta(days=days)
+    elif rate_package in RATE_PACKAGE_DURATIONS:
+        duration = RATE_PACKAGE_DURATIONS[rate_package]
+    else:
+        return None
+
+    if (
+        rate_package == "morning"
+        and timezone.localtime(starts_at).time() != time(8)
+    ):
+        return None
+    if (
+        rate_package == "evening"
+        and timezone.localtime(starts_at).time() != time(19)
+    ):
+        return None
+
+    end_utc = starts_at.astimezone(datetime_timezone.utc) + duration
+    return end_utc.astimezone(starts_at.tzinfo)
+
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
 @method_decorator(check_branch_dashboard, name="dispatch")
@@ -81,8 +112,8 @@ class CreateReservationView(View):
         else:
             initial_form_data = {
                 "starts_at": f"{selected_day.isoformat()}T09:00",
-                "ends_at": f"{selected_day.isoformat()}T10:00",
                 "status": Reservation.Status.CONFIRMED,
+                "days": "1",
             }
         return render(
             request,
@@ -99,8 +130,9 @@ class CreateReservationView(View):
         facility_id = request.POST.get("facility", "")
         guest_id = request.POST.get("guest", "")
         starts_at_value = request.POST.get("starts_at", "").strip()
-        ends_at_value = request.POST.get("ends_at", "").strip()
-        party_size_value = request.POST.get("party_size", "").strip()
+        rate_package = request.POST.get("rate_package", "").strip()
+        days_value = request.POST.get("days", "1").strip() or "1"
+        discount_value = request.POST.get("discount", "0.00").strip() or "0.00"
         status = (
             Reservation.Status.CONFIRMED
             if self.auto_confirm
@@ -112,8 +144,9 @@ class CreateReservationView(View):
             "facility": facility_id,
             "guest": guest_id,
             "starts_at": starts_at_value,
-            "ends_at": ends_at_value,
-            "party_size": party_size_value,
+            "rate_package": rate_package,
+            "days": days_value,
+            "discount": discount_value,
             "status": status,
             "special_requests": special_requests,
         }
@@ -132,42 +165,66 @@ class CreateReservationView(View):
             errors["guest"] = "Select an active guest."
 
         starts_at = parse_datetime(starts_at_value)
-        ends_at = parse_datetime(ends_at_value)
         if starts_at is None:
             errors["starts_at"] = "Enter a valid start date and time."
         elif timezone.is_naive(starts_at):
             starts_at = timezone.make_aware(starts_at)
 
-        if ends_at is None:
-            errors["ends_at"] = "Enter a valid end date and time."
-        elif timezone.is_naive(ends_at):
-            ends_at = timezone.make_aware(ends_at)
-
-        if starts_at is not None and ends_at is not None and ends_at <= starts_at:
-            errors["ends_at"] = "The end date and time must be after the start."
         if (
             starts_at is not None
             and timezone.localtime(starts_at).date() < timezone.localdate()
         ):
             errors["starts_at"] = "Reservations cannot be added to a past date."
-        total_amount = None
+
+        days = 1
+        if rate_package == "24hours":
+            try:
+                days = int(days_value)
+                if days < 1:
+                    raise ValueError
+            except ValueError:
+                days = None
+                errors["days"] = "Choose at least 1 day."
+        elif rate_package not in RATE_PACKAGE_DURATIONS:
+            errors["rate_package"] = "Choose a valid reservation rate."
+
+        ends_at = (
+            get_package_end(rate_package, starts_at, days)
+            if starts_at is not None and days is not None
+            else None
+        )
+        if (
+            starts_at is not None
+            and rate_package in {"morning", "evening"}
+            and ends_at is None
+        ):
+            errors["starts_at"] = (
+                "Morning reservations must start at 8 AM; evening reservations "
+                "must start at 7 PM."
+            )
+        if ends_at is not None:
+            form_data["ends_at"] = timezone.localtime(ends_at).strftime(
+                "%Y-%m-%dT%H:%M"
+            )
+        else:
+            form_data["ends_at"] = ""
+
+        raw_amount = None
         if (
             facility is not None
             and starts_at is not None
             and ends_at is not None
-            and ends_at > starts_at
         ):
-            total_amount = calculate_total_amount(
+            raw_amount = calculate_total_amount(
                 facility, starts_at, ends_at
             )
-            if total_amount is None:
-                errors["starts_at"] = RATE_REQUIRED_ERROR
+            if raw_amount is None:
+                errors["rate_package"] = RATE_REQUIRED_ERROR
         if (
             facility is not None
             and starts_at is not None
             and ends_at is not None
-            and ends_at > starts_at
-            and total_amount is not None
+            and raw_amount is not None
             and status
             in {Reservation.Status.CONFIRMED, Reservation.Status.COMPLETED}
             and has_calendar_conflict(facility, starts_at, ends_at)
@@ -177,12 +234,24 @@ class CreateReservationView(View):
             )
 
         try:
-            party_size = int(party_size_value)
-            if party_size < 1:
-                raise ValueError
-        except ValueError:
-            party_size = None
-            errors["party_size"] = "Party size must be at least 1."
+            discount = Decimal(discount_value)
+            if (
+                not discount.is_finite()
+                or discount < 0
+                or discount > Decimal("99999999.99")
+                or discount.quantize(Decimal("0.01")) != discount
+                or (
+                    raw_amount is not None
+                    and discount > raw_amount
+                )
+            ):
+                raise InvalidOperation
+        except InvalidOperation:
+            discount = None
+            errors["discount"] = (
+                "Enter a non-negative discount no greater than the raw amount, "
+                "with up to 2 decimal places."
+            )
 
         if status not in Reservation.Status.values:
             errors["status"] = "Select a valid reservation status."
@@ -200,7 +269,7 @@ class CreateReservationView(View):
                 facility=facility,
                 starts_at=starts_at,
                 ends_at=ends_at,
-                party_size=party_size,
+                discount=discount,
                 status=status,
                 special_requests=special_requests,
             )
@@ -219,7 +288,6 @@ class CreateReservationView(View):
                     starts_at=starts_at,
                     ends_at=ends_at,
                     status=calendar_status,
-                    total_amount=total_amount,
                 )
         reservations_url = reverse(
             "reservations",

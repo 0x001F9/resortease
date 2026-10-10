@@ -226,7 +226,7 @@
                             </td>
                             <td class="text-right">
                                 {% if reservation.calendar_entry.has_amount %}
-                                    ₱{{ reservation.calendar_entry.total_amount|floatformat:2 }}
+                                    ₱{{ reservation.raw_amount|floatformat:2 }}
                                 {% else %}
                                     &mdash;
                                 {% endif %}

@@ -1,0 +1,50 @@
+<fieldset class="sm:col-span-2">
+    <legend class="label-text mb-2 block font-medium">Choose a rate <span class="text-error">*</span></legend>
+    <div class="grid gap-3 sm:grid-cols-2">
+        <label class="flex cursor-pointer items-start gap-3 rounded-box border border-base-300 p-3">
+            <input class="radio radio-primary mt-1" type="radio" name="rate_package" value="24hours" required {% if form_data.rate_package == "24hours" %}checked{% endif %}>
+            <span>
+                <span class="block font-medium">24-hour rate</span>
+                <span class="block text-xs text-base-content/60">Choose a start time and number of days.</span>
+            </span>
+        </label>
+        <label class="flex cursor-pointer items-start gap-3 rounded-box border border-base-300 p-3">
+            <input class="radio radio-primary mt-1" type="radio" name="rate_package" value="22hours" {% if form_data.rate_package == "22hours" %}checked{% endif %}>
+            <span>
+                <span class="block font-medium">22-hour rate</span>
+                <span class="block text-xs text-base-content/60">Ends automatically 22 hours after start.</span>
+            </span>
+        </label>
+        <label class="flex cursor-pointer items-start gap-3 rounded-box border border-base-300 p-3">
+            <input class="radio radio-primary mt-1" type="radio" name="rate_package" value="morning" {% if form_data.rate_package == "morning" %}checked{% endif %}>
+            <span>
+                <span class="block font-medium">Morning rate · 8 AM–5 PM</span>
+                <span class="block text-xs text-base-content/60">Start time is fixed at 8 AM.</span>
+            </span>
+        </label>
+        <label class="flex cursor-pointer items-start gap-3 rounded-box border border-base-300 p-3">
+            <input class="radio radio-primary mt-1" type="radio" name="rate_package" value="evening" {% if form_data.rate_package == "evening" %}checked{% endif %}>
+            <span>
+                <span class="block font-medium">Evening rate · 7 PM–6 AM</span>
+                <span class="block text-xs text-base-content/60">Start time is fixed at 7 PM.</span>
+            </span>
+        </label>
+    </div>
+    {% if errors.rate_package %}<span class="mt-2 block text-sm text-error">{{ errors.rate_package }}</span>{% endif %}
+</fieldset>
+
+<label class="form-control w-full sm:col-span-2" data-days-field hidden>
+    <span class="label">
+        <span class="label-text font-medium">Number of days <span class="text-error">*</span></span>
+    </span>
+    <input
+        type="number"
+        name="days"
+        min="1"
+        step="1"
+        value="{{ form_data.days|default:'1' }}"
+        class="input input-bordered w-full {% if errors.days %}input-error{% endif %}"
+        data-days-input
+    >
+    {% if errors.days %}<span class="mt-1 text-sm text-error">{{ errors.days }}</span>{% endif %}
+</label>

@@ -25,6 +25,11 @@ PhoneNumberCodeValidator = RegexValidator(
     message="Invalid phone number code."
 )
 
+
+def email_confirmation_expiry():
+    return timezone.now() + timedelta(hours=1)
+
+
 class UserManager(BaseUserManager):
     def create_user(self, email, first_name: str, last_name: str, password=None, **extra):
         first_name = first_name.strip().title()
@@ -61,7 +66,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     email_confirmed_at = models.DateTimeField(null=True, editable=True)
     email_confirmation_token = models.CharField(max_length=255, null=True, unique=True)
-    email_confirmation_expiresat = models.DateTimeField(editable=True, null=True, default=timezone.now() + timedelta(hours=1))
+    email_confirmation_expiresat = models.DateTimeField(
+        editable=True,
+        null=True,
+        default=email_confirmation_expiry,
+    )
 
     avatar_url = models.CharField(max_length=255, null=True)
     first_name = models.CharField(max_length=100, validators=[NameValidator])

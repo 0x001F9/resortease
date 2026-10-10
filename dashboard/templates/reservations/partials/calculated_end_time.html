@@ -1,0 +1,13 @@
+<div class="form-control w-full" aria-label="Calculated reservation end time">
+    <span class="label">
+        <span class="label-text font-medium">Ends</span>
+    </span>
+    <div
+        class="input input-bordered flex w-full items-center"
+        data-end-display
+        role="status"
+        aria-live="polite"
+    >Choose a rate and start time</div>
+</div>
+<input type="hidden" name="starts_at" value="{{ form_data.starts_at|default:'' }}">
+<input type="hidden" name="ends_at" value="{{ form_data.ends_at|default:'' }}">

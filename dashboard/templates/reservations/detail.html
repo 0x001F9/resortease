@@ -76,28 +76,41 @@
                 </section>
 
                 <section aria-labelledby="billing-heading">
-                    <h2 id="billing-heading" class="mb-3 text-lg font-semibold">Booking and billing</h2>
-                    {% if calendar_entry %}
-                        <dl class="grid gap-4 rounded-box border border-base-300 p-4 sm:grid-cols-2">
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <h2 id="billing-heading" class="text-lg font-semibold">Price summary</h2>
+                        {% if calendar_entry %}
+                            <span class="badge badge-outline">Booking {{ calendar_entry.get_status_display }}</span>
+                        {% else %}
+                            <span class="badge badge-ghost">Estimate</span>
+                        {% endif %}
+                    </div>
+                    <section class="rounded-box border border-base-300 bg-base-200/30 p-4 sm:p-5" aria-label="Reservation price summary">
+                        <div class="mb-4 flex flex-wrap items-start justify-between gap-4">
                             <div>
-                                <dt class="text-sm text-base-content/60">Calendar status</dt>
-                                <dd class="font-medium">{{ calendar_entry.get_status_display }}</dd>
+                                <p class="font-medium">{{ reservation.facility.name|default:"Facility unavailable" }}</p>
+                                <p class="text-sm text-base-content/60">{{ reservation.starts_at|date:"M j, Y H:i" }} – {{ reservation.ends_at|date:"M j, Y H:i" }}</p>
                             </div>
-                            <div>
-                                <dt class="text-sm text-base-content/60">Total amount</dt>
-                                <dd class="text-xl font-bold">
-                                    {% if calendar_entry.has_amount %}
-                                        ₱{{ calendar_entry.total_amount|floatformat:2 }}
-                                    {% else %}
-                                        <span class="text-base-content/50">Not set</span>
-                                    {% endif %}
-                                </dd>
-                                {% if not calendar_entry.has_amount %}
-                                    <dd class="text-sm text-base-content/60">No applicable rate has been set for this booking.</dd>
-                                {% endif %}
+                            {% if reservation.raw_amount is None %}
+                                <span class="badge badge-warning">Rate not set</span>
+                            {% endif %}
+                        </div>
+                        <dl class="space-y-2">
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-base-content/70">Raw amount</dt>
+                                <dd class="font-medium">{% if reservation.raw_amount is not None %}₱{{ reservation.raw_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-base-content/70">Discount</dt>
+                                <dd class="font-medium text-success">−₱{{ reservation.discount|floatformat:2 }}</dd>
+                            </div>
+                            <div class="flex justify-between gap-4 border-t border-base-300 pt-3">
+                                <dt class="font-semibold">Total amount</dt>
+                                <dd class="text-xl font-bold text-primary">{% if reservation.total_amount is not None %}₱{{ reservation.total_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
                             </div>
                         </dl>
+                    </section>
 
+                    {% if calendar_entry %}
                         <div class="mt-4">
                             <h3 class="mb-2 font-semibold">Payments</h3>
                             {% if calendar_entry.payments.all %}

@@ -461,7 +461,7 @@ class EditCalendarEntryView(View):
                 }
             )
 
-        total_amount = None
+        raw_amount = None
         if (
             reservation is not None
             and facility is not None
@@ -469,10 +469,10 @@ class EditCalendarEntryView(View):
             and ends_at is not None
             and ends_at > starts_at
         ):
-            total_amount = calculate_total_amount(
+            raw_amount = calculate_total_amount(
                 facility, starts_at, ends_at
             )
-            if total_amount is None:
+            if raw_amount is None:
                 errors["starts_at"] = RATE_REQUIRED_ERROR
 
         if (
@@ -483,7 +483,7 @@ class EditCalendarEntryView(View):
             and (
                 reservation is None
                 or (
-                    total_amount is not None
+                    raw_amount is not None
                     and status
                     in {
                         Reservation.Status.CONFIRMED,
@@ -514,11 +514,11 @@ class EditCalendarEntryView(View):
             entry.starts_at = starts_at
             entry.ends_at = ends_at
             if reservation:
-                entry.total_amount = total_amount
                 reservation.guest = guest
                 reservation.facility = facility
                 reservation.starts_at = starts_at
                 reservation.ends_at = ends_at
+                reservation.raw_amount = raw_amount
                 reservation.status = status
                 reservation.party_size = party_size
                 reservation.special_requests = special_requests

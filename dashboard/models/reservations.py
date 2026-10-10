@@ -1,7 +1,59 @@
 import uuid
+from datetime import time, timedelta, timezone as datetime_timezone
+from decimal import Decimal
 
 from django.db import models
 from django.db.models import F, Q
+from django.utils import timezone
+
+
+class ReservationManager(models.Manager):
+    def calculate_raw_amount(self, facility, starts_at, ends_at):
+        duration = ends_at.astimezone(datetime_timezone.utc) - starts_at.astimezone(
+            datetime_timezone.utc
+        )
+        rate = None
+
+        day_length = timedelta(hours=24)
+        if duration >= day_length and duration % day_length == timedelta(0):
+            rate = facility.rate_24hours
+            if rate is not None:
+                rate *= duration // day_length
+        elif duration == timedelta(hours=22):
+            rate = facility.rate_22hours
+        else:
+            local_start = timezone.localtime(starts_at)
+            local_end = timezone.localtime(ends_at)
+            if (
+                local_start.time() == time(8)
+                and local_end.time() == time(17)
+                and local_start.date() == local_end.date()
+            ):
+                rate = facility.rate_morning
+            elif (
+                local_start.time() == time(19)
+                and local_end.time() == time(6)
+                and local_end.date() == local_start.date() + timedelta(days=1)
+            ):
+                rate = facility.rate_evening
+
+        return Decimal(rate) if rate is not None else None
+
+    def create(self, **kwargs):
+        reservation = self.model(**kwargs)
+        if (
+            reservation.facility_id is not None
+            and reservation.starts_at is not None
+            and reservation.ends_at is not None
+        ):
+            reservation.raw_amount = self.calculate_raw_amount(
+                reservation.facility,
+                reservation.starts_at,
+                reservation.ends_at,
+            )
+        self._for_write = True
+        reservation.save(force_insert=True, using=self.db)
+        return reservation
 
 
 class Reservation(models.Model):
@@ -32,6 +84,21 @@ class Reservation(models.Model):
         choices=Status.choices,
         default=Status.PENDING,
     )
+
+    raw_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    discount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0.00,
+    )
+
+    objects = ReservationManager()
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -47,6 +114,12 @@ class Reservation(models.Model):
 
     def __str__(self):
         return f"Reservation {self.pk} - {self.guest}"
+
+    @property
+    def total_amount(self):
+        if self.raw_amount is None:
+            return None
+        return max(self.raw_amount - self.discount, Decimal("0.00"))
 
 
 class Calendar(models.Model):
@@ -80,12 +153,6 @@ class Calendar(models.Model):
         choices=Status.choices,
         default=Status.CONFIRMED,
     )
-    total_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-    )
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
@@ -109,7 +176,6 @@ class Calendar(models.Model):
     def save(self, *args, **kwargs):
         if self.reservation_id is None:
             self.booking_reference = None
-            self.total_amount = None
             self.status = self.Status.UNAVAILABLE
         elif self.booking_reference is None:
             self.booking_reference = uuid.uuid4()
@@ -121,7 +187,10 @@ class Calendar(models.Model):
 
     @property
     def has_amount(self):
-        return self.total_amount is not None
+        return (
+            self.reservation_id is not None
+            and self.reservation.raw_amount is not None
+        )
 
 
 class Payment(models.Model):

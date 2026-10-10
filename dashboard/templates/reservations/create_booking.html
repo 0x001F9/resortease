@@ -1,4 +1,5 @@
 {% extends "../partials/layout.html" %}
+{% load static %}
 
 {% block content %}
 <main class="px-4 py-6 sm:px-6 lg:px-8">
@@ -24,16 +25,19 @@
 
                 {% if not facilities %}
                     <div role="alert" class="alert alert-warning">
+                        {% include "reservations/partials/warning_icon.html" %}
                         <span>No facilities are available for this branch.</span>
                     </div>
                 {% endif %}
                 {% if not guests %}
                     <div role="alert" class="alert alert-warning">
+                        {% include "reservations/partials/warning_icon.html" %}
                         <span>No active guest accounts are available to book.</span>
                     </div>
                 {% endif %}
                 {% if is_past_date %}
                     <div role="alert" class="alert alert-warning">
+                        {% include "reservations/partials/warning_icon.html" %}
                         <span>Past dates are read-only. Select today or a future date to create a booking.</span>
                     </div>
                 {% else %}
@@ -71,36 +75,35 @@
                                 <select name="facility" class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}" required {% if not facilities %}disabled{% endif %}>
                                     <option value="" disabled {% if not form_data.facility %}selected{% endif %}>Choose a facility</option>
                                     {% for facility in facilities %}
-                                        <option value="{{ facility.pk }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
+                                        <option value="{{ facility.pk }}" data-rate-24-hours="{{ facility.rate_24hours|default_if_none:'' }}" data-rate-22-hours="{{ facility.rate_22hours|default_if_none:'' }}" data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}" data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
                                     {% endfor %}
                                 </select>
                                 {% if errors.facility %}<span class="mt-1 text-sm text-error">{{ errors.facility }}</span>{% endif %}
                             </label>
 
+                            {% include "reservations/partials/rate_selection.html" %}
+
                             <label class="form-control w-full">
                                 <span class="label">
                                     <span class="label-text font-medium">Starts <span class="text-error">*</span></span>
                                 </span>
-                                <input type="datetime-local" name="starts_at" value="{{ form_data.starts_at|default:'' }}" class="input input-bordered w-full {% if errors.starts_at %}input-error{% endif %}" required>
+                                <input type="datetime-local" value="{{ form_data.starts_at|default:'' }}" class="input input-bordered w-full {% if errors.starts_at %}input-error{% endif %}" lang="en-US" data-start-picker {% if not form_data.rate_package %}disabled{% endif %} required>
+                                <span class="mt-1 text-sm text-base-content/60" data-start-help>Select a start date and time.</span>
                                 {% if errors.starts_at %}<span class="mt-1 text-sm text-error">{{ errors.starts_at }}</span>{% endif %}
                             </label>
 
-                            <label class="form-control w-full">
-                                <span class="label">
-                                    <span class="label-text font-medium">Ends <span class="text-error">*</span></span>
-                                </span>
-                                <input type="datetime-local" name="ends_at" value="{{ form_data.ends_at|default:'' }}" class="input input-bordered w-full {% if errors.ends_at %}input-error{% endif %}" required>
-                                {% if errors.ends_at %}<span class="mt-1 text-sm text-error">{{ errors.ends_at }}</span>{% endif %}
-                            </label>
+                            {% include "reservations/partials/calculated_end_time.html" %}
 
                             <label class="form-control w-full">
                                 <span class="label">
-                                    <span class="label-text font-medium">Party size <span class="text-error">*</span></span>
+                                    <span class="label-text font-medium">Discount (₱)</span>
                                 </span>
-                                <input type="number" name="party_size" min="1" value="{{ form_data.party_size|default:'1' }}" class="input input-bordered w-full {% if errors.party_size %}input-error{% endif %}" required>
-                                {% if errors.party_size %}<span class="mt-1 text-sm text-error">{{ errors.party_size }}</span>{% endif %}
+                                <input type="number" name="discount" min="0" max="99999999.99" step="0.01" value="{{ form_data.discount|default:'0.00' }}" class="input input-bordered w-full {% if errors.discount %}input-error{% endif %}">
+                                {% if errors.discount %}<span class="mt-1 text-sm text-error">{{ errors.discount }}</span>{% endif %}
                             </label>
                         </div>
+
+                        {% include "reservations/partials/price_summary.html" %}
 
                         <div class="flex flex-col-reverse gap-2 border-t border-base-300 pt-5 sm:flex-row sm:justify-end">
                             <a href="{% url 'reservations' request.branch.slug %}" class="btn btn-ghost">Cancel</a>
@@ -112,4 +115,8 @@
         </section>
     </div>
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/reservation-price-preview.js' %}" defer></script>
 {% endblock %}

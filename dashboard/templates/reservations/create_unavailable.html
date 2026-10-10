@@ -24,12 +24,14 @@
 
                 {% if not facilities %}
                     <div role="alert" class="alert alert-warning">
+                        {% include "reservations/partials/warning_icon.html" %}
                         <span>No facilities are available for this branch.</span>
                     </div>
                 {% endif %}
 
                 {% if is_past_date %}
                     <div role="alert" class="alert alert-warning">
+                        {% include "reservations/partials/warning_icon.html" %}
                         <span>Past dates are read-only. Select today or a future date to add unavailable time.</span>
                     </div>
                 {% else %}

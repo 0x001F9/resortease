@@ -61,6 +61,7 @@
 
 {% if is_past_date %}
     <div role="alert" class="alert alert-warning mt-6">
+        {% include "reservations/partials/warning_icon.html" %}
         <span>Past dates are read-only. New entries can only be added for today or a future date.</span>
     </div>
 {% elif is_unavailable %}

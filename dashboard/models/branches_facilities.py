@@ -69,7 +69,9 @@ class Facility(models.Model):
     rate_morning = models.PositiveIntegerField(null=True, default=None)
     # 7PM to 6AM = 11 hours
     rate_evening = models.PositiveIntegerField(null=True, default=None)
-    
+    # Additional amount charged when the facility exceeds the included hours,
+    # calculated per extra hour.
+    rate_per_extra_hour = models.PositiveIntegerField(null=True, default=None)
 
     class Meta:
         db_table = "facilities"

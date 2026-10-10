@@ -219,7 +219,31 @@ class CalendarEntryViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f'value="{selected_day.isoformat()}T09:00"')
-        self.assertContains(response, f'value="{selected_day.isoformat()}T10:00"')
+        self.assertContains(response, 'type="datetime-local"')
+        self.assertContains(response, 'lang="en-US"')
+        self.assertRegex(
+            response.content.decode(),
+            r'data-start-picker[^>]*\sdisabled(?:\s|>)',
+        )
+        self.assertContains(response, 'name="rate_package"')
+        self.assertContains(response, 'name="days"')
+        self.assertContains(
+            response,
+            'class="form-control w-full sm:col-span-2"',
+        )
+        self.assertContains(response, 'type="hidden" name="ends_at"')
+        self.assertContains(response, "data-end-display")
+        self.assertContains(response, ">Ends</span>")
+        self.assertContains(response, 'class="input input-bordered flex w-full items-center"')
+        self.assertNotContains(response, "data-start-display")
+        self.assertNotContains(response, 'type="datetime-local" name="ends_at"')
+        self.assertLess(
+            response.content.index(b'data-start-picker'),
+            response.content.index(b'data-end-display'),
+        )
+        self.assertContains(response, "Price summary")
+        self.assertContains(response, "/static/js/reservation-price-preview.js")
+        self.assertNotContains(response, 'name="party_size"')
         self.assertContains(response, '<option value="confirmed" selected>')
         self.assertContains(
             response,
@@ -244,11 +268,32 @@ class CalendarEntryViewTests(TestCase):
         self.assertContains(response, "Create booking")
         self.assertContains(response, "automatically confirmed")
         self.assertContains(response, f'value="{selected_day.isoformat()}T09:00"')
-        self.assertContains(response, f'value="{selected_day.isoformat()}T10:00"')
+        self.assertContains(response, 'lang="en-US"')
+        self.assertContains(response, 'type="datetime-local"')
+        self.assertContains(response, 'name="rate_package"')
+        self.assertContains(response, 'name="days"')
+        self.assertContains(response, 'data-start-picker')
+        self.assertRegex(
+            response.content.decode(),
+            r'data-start-picker[^>]*\sdisabled(?:\s|>)',
+        )
+        self.assertContains(response, 'type="hidden" name="ends_at"')
+        self.assertContains(response, "data-end-display")
+        self.assertContains(response, ">Ends</span>")
+        self.assertContains(response, 'class="input input-bordered flex w-full items-center"')
+        self.assertNotContains(response, "data-start-display")
+        self.assertNotContains(response, 'type="datetime-local" name="ends_at"')
+        self.assertLess(
+            response.content.index(b'data-start-picker'),
+            response.content.index(b'data-end-display'),
+        )
         self.assertContains(
             response,
-            f'<option value="{self.facility.pk}" selected>',
+            f'value="{self.facility.pk}" data-rate-24-hours=""',
         )
+        self.assertContains(response, "Price summary")
+        self.assertContains(response, "/static/js/reservation-price-preview.js")
+        self.assertNotContains(response, 'name="party_size"')
         self.assertNotContains(response, "special_requests")
         self.assertNotContains(response, "name=\"status\"")
 
@@ -274,8 +319,7 @@ class CalendarEntryViewTests(TestCase):
                 "facility": str(self.facility.pk),
                 "guest": str(guest.pk),
                 "starts_at": f"{starts_at.isoformat()}T08:00",
-                "ends_at": f"{starts_at.isoformat()}T17:00",
-                "party_size": "2",
+                "rate_package": "morning",
                 "status": Reservation.Status.PENDING,
             },
         )
@@ -283,6 +327,7 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         reservation = Reservation.objects.get(guest=guest)
         calendar_entry = Calendar.objects.get(reservation=reservation)
+        self.assertEqual(reservation.party_size, 1)
         self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
         self.assertEqual(calendar_entry.status, Calendar.Status.CONFIRMED)
 
@@ -299,9 +344,10 @@ class CalendarEntryViewTests(TestCase):
         )
         reservation.special_requests = "Please prepare a quiet area."
         reservation.party_size = 3
+        reservation.discount = Decimal("15.00")
         reservation.save()
-        entry.total_amount = Decimal("120.00")
-        entry.save()
+        reservation.raw_amount = Decimal("120.00")
+        reservation.save(update_fields=["raw_amount", "updated_at"])
         Payment.objects.create(
             calendar_entry=entry,
             amount=Decimal("50.00"),
@@ -326,7 +372,12 @@ class CalendarEntryViewTests(TestCase):
         self.assertContains(response, "booking_guest@example.com")
         self.assertContains(response, "Test Pool")
         self.assertContains(response, "Please prepare a quiet area.")
+        self.assertContains(response, "Price summary")
+        self.assertContains(response, "Raw amount")
+        self.assertNotContains(response, "Invoice reference")
         self.assertContains(response, "₱120.00")
+        self.assertContains(response, "−₱15.00")
+        self.assertContains(response, "₱105.00")
         self.assertContains(response, "receipt-123")
         self.assertContains(response, "Edit booking")
 
@@ -382,32 +433,32 @@ class CalendarEntryViewTests(TestCase):
             (
                 "create-reservation",
                 time(8),
-                1,
-                time(8),
+                "24hours",
+                2,
                 Reservation.Status.CONFIRMED,
-                Decimal("120.00"),
+                Decimal("240.00"),
             ),
             (
                 "create-booking",
                 time(8),
+                "22hours",
                 1,
-                time(6),
                 None,
                 Decimal("110.00"),
             ),
             (
                 "create-booking",
                 time(8),
-                0,
-                time(17),
+                "morning",
+                1,
                 None,
                 Decimal("90.00"),
             ),
             (
                 "create-booking",
                 time(19),
+                "evening",
                 1,
-                time(6),
                 None,
                 Decimal("80.00"),
             ),
@@ -416,8 +467,8 @@ class CalendarEntryViewTests(TestCase):
         for index, (
             route_name,
             start_time,
-            end_day_offset,
-            end_time,
+            rate_package,
+            days,
             reservation_status,
             expected_amount,
         ) in enumerate(booking_cases):
@@ -425,10 +476,6 @@ class CalendarEntryViewTests(TestCase):
                 starts_at = datetime.combine(
                     selected_day + timedelta(days=index * 2),
                     start_time,
-                )
-                ends_at = datetime.combine(
-                    starts_at.date() + timedelta(days=end_day_offset),
-                    end_time,
                 )
                 guest = User.object.create(
                     username=f"priced_guest_{index}",
@@ -443,8 +490,10 @@ class CalendarEntryViewTests(TestCase):
                     "facility": str(self.facility.pk),
                     "guest": str(guest.pk),
                     "starts_at": starts_at.strftime("%Y-%m-%dT%H:%M"),
-                    "ends_at": ends_at.strftime("%Y-%m-%dT%H:%M"),
-                    "party_size": "1",
+                    "rate_package": rate_package,
+                    "days": str(days),
+                    "discount": "12.50",
+                    "ends_at": "2099-01-01T00:00",
                 }
                 if reservation_status is not None:
                     post_data["status"] = reservation_status
@@ -463,9 +512,52 @@ class CalendarEntryViewTests(TestCase):
                     reservation=reservation
                 )
                 self.assertEqual(
-                    calendar_entry.total_amount,
+                    reservation.raw_amount,
                     expected_amount,
                 )
+                self.assertEqual(reservation.party_size, 1)
+                self.assertEqual(reservation.discount, Decimal("12.50"))
+                duration = {
+                    "24hours": timedelta(days=days),
+                    "22hours": timedelta(hours=22),
+                    "morning": timedelta(hours=9),
+                    "evening": timedelta(hours=11),
+                }[rate_package]
+                self.assertEqual(
+                    reservation.ends_at,
+                    timezone.make_aware(starts_at) + duration,
+                )
+
+    def test_reservation_discount_must_be_nonnegative_and_have_two_decimal_places(self):
+        selected_day = timezone.localdate() + timedelta(days=1)
+        self.facility.rate_morning = 90
+        self.facility.save()
+
+        guest = User.object.create(
+            username="discount_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234599",
+            email="discount_guest@example.com",
+            first_name="Discount",
+            last_name="Guest",
+        )
+        response = self.client.post(
+            reverse("create-reservation", kwargs={"branch": self.branch.slug}),
+            {
+                "facility": str(self.facility.pk),
+                "guest": str(guest.pk),
+                "starts_at": f"{selected_day.isoformat()}T08:00",
+                "rate_package": "morning",
+                "party_size": "1",
+                "discount": "-1.00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter a non-negative discount")
+        self.assertContains(response, 'value="-1.00"')
+        self.assertFalse(Reservation.objects.filter(guest=guest).exists())
 
     def test_booking_requires_a_matching_package_with_a_configured_rate(self):
         self.facility.rate_24hours = 120
@@ -479,28 +571,28 @@ class CalendarEntryViewTests(TestCase):
             (
                 "create-booking",
                 time(9),
-                time(10),
+                "morning",
                 "unmatched_booking",
                 None,
             ),
             (
                 "create-reservation",
                 time(9),
-                time(10),
-                "unmatched_confirmed_reservation",
+                "morning",
+                "unmatched_confirmed",
                 Reservation.Status.CONFIRMED,
             ),
             (
                 "create-reservation",
                 time(9),
-                time(10),
-                "unmatched_pending_reservation",
+                "morning",
+                "unmatched_pending",
                 Reservation.Status.PENDING,
             ),
             (
                 "create-booking",
                 time(8),
-                time(17),
+                "morning",
                 "missing_rate",
                 None,
             ),
@@ -508,7 +600,7 @@ class CalendarEntryViewTests(TestCase):
         for index, (
             route_name,
             start_time,
-            end_time,
+            rate_package,
             username,
             reservation_status,
         ) in enumerate(cases):
@@ -526,7 +618,6 @@ class CalendarEntryViewTests(TestCase):
                     last_name="Required",
                 )
                 starts_at = datetime.combine(selected_day, start_time)
-                ends_at = datetime.combine(selected_day, end_time)
 
                 response = self.client.post(
                     reverse(
@@ -537,7 +628,8 @@ class CalendarEntryViewTests(TestCase):
                         "facility": str(self.facility.pk),
                         "guest": str(guest.pk),
                         "starts_at": starts_at.strftime("%Y-%m-%dT%H:%M"),
-                        "ends_at": ends_at.strftime("%Y-%m-%dT%H:%M"),
+                        "rate_package": rate_package,
+                        "days": "1",
                         "party_size": "1",
                         **(
                             {"status": reservation_status}
@@ -548,12 +640,10 @@ class CalendarEntryViewTests(TestCase):
                 )
 
                 self.assertEqual(response.status_code, 200)
-                self.assertIn("starts_at", response.context["errors"])
-                self.assertEqual(
-                    response.context["errors"]["starts_at"],
-                    "Choose a time range matching a configured facility rate: "
-                    "24 hours, 22 hours, 8 AM–5 PM, or 7 PM–6 AM.",
+                error_field = (
+                    "rate_package" if username == "missing_rate" else "starts_at"
                 )
+                self.assertIn(error_field, response.context["errors"])
                 self.assertFalse(
                     Reservation.objects.filter(guest=guest).exists()
                 )
@@ -562,7 +652,7 @@ class CalendarEntryViewTests(TestCase):
         self.facility.rate_morning = 90
         self.facility.save()
         guest = User.object.create(
-            username="overlap_booking_guest",
+            username="overlap_book",
             role=User.Role.User,
             phone_number_code="+1",
             phone_number="5551234572",
@@ -590,7 +680,7 @@ class CalendarEntryViewTests(TestCase):
                 "facility": str(self.facility.pk),
                 "guest": str(guest.pk),
                 "starts_at": f"{starts_at.date().isoformat()}T08:00",
-                "ends_at": f"{starts_at.date().isoformat()}T17:00",
+                "rate_package": "morning",
                 "party_size": "2",
             },
         )
@@ -750,7 +840,7 @@ class CalendarEntryViewTests(TestCase):
                 "facility": str(self.facility.pk),
                 "guest": str(guest.pk),
                 "starts_at": f"{starts_at.isoformat()}T08:00",
-                "ends_at": f"{starts_at.isoformat()}T17:00",
+                "rate_package": "morning",
                 "party_size": "1",
                 "status": "confirmed",
             },
@@ -936,7 +1026,7 @@ class CalendarEntryViewTests(TestCase):
             timezone.localtime(reservation.ends_at).date(),
             updated_end,
         )
-        self.assertEqual(entry.total_amount, Decimal("130.00"))
+        self.assertEqual(reservation.raw_amount, Decimal("130.00"))
 
     def test_reservation_rejects_a_past_date(self):
         guest = User.object.create(
@@ -958,7 +1048,7 @@ class CalendarEntryViewTests(TestCase):
                 "facility": str(self.facility.pk),
                 "guest": str(guest.pk),
                 "starts_at": f"{starts_at.isoformat()}T09:00",
-                "ends_at": f"{starts_at.isoformat()}T10:00",
+                "rate_package": "24hours",
                 "party_size": "1",
                 "status": "confirmed",
             },
