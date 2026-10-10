@@ -40,9 +40,11 @@
         </div>
 
         <div class='flex shrink-0 items-center justify-end gap-2 text-sm sm:gap-4'>
-            <button class="btn btn-primary btn-sm hidden md:block">
-                Express Check-in
-            </button>
+            <a href="/dashboard/{{ request.branch.slug }}/reservations/booking/new/">
+                <button class="btn btn-primary btn-sm hidden md:block">
+                    Create Booking
+                </button>
+            </a>
 
             <div class="dropdown dropdown-end">
                 <div class="avatar" role="button" tabindex="0">

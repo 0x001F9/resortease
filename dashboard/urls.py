@@ -8,6 +8,7 @@ from dashboard.views.facility_detail import FacilityDetailView
 from dashboard.views.edit_facility import EditFacilityView
 from dashboard.views.inventory import InventoryView
 from dashboard.views.reservations import ReservationsCalendarView
+from dashboard.views.reservation_detail import ReservationDetailView
 from dashboard.views.create_reservation import (
     CreateBookingView,
     CreateReservationView,
@@ -41,6 +42,11 @@ urlpatterns = [
         '<str:branch>/reservations/booking/new/',
         CreateBookingView.as_view(),
         name='create-booking',
+    ),
+    path(
+        '<str:branch>/reservations/<int:reservation_id>/',
+        ReservationDetailView.as_view(),
+        name='reservation-detail',
     ),
     path(
         '<str:branch>/reservations/calendar/day/',

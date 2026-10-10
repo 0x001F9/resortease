@@ -13,6 +13,10 @@
                             <span class="font-medium">
                                 {{ entry.reservation.guest.first_name }} {{ entry.reservation.guest.last_name }}
                             </span>
+                            <a
+                                class="link link-primary"
+                                href="{% url 'reservation-detail' request.branch.slug entry.reservation_id %}"
+                            >Details</a>
                         {% endif %}
                         <span class="text-base-content/70">· {{ entry.facility.name }}</span>
                     </span>

@@ -1,11 +1,12 @@
 from datetime import datetime, time, timedelta
+from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from account.models import User
-from dashboard.models import Branch, Calendar, Facility, Reservation
+from dashboard.models import Branch, Calendar, Facility, Payment, Reservation
 
 
 class CalendarEntryViewTests(TestCase):
@@ -252,6 +253,8 @@ class CalendarEntryViewTests(TestCase):
         self.assertNotContains(response, "name=\"status\"")
 
     def test_calendar_booking_is_confirmed_and_added_to_calendar(self):
+        self.facility.rate_morning = 90
+        self.facility.save()
         guest = User.object.create(
             username="direct_booking_guest",
             role=User.Role.User,
@@ -270,8 +273,8 @@ class CalendarEntryViewTests(TestCase):
             {
                 "facility": str(self.facility.pk),
                 "guest": str(guest.pk),
-                "starts_at": f"{starts_at.isoformat()}T09:00",
-                "ends_at": f"{starts_at.isoformat()}T10:00",
+                "starts_at": f"{starts_at.isoformat()}T08:00",
+                "ends_at": f"{starts_at.isoformat()}T17:00",
                 "party_size": "2",
                 "status": Reservation.Status.PENDING,
             },
@@ -283,7 +286,281 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
         self.assertEqual(calendar_entry.status, Calendar.Status.CONFIRMED)
 
+    def test_reservation_detail_page_shows_booking_and_payment_details(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        reservation.special_requests = "Please prepare a quiet area."
+        reservation.party_size = 3
+        reservation.save()
+        entry.total_amount = Decimal("120.00")
+        entry.save()
+        Payment.objects.create(
+            calendar_entry=entry,
+            amount=Decimal("50.00"),
+            currency="PHP",
+            method=Payment.Method.CASH,
+            status=Payment.Status.SUCCEEDED,
+            transaction_reference="receipt-123",
+        )
+
+        response = self.client.get(
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Booking details")
+        self.assertContains(response, "booking_guest@example.com")
+        self.assertContains(response, "Test Pool")
+        self.assertContains(response, "Please prepare a quiet area.")
+        self.assertContains(response, "₱120.00")
+        self.assertContains(response, "receipt-123")
+        self.assertContains(response, "Edit booking")
+
+    def test_reservation_detail_page_does_not_expose_other_branch_reservations(self):
+        other_branch = Branch.objects.create(
+            name="Other Branch",
+            slug="other-branch",
+            city="Other City",
+            address="2 Test Street",
+        )
+        other_facility = Facility.objects.create(
+            branch=other_branch,
+            name="Other Pool",
+            slug="other-pool",
+        )
+        guest = User.object.create(
+            username="private_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234620",
+            email="private_guest@example.com",
+            first_name="Private",
+            last_name="Guest",
+        )
+        reservation = Reservation.objects.create(
+            guest=guest,
+            facility=other_facility,
+            starts_at=timezone.now() + timedelta(days=1),
+            ends_at=timezone.now() + timedelta(days=1, hours=1),
+        )
+
+        response = self.client.get(
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_created_reservations_and_bookings_store_exact_package_rates(self):
+        self.facility.rate_24hours = 120
+        self.facility.rate_22hours = 110
+        self.facility.rate_morning = 90
+        self.facility.rate_evening = 80
+        self.facility.save()
+
+        selected_day = timezone.localdate() + timedelta(days=1)
+        booking_cases = (
+            (
+                "create-reservation",
+                time(8),
+                1,
+                time(8),
+                Reservation.Status.CONFIRMED,
+                Decimal("120.00"),
+            ),
+            (
+                "create-booking",
+                time(8),
+                1,
+                time(6),
+                None,
+                Decimal("110.00"),
+            ),
+            (
+                "create-booking",
+                time(8),
+                0,
+                time(17),
+                None,
+                Decimal("90.00"),
+            ),
+            (
+                "create-booking",
+                time(19),
+                1,
+                time(6),
+                None,
+                Decimal("80.00"),
+            ),
+        )
+
+        for index, (
+            route_name,
+            start_time,
+            end_day_offset,
+            end_time,
+            reservation_status,
+            expected_amount,
+        ) in enumerate(booking_cases):
+            with self.subTest(route=route_name, expected_amount=expected_amount):
+                starts_at = datetime.combine(
+                    selected_day + timedelta(days=index * 2),
+                    start_time,
+                )
+                ends_at = datetime.combine(
+                    starts_at.date() + timedelta(days=end_day_offset),
+                    end_time,
+                )
+                guest = User.object.create(
+                    username=f"priced_guest_{index}",
+                    role=User.Role.User,
+                    phone_number_code="+1",
+                    phone_number=f"555123460{index}",
+                    email=f"priced_guest_{index}@example.com",
+                    first_name="Priced",
+                    last_name="Guest",
+                )
+                post_data = {
+                    "facility": str(self.facility.pk),
+                    "guest": str(guest.pk),
+                    "starts_at": starts_at.strftime("%Y-%m-%dT%H:%M"),
+                    "ends_at": ends_at.strftime("%Y-%m-%dT%H:%M"),
+                    "party_size": "1",
+                }
+                if reservation_status is not None:
+                    post_data["status"] = reservation_status
+
+                response = self.client.post(
+                    reverse(
+                        route_name,
+                        kwargs={"branch": self.branch.slug},
+                    ),
+                    post_data,
+                )
+
+                self.assertEqual(response.status_code, 302)
+                reservation = Reservation.objects.get(guest=guest)
+                calendar_entry = Calendar.objects.get(
+                    reservation=reservation
+                )
+                self.assertEqual(
+                    calendar_entry.total_amount,
+                    expected_amount,
+                )
+
+    def test_booking_requires_a_matching_package_with_a_configured_rate(self):
+        self.facility.rate_24hours = 120
+        self.facility.rate_22hours = 110
+        self.facility.rate_morning = 90
+        self.facility.rate_evening = 80
+        self.facility.save()
+        selected_day = timezone.localdate() + timedelta(days=1)
+
+        cases = (
+            (
+                "create-booking",
+                time(9),
+                time(10),
+                "unmatched_booking",
+                None,
+            ),
+            (
+                "create-reservation",
+                time(9),
+                time(10),
+                "unmatched_confirmed_reservation",
+                Reservation.Status.CONFIRMED,
+            ),
+            (
+                "create-reservation",
+                time(9),
+                time(10),
+                "unmatched_pending_reservation",
+                Reservation.Status.PENDING,
+            ),
+            (
+                "create-booking",
+                time(8),
+                time(17),
+                "missing_rate",
+                None,
+            ),
+        )
+        for index, (
+            route_name,
+            start_time,
+            end_time,
+            username,
+            reservation_status,
+        ) in enumerate(cases):
+            with self.subTest(username=username):
+                if username == "missing_rate":
+                    self.facility.rate_morning = None
+                    self.facility.save()
+                guest = User.object.create(
+                    username=username,
+                    role=User.Role.User,
+                    phone_number_code="+1",
+                    phone_number=f"555123463{index}",
+                    email=f"{username}@example.com",
+                    first_name="Rate",
+                    last_name="Required",
+                )
+                starts_at = datetime.combine(selected_day, start_time)
+                ends_at = datetime.combine(selected_day, end_time)
+
+                response = self.client.post(
+                    reverse(
+                        route_name,
+                        kwargs={"branch": self.branch.slug},
+                    ),
+                    {
+                        "facility": str(self.facility.pk),
+                        "guest": str(guest.pk),
+                        "starts_at": starts_at.strftime("%Y-%m-%dT%H:%M"),
+                        "ends_at": ends_at.strftime("%Y-%m-%dT%H:%M"),
+                        "party_size": "1",
+                        **(
+                            {"status": reservation_status}
+                            if reservation_status is not None
+                            else {}
+                        ),
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("starts_at", response.context["errors"])
+                self.assertEqual(
+                    response.context["errors"]["starts_at"],
+                    "Choose a time range matching a configured facility rate: "
+                    "24 hours, 22 hours, 8 AM–5 PM, or 7 PM–6 AM.",
+                )
+                self.assertFalse(
+                    Reservation.objects.filter(guest=guest).exists()
+                )
+
     def test_calendar_booking_rejects_an_overlapping_entry(self):
+        self.facility.rate_morning = 90
+        self.facility.save()
         guest = User.object.create(
             username="overlap_booking_guest",
             role=User.Role.User,
@@ -312,8 +589,8 @@ class CalendarEntryViewTests(TestCase):
             {
                 "facility": str(self.facility.pk),
                 "guest": str(guest.pk),
-                "starts_at": f"{starts_at.date().isoformat()}T09:30",
-                "ends_at": f"{starts_at.date().isoformat()}T10:30",
+                "starts_at": f"{starts_at.date().isoformat()}T08:00",
+                "ends_at": f"{starts_at.date().isoformat()}T17:00",
                 "party_size": "2",
             },
         )
@@ -445,6 +722,8 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(Calendar.objects.count(), 1)
 
     def test_reservation_rejects_overlapping_calendar_entry(self):
+        self.facility.rate_morning = 90
+        self.facility.save()
         guest = User.object.create(
             username="overlap_guest",
             role=User.Role.User,
@@ -470,8 +749,8 @@ class CalendarEntryViewTests(TestCase):
             {
                 "facility": str(self.facility.pk),
                 "guest": str(guest.pk),
-                "starts_at": f"{starts_at.isoformat()}T10:00",
-                "ends_at": f"{starts_at.isoformat()}T12:00",
+                "starts_at": f"{starts_at.isoformat()}T08:00",
+                "ends_at": f"{starts_at.isoformat()}T17:00",
                 "party_size": "1",
                 "status": "confirmed",
             },
@@ -608,6 +887,8 @@ class CalendarEntryViewTests(TestCase):
         )
 
     def test_edit_booking_updates_reservation_and_calendar_fields(self):
+        self.facility.rate_morning = 130
+        self.facility.save()
         starts_at = timezone.make_aware(
             datetime.combine(
                 timezone.localdate() + timedelta(days=1),
@@ -632,8 +913,8 @@ class CalendarEntryViewTests(TestCase):
             {
                 "facility": str(self.facility.pk),
                 "guest": str(reservation.guest_id),
-                "starts_at": f"{updated_start.isoformat()}T13:00",
-                "ends_at": f"{updated_start.isoformat()}T15:00",
+                "starts_at": f"{updated_start.isoformat()}T08:00",
+                "ends_at": f"{updated_start.isoformat()}T17:00",
                 "party_size": "3",
                 "status": Reservation.Status.CONFIRMED,
                 "special_requests": "Updated request",
@@ -649,12 +930,13 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(reservation.ends_at, entry.ends_at)
         self.assertEqual(
             timezone.localtime(reservation.starts_at).strftime("%Y-%m-%dT%H:%M"),
-            f"{updated_start.isoformat()}T13:00",
+            f"{updated_start.isoformat()}T08:00",
         )
         self.assertEqual(
             timezone.localtime(reservation.ends_at).date(),
             updated_end,
         )
+        self.assertEqual(entry.total_amount, Decimal("130.00"))
 
     def test_reservation_rejects_a_past_date(self):
         guest = User.object.create(

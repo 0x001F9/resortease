@@ -11,6 +11,7 @@ from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
 from account.models import User
+from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.models import Calendar, Facility, Reservation
 
@@ -460,6 +461,20 @@ class EditCalendarEntryView(View):
                 }
             )
 
+        total_amount = None
+        if (
+            reservation is not None
+            and facility is not None
+            and starts_at is not None
+            and ends_at is not None
+            and ends_at > starts_at
+        ):
+            total_amount = calculate_total_amount(
+                facility, starts_at, ends_at
+            )
+            if total_amount is None:
+                errors["starts_at"] = RATE_REQUIRED_ERROR
+
         if (
             facility is not None
             and starts_at is not None
@@ -467,8 +482,14 @@ class EditCalendarEntryView(View):
             and ends_at > starts_at
             and (
                 reservation is None
-                or status
-                in {Reservation.Status.CONFIRMED, Reservation.Status.COMPLETED}
+                or (
+                    total_amount is not None
+                    and status
+                    in {
+                        Reservation.Status.CONFIRMED,
+                        Reservation.Status.COMPLETED,
+                    }
+                )
             )
             and has_calendar_conflict(
                 facility,
@@ -493,6 +514,7 @@ class EditCalendarEntryView(View):
             entry.starts_at = starts_at
             entry.ends_at = ends_at
             if reservation:
+                entry.total_amount = total_amount
                 reservation.guest = guest
                 reservation.facility = facility
                 reservation.starts_at = starts_at

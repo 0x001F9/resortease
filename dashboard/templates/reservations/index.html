@@ -197,6 +197,10 @@
                             <td>
                                 <div class="font-medium">{{ reservation.guest.first_name }} {{ reservation.guest.last_name }}</div>
                                 <div class="text-sm text-base-content/60">{{ reservation.guest.email }}</div>
+                                <a
+                                    class="link link-primary mt-1 inline-block text-sm"
+                                    href="{% url 'reservation-detail' request.branch.slug reservation.pk %}"
+                                >View details</a>
                             </td>
                             <td>
                                 {% if reservation.facility %}

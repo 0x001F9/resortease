@@ -1,0 +1,151 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-4xl">
+        <a href="{% url 'reservations' request.branch.slug %}" class="btn btn-ghost btn-sm mb-4">
+            <span aria-hidden="true">&larr;</span>
+            Reservations &amp; calendar
+        </a>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-6 p-5 sm:p-8">
+                <header class="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-wide text-primary">{{ request.branch.name }}</p>
+                        <h1 class="card-title mt-1 text-2xl sm:text-3xl">
+                            {% if calendar_entry %}Booking{% else %}Reservation{% endif %} details
+                        </h1>
+                        {% if calendar_entry and calendar_entry.booking_reference %}
+                            <p class="mt-2 font-mono text-sm text-base-content/70">
+                                Reference {{ calendar_entry.booking_reference }}
+                            </p>
+                        {% endif %}
+                    </div>
+                    <span class="badge badge-lg {% if reservation.status == 'confirmed' %}badge-success{% elif reservation.status == 'cancelled' %}badge-error{% elif reservation.status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">
+                        {{ reservation.get_status_display }}
+                    </span>
+                </header>
+
+                <section aria-labelledby="stay-heading">
+                    <h2 id="stay-heading" class="mb-3 text-lg font-semibold">Reservation</h2>
+                    <dl class="grid gap-4 rounded-box border border-base-300 p-4 sm:grid-cols-2">
+                        <div>
+                            <dt class="text-sm text-base-content/60">Guest</dt>
+                            <dd class="font-medium">{{ reservation.guest.first_name }} {{ reservation.guest.last_name }}</dd>
+                            <dd class="text-sm text-base-content/70">{{ reservation.guest.email }}</dd>
+                            {% if reservation.guest.phone_number %}
+                                <dd class="text-sm text-base-content/70">
+                                    {{ reservation.guest.phone_number_code }} {{ reservation.guest.phone_number }}
+                                </dd>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <dt class="text-sm text-base-content/60">Facility</dt>
+                            <dd class="font-medium">
+                                {% if reservation.facility %}
+                                    {{ reservation.facility.name }}
+                                {% else %}
+                                    Facility no longer available
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm text-base-content/60">Starts</dt>
+                            <dd class="font-medium">{{ reservation.starts_at|date:"l, F j, Y" }}</dd>
+                            <dd>{{ reservation.starts_at|date:"H:i" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm text-base-content/60">Ends</dt>
+                            <dd class="font-medium">{{ reservation.ends_at|date:"l, F j, Y" }}</dd>
+                            <dd>{{ reservation.ends_at|date:"H:i" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm text-base-content/60">Party size</dt>
+                            <dd class="font-medium">{{ reservation.party_size }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm text-base-content/60">Created</dt>
+                            <dd class="font-medium">{{ reservation.created_at|date:"M j, Y H:i" }}</dd>
+                        </div>
+                        <div class="sm:col-span-2">
+                            <dt class="text-sm text-base-content/60">Special requests</dt>
+                            <dd class="whitespace-pre-line">{% if reservation.special_requests %}{{ reservation.special_requests }}{% else %}<span class="text-base-content/50">None</span>{% endif %}</dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <section aria-labelledby="billing-heading">
+                    <h2 id="billing-heading" class="mb-3 text-lg font-semibold">Booking and billing</h2>
+                    {% if calendar_entry %}
+                        <dl class="grid gap-4 rounded-box border border-base-300 p-4 sm:grid-cols-2">
+                            <div>
+                                <dt class="text-sm text-base-content/60">Calendar status</dt>
+                                <dd class="font-medium">{{ calendar_entry.get_status_display }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-base-content/60">Total amount</dt>
+                                <dd class="text-xl font-bold">
+                                    {% if calendar_entry.has_amount %}
+                                        ₱{{ calendar_entry.total_amount|floatformat:2 }}
+                                    {% else %}
+                                        <span class="text-base-content/50">Not set</span>
+                                    {% endif %}
+                                </dd>
+                                {% if not calendar_entry.has_amount %}
+                                    <dd class="text-sm text-base-content/60">No applicable rate has been set for this booking.</dd>
+                                {% endif %}
+                            </div>
+                        </dl>
+
+                        <div class="mt-4">
+                            <h3 class="mb-2 font-semibold">Payments</h3>
+                            {% if calendar_entry.payments.all %}
+                                <div class="overflow-x-auto rounded-box border border-base-300">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Amount</th>
+                                                <th>Method</th>
+                                                <th>Status</th>
+                                                <th>Paid at</th>
+                                                <th>Transaction reference</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for payment in calendar_entry.payments.all %}
+                                                <tr>
+                                                    <td>{{ payment.currency }} {{ payment.amount|floatformat:2 }}</td>
+                                                    <td>{{ payment.get_method_display }}</td>
+                                                    <td>{{ payment.get_status_display }}</td>
+                                                    <td>{{ payment.paid_at|date:"M j, Y H:i"|default:"—" }}</td>
+                                                    <td>{{ payment.transaction_reference|default:"—" }}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <p class="rounded-box border border-base-300 p-4 text-sm text-base-content/70">
+                                    No payments have been recorded for this booking.
+                                </p>
+                            {% endif %}
+                        </div>
+
+                        <div class="mt-5 flex justify-end">
+                            <a
+                                class="btn btn-outline"
+                                href="{% url 'edit-calendar-entry' request.branch.slug calendar_entry.pk %}"
+                            >Edit booking</a>
+                        </div>
+                    {% else %}
+                        <p class="rounded-box border border-base-300 p-4 text-sm text-base-content/70">
+                            This reservation has not been added to the calendar as a booking yet.
+                        </p>
+                    {% endif %}
+                </section>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

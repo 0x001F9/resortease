@@ -11,13 +11,13 @@ from django.views import View
 from account.decoration.role_required import normal_user_not_allowed
 from account.models import User
 from dashboard.decorations.branch_check import check_branch_dashboard
+from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
 from dashboard.models import Calendar, Facility, Reservation
 from dashboard.views.calendar_entries import (
     get_entries_for_day,
     has_calendar_conflict,
     is_past_date,
 )
-
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
 @method_decorator(check_branch_dashboard, name="dispatch")
@@ -150,11 +150,24 @@ class CreateReservationView(View):
             and timezone.localtime(starts_at).date() < timezone.localdate()
         ):
             errors["starts_at"] = "Reservations cannot be added to a past date."
+        total_amount = None
         if (
             facility is not None
             and starts_at is not None
             and ends_at is not None
             and ends_at > starts_at
+        ):
+            total_amount = calculate_total_amount(
+                facility, starts_at, ends_at
+            )
+            if total_amount is None:
+                errors["starts_at"] = RATE_REQUIRED_ERROR
+        if (
+            facility is not None
+            and starts_at is not None
+            and ends_at is not None
+            and ends_at > starts_at
+            and total_amount is not None
             and status
             in {Reservation.Status.CONFIRMED, Reservation.Status.COMPLETED}
             and has_calendar_conflict(facility, starts_at, ends_at)
@@ -206,6 +219,7 @@ class CreateReservationView(View):
                     starts_at=starts_at,
                     ends_at=ends_at,
                     status=calendar_status,
+                    total_amount=total_amount,
                 )
         reservations_url = reverse(
             "reservations",

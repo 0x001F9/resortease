@@ -29,6 +29,12 @@
                     </span>
                 </div>
                 <div class="mt-3 flex flex-wrap justify-end gap-2 border-t border-base-300 pt-3">
+                    {% if not entry.is_unavailable %}
+                        <a
+                            class="btn btn-sm btn-ghost"
+                            href="{% url 'reservation-detail' request.branch.slug entry.reservation_id %}"
+                        >View details</a>
+                    {% endif %}
                     <a
                         class="btn btn-sm btn-outline"
                         href="{% url 'edit-calendar-entry' request.branch.slug entry.pk %}"

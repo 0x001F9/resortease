@@ -63,6 +63,14 @@ class Facility(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    rate_24hours = models.PositiveIntegerField(null=True, default=None)
+    rate_22hours = models.PositiveIntegerField(null=True, default=None)
+    # 8AM to 5PM = 9 hours
+    rate_morning = models.PositiveIntegerField(null=True, default=None)
+    # 7PM to 6AM = 11 hours
+    rate_evening = models.PositiveIntegerField(null=True, default=None)
+    
+
     class Meta:
         db_table = "facilities"
         constraints = [
