@@ -9,8 +9,8 @@
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"></script>
 </head>
 <body class="overflow-x-hidden">
-    <header class='flex justify-between items-center p-4 fixed w-full bg-white z-3'>
-        <div class='flex items-center justify-center gap-2'>
+    <header class='fixed inset-x-0 z-3 flex items-center justify-between gap-2 bg-white px-3 py-4 sm:p-4'>
+        <div class='flex min-w-0 items-center justify-center gap-2'>
             {% if not hide_aside %}
             <button class="btn btn-ghost w-8 box-border p-1 md:hidden" id="open-aside">
                 <img
@@ -24,7 +24,7 @@
                     ResortEase
                 </a>
             </h1>
-            <div class="divider md:divider-horizontal"></div>
+            <div class="hidden md:divider md:divider-horizontal"></div>
 
             <select class="branch-select select appearance-none select-sm bg-secondary text-white border-0 hidden md:block">
                 <option disabled>Branch</option>
@@ -39,7 +39,7 @@
             </select>
         </div>
 
-        <div class='flex items-center justify-end gap-4 text-sm'>
+        <div class='flex shrink-0 items-center justify-end gap-2 text-sm sm:gap-4'>
             <button class="btn btn-primary btn-sm hidden md:block">
                 Express Check-in
             </button>
@@ -70,7 +70,7 @@
     </header>
     
 
-    <div class="flex">
+    <div class="flex min-w-0">
         {% if not hide_aside %}
         <aside 
             class="duration-1000 bg-base-200 h-svh p-4 md:pt-22 md:max-w-60 md:w-full w-screen fixed md:static top-0 left-[-100vw] z-50 md:z-0"
@@ -131,7 +131,7 @@
             </div>
         </aside>
         {% endif %}
-        <div class="pt-22 flex-1">
+        <div class="min-w-0 flex-1 pt-22">
             {% block content %}
             Default content
             {% endblock %}
