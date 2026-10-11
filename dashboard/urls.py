@@ -12,6 +12,7 @@ from dashboard.views.reservation_detail import ReservationDetailView
 from dashboard.views.create_reservation import (
     CreateBookingView,
     CreateReservationView,
+    SearchReservationGuestsView,
 )
 from dashboard.views.calendar_entries import (
     CalendarDayEntriesView,
@@ -42,6 +43,11 @@ urlpatterns = [
         '<str:branch>/reservations/booking/new/',
         CreateBookingView.as_view(),
         name='create-booking',
+    ),
+    path(
+        '<str:branch>/reservations/guests/search/',
+        SearchReservationGuestsView.as_view(),
+        name='search-reservation-guests',
     ),
     path(
         '<str:branch>/reservations/<int:reservation_id>/',

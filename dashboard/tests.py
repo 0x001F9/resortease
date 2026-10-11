@@ -297,12 +297,59 @@ class CalendarEntryViewTests(TestCase):
         self.assertNotContains(response, "special_requests")
         self.assertNotContains(response, "name=\"status\"")
 
+    def test_guest_search_includes_active_users_of_every_role(self):
+        worker = User.object.create(
+            username="frontdesk_mira",
+            role=User.Role.FrontDeskAgent,
+            phone_number_code="+1",
+            phone_number="5551234590",
+            email="mira.guest@example.com",
+            first_name="Mira",
+            middle_name="Fern",
+            last_name="Guest",
+        )
+        inactive_worker = User.object.create(
+            username="inactive_mira",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5551234591",
+            email="inactive.mira@example.com",
+            first_name="Mira",
+            last_name="Inactive",
+            is_active=False,
+        )
+        url = reverse(
+            "search-reservation-guests",
+            kwargs={"branch": self.branch.slug},
+        )
+
+        for query in ("mira fern", "frontdesk_mira", "mira.guest@example.com"):
+            with self.subTest(query=query):
+                response = self.client.get(url, {"q": query})
+                self.assertEqual(response.status_code, 200)
+                result_ids = [
+                    result["id"] for result in response.json()["results"]
+                ]
+                self.assertIn(worker.pk, result_ids)
+                self.assertNotIn(inactive_worker.pk, result_ids)
+
+    def test_reservation_and_booking_forms_use_guest_search_modal(self):
+        for route_name in ("create-reservation", "create-booking"):
+            with self.subTest(route_name=route_name):
+                response = self.client.get(
+                    reverse(route_name, kwargs={"branch": self.branch.slug})
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "Find a guest")
+                self.assertContains(response, "reservation-user-picker.js")
+                self.assertNotContains(response, '<select name="guest"')
+
     def test_calendar_booking_is_confirmed_and_added_to_calendar(self):
         self.facility.rate_morning = 90
         self.facility.save()
         guest = User.object.create(
             username="direct_booking_guest",
-            role=User.Role.User,
+            role=User.Role.Employee,
             phone_number_code="+1",
             phone_number="5551234571",
             email="direct_booking_guest@example.com",

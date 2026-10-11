@@ -1,6 +1,8 @@
 from datetime import date, time, timedelta, timezone as datetime_timezone
 from decimal import Decimal, InvalidOperation
 
+from django.db.models import Q
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.db import transaction
@@ -71,6 +73,12 @@ class CreateReservationView(View):
         )
         if selected_facility is not None:
             form_data.setdefault("facility", str(selected_facility.pk))
+        guest_id = str(form_data.get("guest", ""))
+        selected_guest = (
+            User.object.filter(pk=guest_id, is_active=True).first()
+            if guest_id.isdecimal()
+            else None
+        )
         date_value = request.GET.get("date", "") or form_data.get(
             "starts_at", ""
         )[:10]
@@ -80,10 +88,8 @@ class CreateReservationView(View):
             selected_day = None
         return {
             "facilities": facilities,
-            "guests": User.object.filter(
-                role=User.Role.User,
-                is_active=True,
-            ).order_by("first_name", "last_name"),
+            "has_guests": User.object.filter(is_active=True).exists(),
+            "selected_guest": selected_guest,
             "status_choices": Reservation.Status.choices,
             "form_data": form_data or {},
             "errors": errors or {},
@@ -123,10 +129,7 @@ class CreateReservationView(View):
 
     def post(self, request, *args, **kwargs):
         facilities = Facility.objects.filter(branch=request.branch)
-        guests = User.object.filter(
-            role=User.Role.User,
-            is_active=True,
-        )
+        guests = User.object.filter(is_active=True)
         facility_id = request.POST.get("facility", "")
         guest_id = request.POST.get("guest", "")
         starts_at_value = request.POST.get("starts_at", "").strip()
@@ -162,7 +165,7 @@ class CreateReservationView(View):
         if facility is None:
             errors["facility"] = "Select a facility in this branch."
         if guest is None:
-            errors["guest"] = "Select an active guest."
+            errors["guest"] = "Select an active user."
 
         starts_at = parse_datetime(starts_at_value)
         if starts_at is None:
@@ -301,3 +304,46 @@ class CreateReservationView(View):
 class CreateBookingView(CreateReservationView):
     template_name = "reservations/create_booking.html"
     auto_confirm = True
+
+
+@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(check_branch_dashboard, name="dispatch")
+class SearchReservationGuestsView(View):
+    def get(self, request, *args, **kwargs):
+        query = request.GET.get("q", "").strip()[:100]
+        if not query:
+            return JsonResponse({"results": [], "has_more": False})
+
+        matching_users = User.object.filter(is_active=True)
+        for term in query.split():
+            matching_users = matching_users.filter(
+                Q(username__icontains=term)
+                | Q(email__icontains=term)
+                | Q(first_name__icontains=term)
+                | Q(middle_name__icontains=term)
+                | Q(last_name__icontains=term)
+            )
+
+        users = list(
+            matching_users.order_by("first_name", "last_name", "username")[:21]
+        )
+        results = [
+            {
+                "id": user.pk,
+                "name": " ".join(
+                    part
+                    for part in (
+                        user.first_name,
+                        user.middle_name,
+                        user.last_name,
+                    )
+                    if part
+                ),
+                "username": user.username,
+                "email": user.email,
+            }
+            for user in users[:20]
+        ]
+        return JsonResponse(
+            {"results": results, "has_more": len(users) > 20}
+        )

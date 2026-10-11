@@ -29,10 +29,10 @@
                         <span>No facilities are available for this branch.</span>
                     </div>
                 {% endif %}
-                {% if not guests %}
+                {% if not has_guests %}
                     <div role="alert" class="alert alert-warning">
                         {% include "reservations/partials/warning_icon.html" %}
-                        <span>No active guest accounts are available to book.</span>
+                        <span>No active user accounts are available to book.</span>
                     </div>
                 {% endif %}
                 {% if is_past_date %}
@@ -53,20 +53,7 @@
                             <p class="text-sm text-base-content/70 sm:col-span-2">
                                 Choose a time range with a configured facility rate: 24 hours, 22 hours, 8 AM–5 PM, or 7 PM–6 AM.
                             </p>
-                            <label class="form-control w-full">
-                                <span class="label">
-                                    <span class="label-text font-medium">Guest <span class="text-error">*</span></span>
-                                </span>
-                                <select name="guest" class="select select-bordered w-full {% if errors.guest %}select-error{% endif %}" required {% if not guests %}disabled{% endif %}>
-                                    <option value="" disabled {% if not form_data.guest %}selected{% endif %}>Choose a guest</option>
-                                    {% for guest in guests %}
-                                        <option value="{{ guest.pk }}" {% if form_data.guest == guest.pk|stringformat:"s" %}selected{% endif %}>
-                                            {{ guest.first_name }} {{ guest.last_name }} ({{ guest.email }})
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                                {% if errors.guest %}<span class="mt-1 text-sm text-error">{{ errors.guest }}</span>{% endif %}
-                            </label>
+                            {% include "reservations/partials/user_picker.html" %}
 
                             <label class="form-control w-full">
                                 <span class="label">
@@ -107,7 +94,7 @@
 
                         <div class="flex flex-col-reverse gap-2 border-t border-base-300 pt-5 sm:flex-row sm:justify-end">
                             <a href="{% url 'reservations' request.branch.slug %}" class="btn btn-ghost">Cancel</a>
-                            <button type="submit" class="btn btn-primary" {% if not facilities or not guests %}disabled{% endif %}>Create confirmed booking</button>
+                            <button type="submit" class="btn btn-primary" {% if not facilities or not has_guests %}disabled{% endif %}>Create confirmed booking</button>
                         </div>
                     </form>
                 {% endif %}
@@ -119,4 +106,5 @@
 
 {% block scripts %}
 <script src="{% static 'js/reservation-price-preview.js' %}" defer></script>
+<script src="{% static 'js/reservation-user-picker.js' %}" defer></script>
 {% endblock %}
