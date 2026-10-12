@@ -28,7 +28,15 @@
                 </header>
 
                 <section aria-labelledby="stay-heading">
-                    <h2 id="stay-heading" class="mb-3 text-lg font-semibold">Reservation</h2>
+                    <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <h2 id="stay-heading" class="text-lg font-semibold">Reservation</h2>
+                        {% if reservation.status != 'confirmed' %}
+                            <a
+                                class="btn btn-outline btn-sm"
+                                href="{% url 'edit-reservation' request.branch.slug reservation.pk %}"
+                            >Edit reservation</a>
+                        {% endif %}
+                    </div>
                     <dl class="grid gap-4 rounded-box border border-base-300 p-4 sm:grid-cols-2">
                         <div>
                             <dt class="text-sm text-base-content/60">Guest</dt>
@@ -60,6 +68,19 @@
                             <dd class="font-medium">{{ reservation.ends_at|date:"l, F j, Y" }}</dd>
                             <dd>{{ reservation.ends_at|date:"H:i" }}</dd>
                         </div>
+                        {% if reservation.status != 'confirmed' %}
+                            <div class="sm:col-span-2">
+                                {% if availability_conflict %}
+                                    <p role="alert" class="rounded-box border border-error/40 bg-error/10 p-3 text-sm text-error">
+                                        This facility already has a calendar entry during this reservation time. Edit the reservation to choose another time.
+                                    </p>
+                                {% else %}
+                                    <p role="status" class="rounded-box border border-success/40 bg-success/10 p-3 text-sm text-success">
+                                        This reservation time is available on the calendar.
+                                    </p>
+                                {% endif %}
+                            </div>
+                        {% endif %}
                         <div>
                             <dt class="text-sm text-base-content/60">Party size</dt>
                             <dd class="font-medium">{{ reservation.party_size }}</dd>
@@ -110,27 +131,55 @@
                         </dl>
                     </section>
 
-                    {% if calendar_entry %}
+                    {% if reservation.status == 'confirmed' %}
                         <div class="mt-4">
-                            <h3 class="mb-2 font-semibold">Payments</h3>
-                            {% if calendar_entry.payments.all %}
+                            <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <h3 class="font-semibold">Payments</h3>
+                                    <p class="text-sm text-base-content/70">
+                                        Total paid: PHP {{ paid_total|floatformat:2 }}
+                                        {% if remaining_balance is not None %}
+                                            · Balance: PHP {{ remaining_balance|floatformat:2 }}
+                                        {% endif %}
+                                    </p>
+                                </div>
+                                {% if not is_fully_paid and reservation.total_amount is not None %}
+                                    <a
+                                        class="btn btn-primary btn-sm"
+                                        href="{% url 'create-payment' request.branch.slug reservation.pk %}"
+                                    >Add payment</a>
+                                {% elif is_fully_paid %}
+                                    <span class="badge badge-success">Paid in full</span>
+                                {% endif %}
+                            </div>
+                            {% if payments %}
                                 <div class="overflow-x-auto rounded-box border border-base-300">
                                     <table class="table">
                                         <thead>
                                             <tr>
+                                                <th>Type</th>
                                                 <th>Amount</th>
                                                 <th>Method</th>
                                                 <th>Status</th>
+                                                <th>Cashier</th>
                                                 <th>Paid at</th>
                                                 <th>Transaction reference</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for payment in calendar_entry.payments.all %}
+                                            {% for payment in payments %}
                                                 <tr>
+                                                    <td>{{ payment.get_type_display }}</td>
                                                     <td>{{ payment.currency }} {{ payment.amount|floatformat:2 }}</td>
-                                                    <td>{{ payment.get_method_display }}</td>
+                                                    <td>{{ payment.method }}</td>
                                                     <td>{{ payment.get_status_display }}</td>
+                                                    <td>
+                                                        {% if payment.cashier %}
+                                                            {{ payment.cashier.first_name }} {{ payment.cashier.last_name }}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
                                                     <td>{{ payment.paid_at|date:"M j, Y H:i"|default:"—" }}</td>
                                                     <td>{{ payment.transaction_reference|default:"—" }}</td>
                                                 </tr>
@@ -140,11 +189,13 @@
                                 </div>
                             {% else %}
                                 <p class="rounded-box border border-base-300 p-4 text-sm text-base-content/70">
-                                    No payments have been recorded for this booking.
+                                    No payments have been recorded for this reservation.
                                 </p>
                             {% endif %}
                         </div>
+                    {% endif %}
 
+                    {% if calendar_entry %}
                         <div class="mt-5 flex justify-end">
                             <a
                                 class="btn btn-outline"

@@ -339,21 +339,12 @@ class EditCalendarEntryView(View):
     def get_form_context(self, request, entry, form_data=None, errors=None):
         form_data = form_data or {}
         reservation = entry.reservation if entry.reservation_id else None
-        guests = list(
-            User.object.filter(
-                role=User.Role.User,
-                is_active=True,
-            ).order_by("first_name", "last_name")
-        )
-        if reservation and reservation.guest not in guests:
-            guests.append(reservation.guest)
         return {
             "entry": entry,
             "reservation": reservation,
             "facilities": Facility.objects.filter(
                 branch=request.branch
             ).order_by("name"),
-            "guests": guests,
             "status_choices": Reservation.Status.choices,
             "form_data": form_data or {
                 "facility": str(entry.facility_id),
@@ -429,17 +420,7 @@ class EditCalendarEntryView(View):
         party_size = 1
         special_requests = ""
         if reservation:
-            guest_id = request.POST.get("guest", "")
-            guest = (
-                User.object.filter(
-                    pk=guest_id,
-                    role=User.Role.User,
-                ).first()
-                if guest_id.isdecimal()
-                else None
-            )
-            if guest is None:
-                errors["guest"] = "Select a valid guest."
+            guest = reservation.guest
             status = request.POST.get("status", "")
             if status not in Reservation.Status.values:
                 errors["status"] = "Select a valid reservation status."
@@ -454,7 +435,6 @@ class EditCalendarEntryView(View):
             ).strip()
             form_data.update(
                 {
-                    "guest": request.POST.get("guest", ""),
                     "status": status,
                     "party_size": request.POST.get("party_size", ""),
                     "special_requests": special_requests,

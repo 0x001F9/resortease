@@ -1,0 +1,71 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-2xl">
+        <a
+            href="{% url 'reservation-detail' request.branch.slug reservation.pk %}"
+            class="btn btn-ghost btn-sm mb-4"
+        >
+            <span aria-hidden="true">&larr;</span>
+            Back to reservation
+        </a>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-6 p-5 sm:p-8">
+                <header>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">{{ request.branch.name }}</p>
+                    <h1 class="card-title mt-1 text-2xl">Edit reservation</h1>
+                    <p class="mt-2 text-sm text-base-content/70">
+                        Update the schedule, special requests, discount, or reservation status.
+                    </p>
+                </header>
+
+                {% if availability_conflict %}
+                    <div role="alert" class="alert alert-error">
+                        This facility already has a calendar entry during the selected time. Choose another time to save this reservation.
+                    </div>
+                {% else %}
+                    <div role="status" class="alert alert-success">
+                        The selected time is available on the calendar.
+                    </div>
+                {% endif %}
+
+                <form method="post" class="space-y-4">
+                    {% csrf_token %}
+                    <div class="rounded-box border border-base-300 p-4">
+                        <p class="text-sm text-base-content/60">Guest</p>
+                        <p class="font-medium">
+                            {{ reservation.guest.first_name }} {{ reservation.guest.last_name }}
+                        </p>
+                        <p class="text-sm text-base-content/70">{{ reservation.guest.email }}</p>
+                    </div>
+                    {% for field in form %}
+                        <div>
+                            <label class="label" for="{{ field.id_for_label }}">
+                                <span class="label-text font-medium">{{ field.label }}</span>
+                            </label>
+                            {{ field }}
+                            {% for error in field.errors %}
+                                <p class="mt-1 text-sm text-error">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                    {% if form.non_field_errors %}
+                        <div role="alert" class="alert alert-error">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+                    <div class="flex flex-wrap justify-end gap-2">
+                        <a
+                            href="{% url 'reservation-detail' request.branch.slug reservation.pk %}"
+                            class="btn btn-ghost"
+                        >Cancel</a>
+                        <button type="submit" class="btn btn-primary">Save changes</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

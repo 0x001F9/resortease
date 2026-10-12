@@ -385,7 +385,7 @@ class CalendarEntryViewTests(TestCase):
                 time(hour=8),
             )
         )
-        reservation, entry = self.create_calendar_reservation(
+        reservation, _entry = self.create_calendar_reservation(
             starts_at,
             starts_at + timedelta(hours=24),
         )
@@ -396,10 +396,11 @@ class CalendarEntryViewTests(TestCase):
         reservation.raw_amount = Decimal("120.00")
         reservation.save(update_fields=["raw_amount", "updated_at"])
         Payment.objects.create(
-            calendar_entry=entry,
+            reservation_id=reservation,
+            type=Payment.Type.DOWNPAYMENT,
             amount=Decimal("50.00"),
             currency="PHP",
-            method=Payment.Method.CASH,
+            method="cash",
             status=Payment.Status.SUCCEEDED,
             transaction_reference="receipt-123",
         )
@@ -425,8 +426,380 @@ class CalendarEntryViewTests(TestCase):
         self.assertContains(response, "₱120.00")
         self.assertContains(response, "−₱15.00")
         self.assertContains(response, "₱105.00")
+        self.assertContains(response, "Total paid: PHP 50.00")
+        self.assertContains(response, "Balance: PHP 55.00")
+        self.assertContains(response, "Down payment")
+        self.assertContains(response, "cash")
         self.assertContains(response, "receipt-123")
         self.assertContains(response, "Edit booking")
+
+    def test_reservation_detail_hides_payments_when_reservation_not_confirmed(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        reservation.status = Reservation.Status.PENDING
+        reservation.raw_amount = Decimal("100.00")
+        reservation.save(update_fields=["status", "raw_amount", "updated_at"])
+        Payment.objects.create(
+            reservation_id=reservation,
+            amount=Decimal("20.00"),
+            currency="PHP",
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+            transaction_reference="pending-reservation-receipt",
+        )
+
+        response = self.client.get(
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Payments")
+        self.assertNotContains(response, "Total paid")
+        self.assertNotContains(response, "pending-reservation-receipt")
+        self.assertNotContains(response, "Add payment")
+        self.assertContains(response, "Edit reservation")
+
+    def test_edit_pending_reservation_updates_requests_discount_and_status(self):
+        self.facility.rate_24hours = 100
+        self.facility.save(update_fields=["rate_24hours", "updated_at"])
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        new_starts_at = starts_at + timedelta(days=2)
+        reservation.status = Reservation.Status.PENDING
+        reservation.raw_amount = Decimal("100.00")
+        reservation.save(update_fields=["status", "raw_amount", "updated_at"])
+        url = reverse(
+            "edit-reservation",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        response = self.client.post(
+            url,
+            {
+                "starts_at": timezone.localtime(new_starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(
+                    new_starts_at + timedelta(hours=24)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "special_requests": "Please prepare towels.",
+                "discount": "20.00",
+                "status": Reservation.Status.CONFIRMED,
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+        )
+        reservation.refresh_from_db()
+        self.assertEqual(
+            reservation.special_requests,
+            "Please prepare towels.",
+        )
+        self.assertEqual(reservation.discount, Decimal("20.00"))
+        self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
+        self.assertEqual(reservation.starts_at, new_starts_at)
+        self.assertEqual(reservation.raw_amount, Decimal("100.00"))
+        entry = Calendar.objects.get(reservation=reservation)
+        self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
+        self.assertEqual(entry.starts_at, new_starts_at)
+        self.assertEqual(entry.ends_at, new_starts_at + timedelta(hours=24))
+
+    def test_edit_reservation_rejects_discount_above_raw_amount(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        reservation.status = Reservation.Status.PENDING
+        reservation.raw_amount = Decimal("100.00")
+        reservation.save(update_fields=["status", "raw_amount", "updated_at"])
+
+        response = self.client.post(
+            reverse(
+                "edit-reservation",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+            {
+                "starts_at": timezone.localtime(starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(
+                    starts_at + timedelta(hours=24)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "special_requests": "",
+                "discount": "101.00",
+                "status": Reservation.Status.PENDING,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Discount cannot be greater than the reservation amount.",
+        )
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.discount, Decimal("0.00"))
+
+    def test_pending_reservation_availability_and_edit_reject_calendar_conflict(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        reservation.status = Reservation.Status.PENDING
+        reservation.raw_amount = Decimal("100.00")
+        reservation.save(update_fields=["status", "raw_amount", "updated_at"])
+        Calendar.objects.create(
+            facility=self.facility,
+            starts_at=starts_at + timedelta(hours=1),
+            ends_at=starts_at + timedelta(hours=2),
+        )
+
+        detail_response = self.client.get(
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+        self.assertContains(
+            detail_response,
+            "This facility already has a calendar entry during this reservation time.",
+        )
+
+        edit_url = reverse(
+            "edit-reservation",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+        edit_get_response = self.client.get(edit_url)
+        self.assertContains(edit_get_response, "booking_guest@example.com")
+        self.assertNotContains(edit_get_response, 'name="guest"')
+        self.assertContains(
+            edit_get_response,
+            "This facility already has a calendar entry during the selected time.",
+        )
+
+        edit_response = self.client.post(
+            edit_url,
+            {
+                "starts_at": timezone.localtime(starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(
+                    starts_at + timedelta(hours=24)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Reservation.Status.PENDING,
+            },
+        )
+        self.assertEqual(edit_response.status_code, 200)
+        self.assertContains(
+            edit_response,
+            "This facility already has a calendar entry during that time.",
+        )
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.status, Reservation.Status.PENDING)
+
+    def test_confirmed_reservation_cannot_be_edited_with_reservation_form(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        response = self.client.get(
+            reverse(
+                "edit-reservation",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+        )
+
+    def test_add_payment_records_successful_payment_and_cashier(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        reservation.raw_amount = Decimal("100.00")
+        reservation.save(update_fields=["raw_amount", "updated_at"])
+
+        response = self.client.post(
+            reverse(
+                "create-payment",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+            {
+                "amount": "35.00",
+                "type": Payment.Type.DOWNPAYMENT,
+                "method": "cash",
+                "transaction_reference": "cashier-receipt-35",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+        )
+        payment = Payment.objects.get(reservation_id=reservation)
+        self.assertEqual(payment.amount, Decimal("35.00"))
+        self.assertEqual(payment.currency, "PHP")
+        self.assertEqual(payment.status, Payment.Status.SUCCEEDED)
+        self.assertEqual(payment.cashier, self.user)
+        self.assertIsNotNone(payment.paid_at)
+
+        detail_response = self.client.get(
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+        self.assertContains(detail_response, "Total paid: PHP 35.00")
+        self.assertContains(detail_response, "Balance: PHP 65.00")
+        self.assertNotContains(detail_response, "Paid in full")
+        self.assertContains(detail_response, "Add payment")
+
+        Payment.objects.create(
+            reservation_id=reservation,
+            type=Payment.Type.BALANCE,
+            amount=Decimal("65.00"),
+            currency="PHP",
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+        )
+        fully_paid_response = self.client.get(
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+        self.assertContains(fully_paid_response, "Total paid: PHP 100.00")
+        self.assertContains(fully_paid_response, "Balance: PHP 0.00")
+        self.assertContains(fully_paid_response, "Paid in full")
+        self.assertNotContains(fully_paid_response, "Add payment")
+
+    def test_add_payment_rejects_amount_above_remaining_balance(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        reservation.raw_amount = Decimal("100.00")
+        reservation.save(update_fields=["raw_amount", "updated_at"])
+        url = reverse(
+            "create-payment",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        response = self.client.post(
+            url,
+            {
+                "amount": "100.01",
+                "type": Payment.Type.FULL_PAYMENT,
+                "method": "cash",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Amount cannot exceed the remaining balance")
+        self.assertFalse(Payment.objects.filter(reservation_id=reservation).exists())
 
     def test_reservation_detail_page_does_not_expose_other_branch_reservations(self):
         other_branch = Branch.objects.create(
@@ -1038,18 +1411,23 @@ class CalendarEntryViewTests(TestCase):
         )
         updated_start = timezone.localdate() + timedelta(days=2)
         updated_end = updated_start + timedelta(days=1)
+        url = reverse(
+            "edit-calendar-entry",
+            kwargs={
+                "branch": self.branch.slug,
+                "entry_id": entry.pk,
+            },
+        )
+
+        edit_response = self.client.get(url)
+        self.assertContains(edit_response, "booking_guest@example.com")
+        self.assertNotContains(edit_response, 'name="guest"')
 
         response = self.client.post(
-            reverse(
-                "edit-calendar-entry",
-                kwargs={
-                    "branch": self.branch.slug,
-                    "entry_id": entry.pk,
-                },
-            ),
+            url,
             {
                 "facility": str(self.facility.pk),
-                "guest": str(reservation.guest_id),
+                "guest": "999999",
                 "starts_at": f"{updated_start.isoformat()}T08:00",
                 "ends_at": f"{updated_start.isoformat()}T17:00",
                 "party_size": "3",
@@ -1061,6 +1439,10 @@ class CalendarEntryViewTests(TestCase):
         reservation.refresh_from_db()
         entry.refresh_from_db()
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            reservation.guest_id,
+            User.object.get(username="booking_guest").pk,
+        )
         self.assertEqual(reservation.party_size, 3)
         self.assertEqual(reservation.special_requests, "Updated request")
         self.assertEqual(reservation.starts_at, entry.starts_at)

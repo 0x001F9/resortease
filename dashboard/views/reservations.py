@@ -1,8 +1,7 @@
 import calendar
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal
 
-from django.db.models import CharField, Q, Sum
+from django.db.models import CharField, Q
 from django.db.models.functions import Cast
 from django.shortcuts import render
 from django.utils import timezone
@@ -11,7 +10,7 @@ from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.decorations.branch_check import check_branch_dashboard
-from dashboard.models import Calendar, Facility, Payment, Reservation
+from dashboard.models import Calendar, Facility, Reservation
 from dashboard.views.calendar_entries import is_day_fully_unavailable
 
 
@@ -153,12 +152,6 @@ class ReservationsCalendarView(View):
             facility__branch=request.branch,
             reservation__isnull=False,
         ).exclude(status=Calendar.Status.CANCELLED).count()
-        revenue = Payment.objects.filter(
-            calendar_entry__facility__branch=request.branch,
-            status=Payment.Status.SUCCEEDED,
-            currency="PHP",
-        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-
         return render(
             request,
             self.template_name,
@@ -178,6 +171,5 @@ class ReservationsCalendarView(View):
                     status=Reservation.Status.PENDING
                 ).count(),
                 "total_bookings": total_bookings,
-                "revenue": revenue,
             },
         )

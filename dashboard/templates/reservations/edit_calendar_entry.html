@@ -26,19 +26,13 @@
                 <form method="post" class="space-y-5">
                     {% csrf_token %}
                     {% if reservation %}
-                        <label class="form-control w-full">
-                            <span class="label">
-                                <span class="label-text font-medium">Guest <span class="text-error">*</span></span>
-                            </span>
-                            <select name="guest" class="select select-bordered w-full {% if errors.guest %}select-error{% endif %}" required>
-                                {% for guest in guests %}
-                                    <option value="{{ guest.pk }}" {% if form_data.guest == guest.pk|stringformat:"s" %}selected{% endif %}>
-                                        {{ guest.first_name }} {{ guest.last_name }} ({{ guest.email }})
-                                    </option>
-                                {% endfor %}
-                            </select>
-                            {% if errors.guest %}<span class="mt-1 text-sm text-error">{{ errors.guest }}</span>{% endif %}
-                        </label>
+                        <div class="rounded-box border border-base-300 p-4">
+                            <p class="text-sm text-base-content/60">Guest</p>
+                            <p class="font-medium">
+                                {{ reservation.guest.first_name }} {{ reservation.guest.last_name }}
+                            </p>
+                            <p class="text-sm text-base-content/70">{{ reservation.guest.email }}</p>
+                        </div>
                     {% endif %}
 
                     <label class="form-control w-full">
