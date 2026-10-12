@@ -90,7 +90,6 @@ class CreateReservationView(View):
             "facilities": facilities,
             "has_guests": User.object.filter(is_active=True).exists(),
             "selected_guest": selected_guest,
-            "status_choices": Reservation.Status.choices,
             "form_data": form_data or {},
             "errors": errors or {},
             "selected_day": selected_day,
@@ -118,7 +117,6 @@ class CreateReservationView(View):
         else:
             initial_form_data = {
                 "starts_at": f"{selected_day.isoformat()}T09:00",
-                "status": Reservation.Status.CONFIRMED,
                 "days": "1",
             }
         return render(
@@ -139,7 +137,7 @@ class CreateReservationView(View):
         status = (
             Reservation.Status.CONFIRMED
             if self.auto_confirm
-            else request.POST.get("status", Reservation.Status.PENDING)
+            else Reservation.Status.PENDING
         )
         special_requests = request.POST.get("special_requests", "").strip()
 
@@ -150,7 +148,6 @@ class CreateReservationView(View):
             "rate_package": rate_package,
             "days": days_value,
             "discount": discount_value,
-            "status": status,
             "special_requests": special_requests,
         }
         errors = {}
@@ -255,9 +252,6 @@ class CreateReservationView(View):
                 "Enter a non-negative discount no greater than the raw amount, "
                 "with up to 2 decimal places."
             )
-
-        if status not in Reservation.Status.values:
-            errors["status"] = "Select a valid reservation status."
 
         if errors:
             return render(

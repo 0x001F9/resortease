@@ -134,21 +134,6 @@
                             {% endif %}
                         </label>
 
-                        <label class="form-control w-full">
-                            <span class="label">
-                                <span class="label-text font-medium">Status</span>
-                            </span>
-                            <select name="status" class="select select-bordered w-full {% if errors.status %}select-error{% endif %}">
-                                {% for value, label in status_choices %}
-                                    <option value="{{ value }}" {% if form_data.status == value or not form_data.status and value == "pending" %}selected{% endif %}>
-                                        {{ label }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                            {% if errors.status %}
-                                <span class="mt-1 text-sm text-error">{{ errors.status }}</span>
-                            {% endif %}
-                        </label>
                     </div>
 
                     {% include "reservations/partials/price_summary.html" %}

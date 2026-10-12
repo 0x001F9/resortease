@@ -343,6 +343,8 @@ class CalendarEntryViewTests(TestCase):
                 self.assertContains(response, "Find a guest")
                 self.assertContains(response, "reservation-user-picker.js")
                 self.assertNotContains(response, '<select name="guest"')
+                if route_name == "create-reservation":
+                    self.assertNotContains(response, 'name="status"')
 
     def test_calendar_booking_is_confirmed_and_added_to_calendar(self):
         self.facility.rate_morning = 90
@@ -372,6 +374,11 @@ class CalendarEntryViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
+        self.assertRedirects(
+            response,
+            f"{reverse('reservations', kwargs={'branch': self.branch.slug})}"
+            f"?month={starts_at.strftime('%Y-%m')}",
+        )
         reservation = Reservation.objects.get(guest=guest)
         calendar_entry = Calendar.objects.get(reservation=reservation)
         self.assertEqual(reservation.party_size, 1)
@@ -855,7 +862,7 @@ class CalendarEntryViewTests(TestCase):
                 time(8),
                 "24hours",
                 2,
-                Reservation.Status.CONFIRMED,
+                Reservation.Status.PENDING,
                 Decimal("240.00"),
             ),
             (
@@ -915,7 +922,9 @@ class CalendarEntryViewTests(TestCase):
                     "discount": "12.50",
                     "ends_at": "2099-01-01T00:00",
                 }
-                if reservation_status is not None:
+                if route_name == "create-reservation":
+                    post_data["status"] = Reservation.Status.CONFIRMED
+                elif reservation_status is not None:
                     post_data["status"] = reservation_status
 
                 response = self.client.post(
@@ -928,15 +937,30 @@ class CalendarEntryViewTests(TestCase):
 
                 self.assertEqual(response.status_code, 302)
                 reservation = Reservation.objects.get(guest=guest)
-                calendar_entry = Calendar.objects.get(
-                    reservation=reservation
-                )
                 self.assertEqual(
                     reservation.raw_amount,
                     expected_amount,
                 )
+                self.assertEqual(
+                    reservation.status,
+                    reservation_status or Reservation.Status.CONFIRMED,
+                )
                 self.assertEqual(reservation.party_size, 1)
                 self.assertEqual(reservation.discount, Decimal("12.50"))
+                if route_name == "create-reservation":
+                    self.assertFalse(
+                        Calendar.objects.filter(
+                            reservation=reservation
+                        ).exists()
+                    )
+                else:
+                    calendar_entry = Calendar.objects.get(
+                        reservation=reservation
+                    )
+                    self.assertEqual(
+                        calendar_entry.status,
+                        Calendar.Status.CONFIRMED,
+                    )
                 duration = {
                     "24hours": timedelta(days=days),
                     "22hours": timedelta(hours=22),
