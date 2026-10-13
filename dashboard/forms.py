@@ -5,7 +5,12 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
-from dashboard.models import Payment, Reservation
+from dashboard.models import (
+    Inventory,
+    InventoryAsset,
+    Payment,
+    Reservation,
+)
 
 
 class PaymentForm(forms.ModelForm):
@@ -148,7 +153,6 @@ class ReservationEditForm(forms.ModelForm):
                 "A facility is required to check availability and rates.",
             )
             return cleaned_data
-
         raw_amount = self.instance.raw_amount
         if schedule_changed:
             raw_amount = calculate_total_amount(
@@ -171,3 +175,109 @@ class ReservationEditForm(forms.ModelForm):
                 "Discount cannot be greater than the reservation amount.",
             )
         return cleaned_data
+
+
+class InventoryItemCreateForm(forms.ModelForm):
+    opening_quantity = forms.IntegerField(
+        min_value=0,
+        initial=0,
+        required=False,
+        widget=forms.NumberInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "min": "0",
+                "step": "1",
+            }
+        ),
+        help_text="If entered, this will be recorded as opening stock.",
+    )
+
+    class Meta:
+        model = Inventory
+        fields = ("name", "sku", "unit", "reorder_level", "unit_cost", "notes")
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "sku": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "unit": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "reorder_level": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "min": "0",
+                    "step": "1",
+                }
+            ),
+            "unit_cost": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "min": "0",
+                    "step": "0.01",
+                    "placeholder": "0.00",
+                }
+            ),
+            "notes": forms.Textarea(
+                attrs={
+                    "class": "textarea textarea-bordered w-full",
+                    "rows": 3,
+                }
+            ),
+        }
+        labels = {"unit_cost": "Unit cost (PHP)"}
+
+    def clean_unit_cost(self):
+        unit_cost = self.cleaned_data.get("unit_cost")
+        if unit_cost is not None and unit_cost < 0:
+            raise forms.ValidationError("Unit cost cannot be negative.")
+        return unit_cost
+
+
+class InventoryAssetCreateForm(forms.ModelForm):
+    class Meta:
+        model = InventoryAsset
+        fields = (
+            "name",
+            "asset_tag",
+            "category",
+            "serial_number",
+            "purchase_date",
+            "purchase_cost",
+            "notes",
+        )
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "asset_tag": forms.TextInput(
+                attrs={"class": "input input-bordered w-full"}
+            ),
+            "category": forms.TextInput(
+                attrs={"class": "input input-bordered w-full"}
+            ),
+            "serial_number": forms.TextInput(
+                attrs={"class": "input input-bordered w-full"}
+            ),
+            "purchase_date": forms.DateInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "type": "date",
+                }
+            ),
+            "purchase_cost": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "min": "0",
+                    "step": "0.01",
+                    "placeholder": "0.00",
+                }
+            ),
+            "notes": forms.Textarea(
+                attrs={
+                    "class": "textarea textarea-bordered w-full",
+                    "rows": 3,
+                }
+            ),
+        }
+        labels = {"purchase_cost": "Purchase cost (PHP)"}
+
+    def clean_purchase_cost(self):
+        purchase_cost = self.cleaned_data.get("purchase_cost")
+        if purchase_cost is not None and purchase_cost < 0:
+            raise forms.ValidationError("Purchase cost cannot be negative.")
+        return purchase_cost

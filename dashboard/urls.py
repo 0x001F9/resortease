@@ -6,7 +6,12 @@ from dashboard.views.edit_maintenance import EditFacilitiesMaintenanceView
 from dashboard.views.maintenance_detail import MaintenanceDetailView
 from dashboard.views.facility_detail import FacilityDetailView
 from dashboard.views.edit_facility import EditFacilityView
-from dashboard.views.inventory import InventoryView
+from dashboard.views.inventory import (
+    InventoryAssetActivityView,
+    InventoryTransactionsView,
+    InventoryView,
+)
+from dashboard.views.add_inventory_item import AddInventoryItemView
 from dashboard.views.reservations import ReservationsCalendarView
 from dashboard.views.reservation_detail import ReservationDetailView
 from dashboard.views.create_payment import CreatePaymentView
@@ -30,6 +35,21 @@ urlpatterns = [
         '<str:branch>/inventory/',
         InventoryView.as_view(),
         name='inventory',
+    ),
+    path(
+        '<str:branch>/inventory/transactions/',
+        InventoryTransactionsView.as_view(),
+        name='inventory-transactions',
+    ),
+    path(
+        '<str:branch>/inventory/asset-activity/',
+        InventoryAssetActivityView.as_view(),
+        name='inventory-asset-activity',
+    ),
+    path(
+        '<str:branch>/inventory/add/',
+        AddInventoryItemView.as_view(),
+        name='add-inventory-item',
     ),
     path(
         '<str:branch>/reservations/',

@@ -14,13 +14,6 @@ class InventoryAsset(models.Model):
         on_delete=models.CASCADE,
         related_name="inventory_assets",
     )
-    facility = models.ForeignKey(
-        "Facility",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="inventory_assets",
-    )
     name = models.CharField(max_length=150)
     asset_tag = models.CharField(max_length=100, unique=True)
     category = models.CharField(max_length=100)

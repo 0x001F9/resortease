@@ -1,12 +1,23 @@
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from account.models import User
-from dashboard.models import Branch, Calendar, Facility, Payment, Reservation
+from dashboard.models import (
+    Branch,
+    Calendar,
+    Facility,
+    Inventory,
+    InventoryAsset,
+    InventoryTransaction,
+    Payment,
+    Reservation,
+)
+from dashboard.models.inventory_assets import InventoryAssetHistory
 
 
 class CalendarEntryViewTests(TestCase):
@@ -1654,3 +1665,289 @@ class CalendarEntryViewTests(TestCase):
         self.assertTrue(
             self.get_calendar_day(response, selected_day)["is_unavailable"]
         )
+
+
+class InventoryViewTests(TestCase):
+    def setUp(self):
+        self.user = User.object.create(
+            username="inventory_staff",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5551234599",
+            email="inventory_staff@example.com",
+            first_name="Inventory",
+            last_name="Staff",
+            is_superuser=True,
+            is_active=True,
+        )
+        self.client.force_login(self.user)
+        self.branch = Branch.objects.create(
+            name="Inventory Branch",
+            slug="inventory-branch",
+            city="Test City",
+            address="1 Inventory Street",
+        )
+        self.inventory_item = Inventory.objects.create(
+            branch=self.branch,
+            name="Pool Towels",
+            sku="POOL-TOWELS",
+            unit=Inventory.Unit.PACK,
+            quantity_on_hand=12,
+            reorder_level=5,
+            unit_cost=Decimal("6.50"),
+            notes="Back-of-house linen stock.",
+        )
+        InventoryTransaction.objects.create(
+            inventory=self.inventory_item,
+            transaction_type=InventoryTransaction.Type.RECEIVED,
+            quantity_change=12,
+            balance_before=0,
+            balance_after=12,
+            unit_cost=Decimal("6.50"),
+            performed_by=self.user,
+            reference="Initial stock",
+            notes="Opening inventory",
+        )
+        self.asset = InventoryAsset.objects.create(
+            branch=self.branch,
+            name="Pool Vacuum",
+            asset_tag="ASSET-POOL-01",
+            category="Pool equipment",
+        )
+        self.asset.record_event(
+            event_type="borrowed",
+            performed_by=self.user,
+            borrower=self.user,
+            notes="Assigned for scheduled cleaning.",
+        )
+
+    def test_inventory_page_renders_summary_and_recent_activity(self):
+        response = self.client.get(
+            reverse("inventory", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Inventory")
+        self.assertContains(response, "Pool Towels")
+        self.assertContains(response, "Initial stock")
+        self.assertContains(response, "12")
+        self.assertContains(response, "Low stock")
+        self.assertContains(response, "Recent activity")
+        self.assertContains(response, "Inventory assets")
+        self.assertContains(response, "At/below reorder level:")
+        self.assertNotContains(response, "Healthy:")
+        self.assertContains(response, "Pool Vacuum")
+        self.assertContains(response, "ASSET-POOL-01")
+        self.assertContains(response, "Inventory asset activity")
+        self.assertContains(response, "View all", count=2)
+        self.assertContains(response, "Borrowed")
+        self.assertContains(response, "Assigned for scheduled cleaning.")
+
+    def test_inventory_activity_limits_recent_items_and_shows_full_lists(self):
+        for index in range(2):
+            InventoryTransaction.objects.create(
+                inventory=self.inventory_item,
+                transaction_type=InventoryTransaction.Type.RECEIVED,
+                quantity_change=1,
+                balance_before=12 + index,
+                balance_after=13 + index,
+                performed_by=self.user,
+                reference=f"Extra stock {index}",
+            )
+            InventoryAsset.objects.create(
+                branch=self.branch,
+                name=f"Extra asset {index}",
+                asset_tag=f"ASSET-EXTRA-{index}",
+                category="Equipment",
+            ).record_event(
+                event_type="acquired",
+                performed_by=self.user,
+                notes=f"Added asset {index}.",
+            )
+
+        response = self.client.get(
+            reverse("inventory", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["recent_transactions"]), 2)
+        self.assertEqual(len(response.context["recent_asset_events"]), 2)
+
+        transactions_response = self.client.get(
+            reverse("inventory-transactions", kwargs={"branch": self.branch.slug})
+        )
+        asset_activity_response = self.client.get(
+            reverse("inventory-asset-activity", kwargs={"branch": self.branch.slug})
+        )
+        self.assertEqual(transactions_response.status_code, 200)
+        self.assertEqual(len(transactions_response.context["transactions"]), 3)
+        self.assertContains(transactions_response, "Extra stock 0")
+        self.assertEqual(asset_activity_response.status_code, 200)
+        self.assertEqual(len(asset_activity_response.context["asset_events"]), 3)
+        self.assertContains(asset_activity_response, "Extra asset 0")
+
+    def test_creating_inventory_and_asset_records_transaction_and_history(self):
+        item = Inventory.objects.create(
+            branch=self.branch,
+            name="Model Test Cleaning Supplies",
+            sku="MODEL-CLEANING-01",
+            unit=Inventory.Unit.BOTTLE,
+            reorder_level=3,
+            unit_cost=Decimal("12.50"),
+        )
+
+        transaction_record = item.record_transaction(
+            transaction_type=InventoryTransaction.Type.RECEIVED,
+            quantity_change=6,
+            performed_by=self.user,
+            reference="Model test receipt",
+        )
+
+        self.assertEqual(item.quantity_on_hand, 6)
+        self.assertEqual(transaction_record.inventory, item)
+        self.assertEqual(transaction_record.balance_before, 0)
+        self.assertEqual(transaction_record.balance_after, 6)
+        self.assertEqual(transaction_record.quantity_change, 6)
+        self.assertEqual(transaction_record.performed_by, self.user)
+        self.assertTrue(
+            InventoryTransaction.objects.filter(pk=transaction_record.pk).exists()
+        )
+
+        asset = InventoryAsset.objects.create(
+            branch=self.branch,
+            name="Model Test Vacuum",
+            asset_tag="ASSET-MODEL-TEST-01",
+            category="Cleaning equipment",
+        )
+        acquired_event = asset.record_event(
+            event_type=InventoryAssetHistory.Event.ACQUIRED,
+            performed_by=self.user,
+            notes="Asset added in model test.",
+        )
+        borrowed_event = asset.record_event(
+            event_type=InventoryAssetHistory.Event.BORROWED,
+            performed_by=self.user,
+            borrower=self.user,
+            notes="Asset borrowed in model test.",
+        )
+
+        asset.refresh_from_db()
+        self.assertEqual(asset.status, InventoryAsset.Status.BORROWED)
+        self.assertEqual(asset.borrowed_by, self.user)
+        self.assertEqual(acquired_event.status_before, InventoryAsset.Status.ACTIVE)
+        self.assertEqual(acquired_event.status_after, InventoryAsset.Status.ACTIVE)
+        self.assertEqual(borrowed_event.status_before, InventoryAsset.Status.ACTIVE)
+        self.assertEqual(borrowed_event.status_after, InventoryAsset.Status.BORROWED)
+        self.assertEqual(borrowed_event.borrower, self.user)
+        self.assertEqual(asset.history.count(), 2)
+        self.assertTrue(
+            InventoryAssetHistory.objects.filter(pk=borrowed_event.pk).exists()
+        )
+
+    def test_seed_inventory_demo_command_is_idempotent(self):
+        call_command("seed_inventory_demo", self.branch.slug)
+        call_command("seed_inventory_demo", self.branch.slug)
+
+        item = Inventory.objects.get(sku="DEMO-POOL-TOWELS")
+        self.assertEqual(item.branch, self.branch)
+        self.assertEqual(item.quantity_on_hand, 12)
+        self.assertEqual(item.transactions.count(), 1)
+        self.assertEqual(
+            item.transactions.get().reference,
+            "Demo seed opening stock",
+        )
+
+        asset = InventoryAsset.objects.get(asset_tag="DEMO-ASSET-POOL-01")
+        self.assertEqual(asset.branch, self.branch)
+        self.assertEqual(asset.history.count(), 1)
+        self.assertEqual(
+            asset.history.get().event_type,
+            InventoryAssetHistory.Event.ACQUIRED,
+        )
+
+    def test_add_inventory_page_renders_both_item_type_tabs(self):
+        stock_response = self.client.get(
+            reverse(
+                "add-inventory-item",
+                kwargs={"branch": self.branch.slug},
+            )
+        )
+        asset_response = self.client.get(
+            reverse(
+                "add-inventory-item",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {"type": "asset"},
+        )
+
+        self.assertEqual(stock_response.status_code, 200)
+        self.assertContains(stock_response, "Add stock item")
+        self.assertContains(stock_response, "Opening quantity")
+        self.assertEqual(asset_response.status_code, 200)
+        self.assertContains(asset_response, "Add tracked asset")
+        self.assertContains(asset_response, "Asset tag")
+        self.assertNotContains(asset_response, "Facility")
+
+    def test_add_inventory_page_can_create_stock_with_opening_transaction(self):
+        response = self.client.post(
+            reverse(
+                "add-inventory-item",
+                kwargs={"branch": self.branch.slug},
+            )
+            + "?type=stock",
+            {
+                "item_type": "stock",
+                "name": "Pool Sanitizer",
+                "sku": "SANITIZER-01",
+                "unit": Inventory.Unit.LITER,
+                "opening_quantity": "8",
+                "reorder_level": "2",
+                "unit_cost": "24.50",
+                "notes": "Liquid treatment.",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("inventory", kwargs={"branch": self.branch.slug}),
+        )
+        item = Inventory.objects.get(sku="SANITIZER-01")
+        self.assertEqual(item.branch, self.branch)
+        self.assertEqual(item.quantity_on_hand, 8)
+        transaction_record = InventoryTransaction.objects.get(inventory=item)
+        self.assertEqual(transaction_record.quantity_change, 8)
+        self.assertEqual(
+            transaction_record.transaction_type,
+            InventoryTransaction.Type.RECEIVED,
+        )
+        self.assertEqual(transaction_record.performed_by, self.user)
+
+    def test_add_inventory_page_can_create_asset_with_acquired_history(self):
+        response = self.client.post(
+            reverse(
+                "add-inventory-item",
+                kwargs={"branch": self.branch.slug},
+            )
+            + "?type=asset",
+            {
+                "item_type": "asset",
+                "name": "Poolside Umbrella",
+                "asset_tag": "ASSET-UMBRELLA-02",
+                "category": "Outdoor furniture",
+                "serial_number": "",
+                "purchase_date": "2026-10-01",
+                "purchase_cost": "4500.00",
+                "notes": "",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("inventory", kwargs={"branch": self.branch.slug}),
+        )
+        asset = InventoryAsset.objects.get(asset_tag="ASSET-UMBRELLA-02")
+        self.assertEqual(asset.branch, self.branch)
+        self.assertEqual(asset.status, InventoryAsset.Status.ACTIVE)
+        event = asset.history.get()
+        self.assertEqual(event.event_type, "acquired")
+        self.assertEqual(event.performed_by, self.user)

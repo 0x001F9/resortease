@@ -1,0 +1,50 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="p-4 pb-10">
+    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <p class="text-sm uppercase tracking-[0.2em] text-base-content/60">Inventory</p>
+            <h1 class="mt-2 text-3xl font-bold">Inventory asset activity</h1>
+        </div>
+        <a href="{% url 'inventory' branch=request.branch.slug %}" class="btn btn-outline btn-sm">Back to inventory</a>
+    </div>
+
+    <section class="rounded-box border border-base-content/10 bg-base-100 shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Asset</th>
+                        <th>Event</th>
+                        <th>Status change</th>
+                        <th>Borrower</th>
+                        <th>Due date</th>
+                        <th>Recorded by</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in asset_events %}
+                    <tr>
+                        <td>{{ event.created_at|date:"M d, Y H:i" }}</td>
+                        <td>{{ event.asset.asset_tag }} · {{ event.asset.name }}</td>
+                        <td>{{ event.get_event_type_display }}</td>
+                        <td>{{ event.get_status_before_display }} → {{ event.get_status_after_display }}</td>
+                        <td>{{ event.borrower|default:"—" }}</td>
+                        <td>{{ event.due_date|date:"M d, Y"|default:"—" }}</td>
+                        <td>{{ event.performed_by|default:"—" }}</td>
+                        <td>{{ event.notes|default:"—"|truncatechars:60 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="py-8 text-center text-base-content/60">No asset events have been recorded for this branch.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+{% endblock %}

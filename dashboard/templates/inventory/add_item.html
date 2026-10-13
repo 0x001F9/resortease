@@ -1,0 +1,120 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-3xl">
+        <a
+            href="/dashboard/{{ request.branch.slug }}/inventory/"
+            class="btn btn-ghost btn-sm mb-4"
+        >
+            <span aria-hidden="true">&larr;</span>
+            Inventory
+        </a>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-5 p-5 sm:p-8">
+                <header>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">Inventory</p>
+                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Add an item</h1>
+                    <p class="mt-2 text-sm text-base-content/70">
+                        Add a consumable stock item or an individually tracked resort asset.
+                    </p>
+                </header>
+
+                <nav role="tablist" class="tabs tabs-boxed w-full" aria-label="Inventory item type">
+                    <a
+                        role="tab"
+                        href="?type=stock"
+                        aria-selected="{% if selected_type == 'stock' %}true{% else %}false{% endif %}"
+                        class="tab flex-1 {% if selected_type == 'stock' %}tab-active{% endif %}"
+                    >Stock item</a>
+                    <a
+                        role="tab"
+                        href="?type=asset"
+                        aria-selected="{% if selected_type == 'asset' %}true{% else %}false{% endif %}"
+                        class="tab flex-1 {% if selected_type == 'asset' %}tab-active{% endif %}"
+                    >Tracked asset</a>
+                </nav>
+
+                {% if selected_type == "stock" %}
+                <div>
+                    <h2 class="text-lg font-semibold">Consumable stock</h2>
+                    <p class="mt-1 text-sm text-base-content/70">
+                        Track quantities that are received, consumed, or returned.
+                    </p>
+                </div>
+
+                <form method="post" action="?type=stock" class="space-y-5">
+                    {% csrf_token %}
+                    <input type="hidden" name="item_type" value="stock">
+
+                    {% if stock_form.non_field_errors %}
+                    <div role="alert" class="alert alert-error">
+                        {% for error in stock_form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        {% for field in stock_form %}
+                        <label class="form-control w-full {% if field.name == 'notes' %}sm:col-span-2{% endif %}">
+                            <span class="label">
+                                <span class="label-text font-medium">
+                                    {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
+                                </span>
+                            </span>
+                            {{ field }}
+                            {% if field.help_text %}<span class="mt-1 text-xs text-base-content/60">{{ field.help_text }}</span>{% endif %}
+                            {% for error in field.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    <div class="card-actions flex-col-reverse justify-end gap-3 border-t border-base-300 pt-5 sm:flex-row">
+                        <a href="/dashboard/{{ request.branch.slug }}/inventory/" class="btn btn-ghost w-full sm:w-auto">Cancel</a>
+                        <button type="submit" class="btn btn-primary w-full sm:w-auto">Add stock item</button>
+                    </div>
+                </form>
+                {% else %}
+                <div>
+                    <h2 class="text-lg font-semibold">Tracked asset</h2>
+                    <p class="mt-1 text-sm text-base-content/70">
+                        Register durable equipment or property by asset tag and track its lifecycle.
+                    </p>
+                </div>
+
+                <form method="post" action="?type=asset" class="space-y-5">
+                    {% csrf_token %}
+                    <input type="hidden" name="item_type" value="asset">
+
+                    {% if asset_form.non_field_errors %}
+                    <div role="alert" class="alert alert-error">
+                        {% for error in asset_form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        {% for field in asset_form %}
+                        <label class="form-control w-full {% if field.name == 'notes' %}sm:col-span-2{% endif %}">
+                            <span class="label">
+                                <span class="label-text font-medium">
+                                    {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
+                                </span>
+                            </span>
+                            {{ field }}
+                            {% if field.help_text %}<span class="mt-1 text-xs text-base-content/60">{{ field.help_text }}</span>{% endif %}
+                            {% for error in field.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    <div class="card-actions flex-col-reverse justify-end gap-3 border-t border-base-300 pt-5 sm:flex-row">
+                        <a href="/dashboard/{{ request.branch.slug }}/inventory/" class="btn btn-ghost w-full sm:w-auto">Cancel</a>
+                        <button type="submit" class="btn btn-primary w-full sm:w-auto">Add tracked asset</button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

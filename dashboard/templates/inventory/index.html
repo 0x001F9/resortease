@@ -1,5 +1,248 @@
 {% extends "../partials/layout.html" %}
 
 {% block content %}
-    <p>test</p>
+<main class="p-4 pb-10">
+    <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+            <p class="text-sm uppercase tracking-[0.2em] text-base-content/60">Operations</p>
+            <h1 class="mt-2 text-3xl font-bold">Inventory</h1>
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+            <a href="/dashboard/{{ request.branch.slug }}/inventory/add/" class="btn btn-primary btn-sm md:btn-md">
+                Create item
+            </a>
+            <a href="/admin/dashboard/inventorytransaction/add/" class="btn btn-outline btn-sm md:btn-md">
+                Record movement
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+    <div class="mt-4 space-y-2">
+        {% for message in messages %}
+        <div role="status" class="alert alert-success">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div class="card bg-base-100 shadow-sm border border-base-content/5">
+            <div class="card-body p-4">
+                <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">Items</p>
+                <div class="mt-2 flex items-end justify-between">
+                    <span class="text-3xl font-bold">{{ total_items }}</span>
+                    <span class="badge badge-info badge-soft">Active SKUs</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm border border-base-content/5">
+            <div class="card-body p-4">
+                <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">On hand</p>
+                <div class="mt-2 flex items-end justify-between">
+                    <span class="text-3xl font-bold">{{ total_units_on_hand }}</span>
+                    <span class="badge badge-success badge-soft">Units</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm border border-base-content/5">
+            <div class="card-body p-4">
+                <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">Low stock</p>
+                <div class="mt-2 flex items-end justify-between">
+                    <span class="text-3xl font-bold">{{ low_stock_count }}</span>
+                    <span class="badge badge-warning badge-soft">Alerts</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm border border-base-content/5">
+            <div class="card-body p-4">
+                <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">Inventory value</p>
+                <div class="mt-2 flex items-end justify-between">
+                    <span class="text-3xl font-bold">₱{{ total_stock_value|floatformat:2 }}</span>
+                    <span class="badge badge-accent badge-soft">Stock</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-8 grid gap-6 xl:grid-cols-[2fr_1fr]">
+        <section class="rounded-box border border-base-content/10 bg-base-100 shadow-sm">
+            <div class="flex items-center justify-between border-b border-base-content/10 px-4 py-3">
+                <h2 class="text-xl font-semibold">Inventory items</h2>
+                <div class="flex gap-2 text-xs">
+                    <span class="badge badge-warning badge-soft">At/below reorder level: {{ inventory_count_by_status.low }}</span>
+                    <span class="badge badge-error badge-soft">Out: {{ inventory_count_by_status.zero }}</span>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="table table-zebra">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>SKU</th>
+                            <th>Unit</th>
+                            <th>On hand</th>
+                            <th>Reorder</th>
+                            <th>Cost</th>
+                            <th>Value</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in inventory_items %}
+                        <tr>
+                            <td>
+                                <div class="font-medium">{{ item.name }}</div>
+                                {% if item.notes %}<div class="text-xs text-base-content/60">{{ item.notes|truncatechars:50 }}</div>{% endif %}
+                            </td>
+                            <td>{{ item.sku|default:"—" }}</td>
+                            <td>{{ item.get_unit_display }}</td>
+                            <td>{{ item.quantity_on_hand }}</td>
+                            <td>{{ item.reorder_level }}</td>
+                            <td>{% if item.unit_cost %}₱{{ item.unit_cost|floatformat:2 }}{% else %}—{% endif %}</td>
+                            <td>{% if item.stock_value %}₱{{ item.stock_value|floatformat:2 }}{% else %}—{% endif %}</td>
+                            <td>
+                                {% if item.quantity_on_hand == 0 %}
+                                    <span class="badge badge-error badge-soft">Out of stock</span>
+                                {% elif item.quantity_on_hand <= item.reorder_level %}
+                                    <span class="badge badge-warning badge-soft">Low stock</span>
+                                {% else %}
+                                    <span class="badge badge-success badge-soft">Healthy</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="py-8 text-center text-base-content/60">No inventory items have been added for this branch yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <aside class="rounded-box border border-base-content/10 bg-base-100 shadow-sm">
+            <div class="border-b border-base-content/10 px-4 py-3">
+                <h2 class="text-xl font-semibold">Recent activity</h2>
+            </div>
+
+            <div class="space-y-5 p-4">
+                <section>
+                    <div class="mb-3 flex items-center justify-between gap-2">
+                        <h3 class="font-semibold">Inventory transactions</h3>
+                        <a href="{% url 'inventory-transactions' branch=request.branch.slug %}" class="btn btn-ghost btn-xs">View all</a>
+                    </div>
+                {% for transaction in recent_transactions %}
+                <div class="rounded-lg border border-base-content/10 bg-base-200/40 p-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <span class="font-medium">{{ transaction.inventory.name }}</span>
+                        <span class="badge {% if transaction.quantity_change > 0 %}badge-success{% else %}badge-warning{% endif %} badge-soft">
+                            {{ transaction.transaction_type|title }}
+                        </span>
+                    </div>
+                    <div class="mt-2 text-sm text-base-content/70">
+                        {{ transaction.quantity_change|floatformat:"0" }} units
+                        {% if transaction.reference %} · {{ transaction.reference }}{% endif %}
+                    </div>
+                    <div class="mt-1 text-xs text-base-content/60">
+                        {{ transaction.created_at|date:"M d, Y" }} · Balance: {{ transaction.balance_after }}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="rounded-lg border border-dashed border-base-content/20 p-4 text-sm text-base-content/60">
+                    No recent inventory transactions.
+                </div>
+                {% endfor %}
+                </section>
+
+                <section>
+                    <div class="mb-3 flex items-center justify-between gap-2">
+                        <h3 class="font-semibold">Inventory asset activity</h3>
+                        <a href="{% url 'inventory-asset-activity' branch=request.branch.slug %}" class="btn btn-ghost btn-xs">View all</a>
+                    </div>
+                    {% for event in recent_asset_events %}
+                    <div class="mb-3 rounded-lg border border-base-content/10 bg-base-200/40 p-3 last:mb-0">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="font-medium">{{ event.asset.name }}</span>
+                            <span class="badge badge-info badge-soft">{{ event.get_event_type_display }}</span>
+                        </div>
+                        <div class="mt-1 text-sm text-base-content/70">
+                            {{ event.asset.asset_tag }}
+                            {% if event.borrower %} · {{ event.borrower }}{% endif %}
+                        </div>
+                        <div class="mt-1 text-xs text-base-content/60">
+                            {{ event.created_at|date:"M d, Y" }} · {{ event.get_status_before_display }} → {{ event.get_status_after_display }}
+                        </div>
+                        {% if event.notes %}<div class="mt-1 text-sm text-base-content/70">{{ event.notes|truncatechars:80 }}</div>{% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="rounded-lg border border-dashed border-base-content/20 p-4 text-sm text-base-content/60">
+                        No recent inventory asset activity.
+                    </div>
+                    {% endfor %}
+                </section>
+            </div>
+        </aside>
+    </div>
+
+    <section class="mt-8 rounded-box border border-base-content/10 bg-base-100 shadow-sm">
+        <div class="flex flex-col gap-2 border-b border-base-content/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="text-xl font-semibold">Inventory assets</h2>
+                <p class="text-sm text-base-content/60">{{ inventory_assets_count }} assets assigned to this branch</p>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th>Asset</th>
+                        <th>Asset tag</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th>Borrowed by</th>
+                        <th>Due date</th>
+                        <th>Purchase cost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asset in inventory_assets %}
+                    <tr>
+                        <td>
+                            <div class="font-medium">{{ asset.name }}</div>
+                            {% if asset.serial_number %}<div class="text-xs text-base-content/60">S/N {{ asset.serial_number }}</div>{% endif %}
+                        </td>
+                        <td>{{ asset.asset_tag }}</td>
+                        <td>{{ asset.category }}</td>
+                        <td>
+                            {% if asset.status == "active" %}
+                                <span class="badge badge-success badge-soft">{{ asset.get_status_display }}</span>
+                            {% elif asset.status == "borrowed" %}
+                                <span class="badge badge-info badge-soft">{{ asset.get_status_display }}</span>
+                            {% elif asset.status == "in_maintenance" %}
+                                <span class="badge badge-warning badge-soft">{{ asset.get_status_display }}</span>
+                            {% else %}
+                                <span class="badge badge-ghost">{{ asset.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ asset.borrowed_by|default:"—" }}</td>
+                        <td>{{ asset.due_date|date:"M d, Y"|default:"—" }}</td>
+                        <td>{% if asset.purchase_cost != None %}₱{{ asset.purchase_cost|floatformat:2 }}{% else %}—{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="py-8 text-center text-base-content/60">No tracked assets have been added for this branch yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</main>
 {% endblock %}

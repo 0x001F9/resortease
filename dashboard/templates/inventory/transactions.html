@@ -1,0 +1,50 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="p-4 pb-10">
+    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <p class="text-sm uppercase tracking-[0.2em] text-base-content/60">Inventory</p>
+            <h1 class="mt-2 text-3xl font-bold">Inventory transactions</h1>
+        </div>
+        <a href="{% url 'inventory' branch=request.branch.slug %}" class="btn btn-outline btn-sm">Back to inventory</a>
+    </div>
+
+    <section class="rounded-box border border-base-content/10 bg-base-100 shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Item</th>
+                        <th>Type</th>
+                        <th>Quantity change</th>
+                        <th>Balance</th>
+                        <th>Reference</th>
+                        <th>Recorded by</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td>{{ transaction.created_at|date:"M d, Y H:i" }}</td>
+                        <td>{{ transaction.inventory.name }}</td>
+                        <td>{{ transaction.get_transaction_type_display }}</td>
+                        <td>{{ transaction.quantity_change|floatformat:"0" }}</td>
+                        <td>{{ transaction.balance_after }}</td>
+                        <td>{{ transaction.reference|default:"—" }}</td>
+                        <td>{{ transaction.performed_by|default:"—" }}</td>
+                        <td>{{ transaction.notes|default:"—"|truncatechars:60 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="py-8 text-center text-base-content/60">No inventory transactions have been recorded for this branch.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+{% endblock %}
