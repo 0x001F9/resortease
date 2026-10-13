@@ -8,6 +8,7 @@ from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
 from dashboard.models import (
     Inventory,
     InventoryAsset,
+    InventoryAssetHistory,
     Payment,
     Reservation,
 )
@@ -237,6 +238,7 @@ class InventoryAssetCreateForm(forms.ModelForm):
             "name",
             "asset_tag",
             "category",
+            "brand",
             "serial_number",
             "purchase_date",
             "purchase_cost",
@@ -248,7 +250,17 @@ class InventoryAssetCreateForm(forms.ModelForm):
                 attrs={"class": "input input-bordered w-full"}
             ),
             "category": forms.TextInput(
-                attrs={"class": "input input-bordered w-full"}
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "list": "resort-asset-categories",
+                    "placeholder": "Choose or enter a category",
+                }
+            ),
+            "brand": forms.TextInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "e.g. Samsung",
+                }
             ),
             "serial_number": forms.TextInput(
                 attrs={"class": "input input-bordered w-full"}
@@ -281,3 +293,55 @@ class InventoryAssetCreateForm(forms.ModelForm):
         if purchase_cost is not None and purchase_cost < 0:
             raise forms.ValidationError("Purchase cost cannot be negative.")
         return purchase_cost
+
+
+class InventoryAssetStatusForm(forms.Form):
+    STATUS_TRANSITIONS = {
+        InventoryAsset.Status.ACTIVE: {
+            InventoryAsset.Status.BORROWED: InventoryAssetHistory.Event.BORROWED,
+            InventoryAsset.Status.IN_MAINTENANCE: (
+                InventoryAssetHistory.Event.MAINTENANCE_STARTED
+            ),
+            InventoryAsset.Status.RETIRED: InventoryAssetHistory.Event.RETIRED,
+            InventoryAsset.Status.DISPOSED: InventoryAssetHistory.Event.DISPOSED,
+        },
+        InventoryAsset.Status.BORROWED: {
+            InventoryAsset.Status.ACTIVE: InventoryAssetHistory.Event.RETURNED,
+        },
+        InventoryAsset.Status.IN_MAINTENANCE: {
+            InventoryAsset.Status.ACTIVE: (
+                InventoryAssetHistory.Event.MAINTENANCE_COMPLETED
+            ),
+            InventoryAsset.Status.RETIRED: InventoryAssetHistory.Event.RETIRED,
+            InventoryAsset.Status.DISPOSED: InventoryAssetHistory.Event.DISPOSED,
+        },
+        InventoryAsset.Status.RETIRED: {
+            InventoryAsset.Status.DISPOSED: InventoryAssetHistory.Event.DISPOSED,
+        },
+        InventoryAsset.Status.DISPOSED: {},
+    }
+
+    status = forms.ChoiceField(
+        label="New status",
+        choices=(),
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+    def __init__(self, *args, asset, **kwargs):
+        self.asset = asset
+        super().__init__(*args, **kwargs)
+        transitions = self.STATUS_TRANSITIONS[asset.status]
+        self.fields["status"].choices = [
+            ("", asset.get_status_display())
+        ] + [
+            (status, InventoryAsset.Status(status).label)
+            for status in transitions
+            if status != InventoryAsset.Status.BORROWED
+        ]
+        if not transitions:
+            self.fields.clear()
+
+    @property
+    def event_type(self):
+        return self.STATUS_TRANSITIONS[self.asset.status][
+            self.cleaned_data["status"]
+        ]

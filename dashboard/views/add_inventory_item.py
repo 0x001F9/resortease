@@ -95,7 +95,11 @@ class AddInventoryItemView(View):
                     )
 
                 messages.success(request, f"{asset.name} was added as an asset.")
-                return redirect("inventory", branch=request.branch.slug)
+                return redirect(
+                    "inventory-asset-detail",
+                    branch=request.branch.slug,
+                    asset_id=asset.pk,
+                )
 
             return render(
                 request,

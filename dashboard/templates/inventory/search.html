@@ -1,0 +1,127 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="p-4 pb-10">
+    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <a href="{% url 'inventory' branch=request.branch.slug %}" class="link link-hover text-sm text-base-content/60">
+                &larr; Inventory
+            </a>
+            <p class="mt-3 text-sm uppercase tracking-[0.2em] text-base-content/60">Inventory</p>
+            <h1 class="mt-2 text-3xl font-bold">Search results</h1>
+            {% if query %}
+            <p class="mt-1 text-base-content/60">Results for “{{ query }}”</p>
+            {% else %}
+            <p class="mt-1 text-base-content/60">Browse items and tracked assets in this branch.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <form
+        method="get"
+        action="{% url 'inventory-search' branch=request.branch.slug %}"
+        class="mb-6 flex flex-col gap-3 rounded-box border border-base-content/10 bg-base-100 p-4 shadow-sm sm:flex-row sm:items-end"
+    >
+        <label class="form-control w-full flex-1">
+            <span class="label">
+                <span class="label-text font-medium">Search inventory</span>
+            </span>
+            <input
+                name="q"
+                type="search"
+                value="{{ query }}"
+                class="input input-bordered w-full"
+                placeholder="Search by name, tag, category, brand, or SKU"
+                autocomplete="off"
+            >
+        </label>
+        <label class="form-control w-full sm:max-w-xs">
+            <span class="label">
+                <span class="label-text font-medium">Search in</span>
+            </span>
+            <select name="type" class="select select-bordered w-full">
+                <option value="all" {% if item_type == "all" %}selected{% endif %}>All</option>
+                <option value="items" {% if item_type == "items" %}selected{% endif %}>Inventory items</option>
+                <option value="assets" {% if item_type == "assets" %}selected{% endif %}>Assets</option>
+            </select>
+        </label>
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+
+    <p class="mb-4 text-sm text-base-content/60">{{ results|length }} result{{ results|length|pluralize }}</p>
+    <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Inventory search results">
+        {% for result in results %}
+            {% if result.type == "item" %}
+            <article class="card border border-base-content/10 bg-base-100 shadow-sm">
+                <div class="card-body gap-3 p-5">
+                    <div class="flex items-start justify-between gap-3">
+                        <h2 class="card-title text-lg">{{ result.item.name }}</h2>
+                        <span class="badge badge-info badge-soft">Inventory item</span>
+                    </div>
+                    <dl class="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <dt class="text-base-content/60">SKU</dt>
+                            <dd class="font-medium">{{ result.item.sku|default:"—" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-base-content/60">Unit</dt>
+                            <dd class="font-medium">{{ result.item.get_unit_display }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-base-content/60">On hand</dt>
+                            <dd class="font-medium">{{ result.item.quantity_on_hand }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-base-content/60">Reorder level</dt>
+                            <dd class="font-medium">{{ result.item.reorder_level }}</dd>
+                        </div>
+                    </dl>
+                    {% if result.item.notes %}
+                    <p class="text-sm text-base-content/70">{{ result.item.notes|truncatechars:120 }}</p>
+                    {% endif %}
+                </div>
+            </article>
+            {% else %}
+            <article class="card border border-base-content/10 bg-base-100 shadow-sm">
+                <div class="card-body gap-3 p-5">
+                    <div class="flex items-start justify-between gap-3">
+                        <h2 class="card-title text-lg">
+                            <a
+                                href="{% url 'inventory-asset-detail' branch=request.branch.slug asset_id=result.asset.pk %}"
+                                class="link link-hover"
+                            >{{ result.asset.name }}</a>
+                        </h2>
+                        <span class="badge badge-secondary badge-soft">Asset</span>
+                    </div>
+                    <dl class="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <dt class="text-base-content/60">Asset tag</dt>
+                            <dd class="font-medium">{{ result.asset.asset_tag }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-base-content/60">Category</dt>
+                            <dd class="font-medium">{{ result.asset.category }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-base-content/60">Brand</dt>
+                            <dd class="font-medium">{{ result.asset.brand|default:"—" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-base-content/60">Status</dt>
+                            <dd class="font-medium">{{ result.asset.get_status_display }}</dd>
+                        </div>
+                    </dl>
+                    {% if result.asset.serial_number %}
+                    <p class="text-sm text-base-content/70">Serial number: {{ result.asset.serial_number }}</p>
+                    {% endif %}
+                </div>
+            </article>
+            {% endif %}
+        {% empty %}
+        <div class="rounded-box border border-dashed border-base-content/20 p-8 text-center text-base-content/60 sm:col-span-2 xl:col-span-3">
+            No inventory items or assets match your search.
+        </div>
+        {% endfor %}
+    </section>
+</main>
+{% endblock %}

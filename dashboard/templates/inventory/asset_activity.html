@@ -29,7 +29,12 @@
                     {% for event in asset_events %}
                     <tr>
                         <td>{{ event.created_at|date:"M d, Y H:i" }}</td>
-                        <td>{{ event.asset.asset_tag }} · {{ event.asset.name }}</td>
+                        <td>
+                            <a
+                                href="{% url 'inventory-asset-detail' branch=request.branch.slug asset_id=event.asset.pk %}"
+                                class="link link-hover"
+                            >{{ event.asset.asset_tag }} · {{ event.asset.name }}</a>
+                        </td>
                         <td>{{ event.get_event_type_display }}</td>
                         <td>{{ event.get_status_before_display }} → {{ event.get_status_after_display }}</td>
                         <td>{{ event.borrower|default:"—" }}</td>

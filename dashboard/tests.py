@@ -1738,10 +1738,57 @@ class InventoryViewTests(TestCase):
         self.assertNotContains(response, "Healthy:")
         self.assertContains(response, "Pool Vacuum")
         self.assertContains(response, "ASSET-POOL-01")
+        self.assertContains(response, 'name="q"')
+        self.assertContains(response, 'name="type"')
+        self.assertContains(
+            response,
+            reverse("inventory-search", kwargs={"branch": self.branch.slug}),
+        )
+        self.assertContains(response, ">All</option>")
+        self.assertContains(response, ">Inventory items</option>")
+        self.assertContains(response, ">Assets</option>")
         self.assertContains(response, "Inventory asset activity")
         self.assertContains(response, "View all", count=2)
         self.assertContains(response, "Borrowed")
         self.assertContains(response, "Assigned for scheduled cleaning.")
+
+    def test_inventory_search_shows_matching_items_and_assets_as_cards(self):
+        response = self.client.get(
+            reverse("inventory-search", kwargs={"branch": self.branch.slug}),
+            {"q": "pool", "type": "all"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Pool Towels")
+        self.assertContains(response, "Inventory item")
+        self.assertContains(response, "Pool Vacuum")
+        self.assertContains(response, "Asset")
+        self.assertContains(response, "ASSET-POOL-01")
+
+    def test_inventory_search_filters_by_type_and_branch(self):
+        other_branch = Branch.objects.create(
+            name="Other Search Branch",
+            slug="other-search-branch",
+            city="Other City",
+            address="3 Inventory Street",
+        )
+        Inventory.objects.create(
+            branch=other_branch,
+            name="Other Branch Pool Towels",
+            sku="OTHER-POOL-TOWELS",
+            unit=Inventory.Unit.PACK,
+        )
+
+        response = self.client.get(
+            reverse("inventory-search", kwargs={"branch": self.branch.slug}),
+            {"q": "pool", "type": "items"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["results"]), 1)
+        self.assertContains(response, "Pool Towels")
+        self.assertNotContains(response, "Pool Vacuum")
+        self.assertNotContains(response, "Other Branch Pool Towels")
 
     def test_inventory_activity_limits_recent_items_and_shows_full_lists(self):
         for index in range(2):
@@ -1785,6 +1832,88 @@ class InventoryViewTests(TestCase):
         self.assertEqual(asset_activity_response.status_code, 200)
         self.assertEqual(len(asset_activity_response.context["asset_events"]), 3)
         self.assertContains(asset_activity_response, "Extra asset 0")
+
+    def test_inventory_asset_detail_shows_details_and_history(self):
+        response = self.client.get(
+            reverse(
+                "inventory-asset-detail",
+                kwargs={"branch": self.branch.slug, "asset_id": self.asset.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Pool Vacuum")
+        self.assertContains(response, "ASSET-POOL-01")
+        self.assertContains(response, "Pool equipment")
+        self.assertContains(response, "Asset history")
+        self.assertContains(response, "Borrowed")
+        self.assertContains(response, 'name="status"')
+        self.assertContains(response, 'option value="active"')
+        self.assertNotContains(response, 'option value="borrowed"')
+        self.assertNotContains(response, "Edit asset")
+
+    def test_inventory_asset_detail_is_limited_to_the_requested_branch(self):
+        other_branch = Branch.objects.create(
+            name="Other Inventory Branch",
+            slug="other-inventory-branch",
+            city="Other City",
+            address="2 Inventory Street",
+        )
+        other_asset = InventoryAsset.objects.create(
+            branch=other_branch,
+            name="Other Branch Asset",
+            asset_tag="ASSET-OTHER-01",
+            category="Equipment",
+        )
+
+        response = self.client.get(
+            reverse(
+                "inventory-asset-detail",
+                kwargs={"branch": self.branch.slug, "asset_id": other_asset.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_inventory_asset_status_can_be_changed_and_recorded(self):
+        response = self.client.post(
+            reverse(
+                "inventory-asset-detail",
+                kwargs={"branch": self.branch.slug, "asset_id": self.asset.pk},
+            ),
+            {
+                "status": InventoryAsset.Status.ACTIVE,
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "inventory-asset-detail",
+                kwargs={"branch": self.branch.slug, "asset_id": self.asset.pk},
+            ),
+        )
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, InventoryAsset.Status.ACTIVE)
+        self.assertIsNone(self.asset.borrowed_by)
+        self.assertIsNone(self.asset.due_date)
+        event = self.asset.history.first()
+        self.assertEqual(event.event_type, InventoryAssetHistory.Event.RETURNED)
+        self.assertEqual(event.borrower, self.user)
+
+    def test_inventory_asset_rejects_invalid_status_transition(self):
+        response = self.client.post(
+            reverse(
+                "inventory-asset-detail",
+                kwargs={"branch": self.branch.slug, "asset_id": self.asset.pk},
+            ),
+            {"status": InventoryAsset.Status.DISPOSED},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, InventoryAsset.Status.BORROWED)
+        self.assertEqual(self.asset.history.count(), 1)
 
     def test_creating_inventory_and_asset_records_transaction_and_history(self):
         item = Inventory.objects.create(
@@ -1886,6 +2015,9 @@ class InventoryViewTests(TestCase):
         self.assertEqual(asset_response.status_code, 200)
         self.assertContains(asset_response, "Add tracked asset")
         self.assertContains(asset_response, "Asset tag")
+        self.assertContains(asset_response, 'list="resort-asset-categories"')
+        self.assertContains(asset_response, "Kitchen equipment")
+        self.assertContains(asset_response, "Brand")
         self.assertNotContains(asset_response, "Facility")
 
     def test_add_inventory_page_can_create_stock_with_opening_transaction(self):
@@ -1934,6 +2066,7 @@ class InventoryViewTests(TestCase):
                 "name": "Poolside Umbrella",
                 "asset_tag": "ASSET-UMBRELLA-02",
                 "category": "Outdoor furniture",
+                "brand": "Resort Living",
                 "serial_number": "",
                 "purchase_date": "2026-10-01",
                 "purchase_cost": "4500.00",
@@ -1943,11 +2076,25 @@ class InventoryViewTests(TestCase):
 
         self.assertRedirects(
             response,
-            reverse("inventory", kwargs={"branch": self.branch.slug}),
+            reverse(
+                "inventory-asset-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "asset_id": InventoryAsset.objects.get(
+                        asset_tag="ASSET-UMBRELLA-02"
+                    ).pk,
+                },
+            ),
         )
         asset = InventoryAsset.objects.get(asset_tag="ASSET-UMBRELLA-02")
         self.assertEqual(asset.branch, self.branch)
+        self.assertEqual(asset.brand, "Resort Living")
+        self.assertEqual(asset.category, "Outdoor furniture")
         self.assertEqual(asset.status, InventoryAsset.Status.ACTIVE)
+        inventory_response = self.client.get(
+            reverse("inventory", kwargs={"branch": self.branch.slug})
+        )
+        self.assertContains(inventory_response, "Resort Living")
         event = asset.history.get()
         self.assertEqual(event.event_type, "acquired")
         self.assertEqual(event.performed_by, self.user)

@@ -68,6 +68,36 @@
         </div>
     </div>
 
+    <form
+        method="get"
+        action="{% url 'inventory-search' branch=request.branch.slug %}"
+        class="mt-6 flex flex-col gap-3 rounded-box border border-base-content/10 bg-base-100 p-4 shadow-sm sm:flex-row sm:items-end"
+    >
+        <label class="form-control w-full flex-1">
+            <span class="label">
+                <span class="label-text font-medium">Search inventory</span>
+            </span>
+            <input
+                name="q"
+                type="search"
+                class="input input-bordered w-full"
+                placeholder="Search by name, tag, category, brand, or SKU"
+                autocomplete="off"
+            >
+        </label>
+        <label class="form-control w-full sm:max-w-xs">
+            <span class="label">
+                <span class="label-text font-medium">Search in</span>
+            </span>
+            <select name="type" class="select select-bordered w-full">
+                <option value="all">All</option>
+                <option value="items">Inventory items</option>
+                <option value="assets">Assets</option>
+            </select>
+        </label>
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+
     <div class="mt-8 grid gap-6 xl:grid-cols-[2fr_1fr]">
         <section class="rounded-box border border-base-content/10 bg-base-100 shadow-sm">
             <div class="flex items-center justify-between border-b border-base-content/10 px-4 py-3">
@@ -167,7 +197,10 @@
                     {% for event in recent_asset_events %}
                     <div class="mb-3 rounded-lg border border-base-content/10 bg-base-200/40 p-3 last:mb-0">
                         <div class="flex items-center justify-between gap-3">
-                            <span class="font-medium">{{ event.asset.name }}</span>
+                            <a
+                                href="{% url 'inventory-asset-detail' branch=request.branch.slug asset_id=event.asset.pk %}"
+                                class="link link-hover font-medium"
+                            >{{ event.asset.name }}</a>
                             <span class="badge badge-info badge-soft">{{ event.get_event_type_display }}</span>
                         </div>
                         <div class="mt-1 text-sm text-base-content/70">
@@ -204,6 +237,7 @@
                         <th>Asset</th>
                         <th>Asset tag</th>
                         <th>Category</th>
+                        <th>Brand</th>
                         <th>Status</th>
                         <th>Borrowed by</th>
                         <th>Due date</th>
@@ -214,11 +248,15 @@
                     {% for asset in inventory_assets %}
                     <tr>
                         <td>
-                            <div class="font-medium">{{ asset.name }}</div>
+                            <a
+                                href="{% url 'inventory-asset-detail' branch=request.branch.slug asset_id=asset.pk %}"
+                                class="link link-hover font-medium"
+                            >{{ asset.name }}</a>
                             {% if asset.serial_number %}<div class="text-xs text-base-content/60">S/N {{ asset.serial_number }}</div>{% endif %}
                         </td>
                         <td>{{ asset.asset_tag }}</td>
                         <td>{{ asset.category }}</td>
+                        <td>{{ asset.brand|default:"—" }}</td>
                         <td>
                             {% if asset.status == "active" %}
                                 <span class="badge badge-success badge-soft">{{ asset.get_status_display }}</span>
@@ -236,7 +274,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="py-8 text-center text-base-content/60">No tracked assets have been added for this branch yet.</td>
+                        <td colspan="8" class="py-8 text-center text-base-content/60">No tracked assets have been added for this branch yet.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

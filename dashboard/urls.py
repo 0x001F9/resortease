@@ -8,6 +8,8 @@ from dashboard.views.facility_detail import FacilityDetailView
 from dashboard.views.edit_facility import EditFacilityView
 from dashboard.views.inventory import (
     InventoryAssetActivityView,
+    InventoryAssetDetailView,
+    InventorySearchView,
     InventoryTransactionsView,
     InventoryView,
 )
@@ -37,6 +39,11 @@ urlpatterns = [
         name='inventory',
     ),
     path(
+        '<str:branch>/inventory/search/',
+        InventorySearchView.as_view(),
+        name='inventory-search',
+    ),
+    path(
         '<str:branch>/inventory/transactions/',
         InventoryTransactionsView.as_view(),
         name='inventory-transactions',
@@ -45,6 +52,11 @@ urlpatterns = [
         '<str:branch>/inventory/asset-activity/',
         InventoryAssetActivityView.as_view(),
         name='inventory-asset-activity',
+    ),
+    path(
+        '<str:branch>/inventory/assets/<int:asset_id>/',
+        InventoryAssetDetailView.as_view(),
+        name='inventory-asset-detail',
     ),
     path(
         '<str:branch>/inventory/add/',

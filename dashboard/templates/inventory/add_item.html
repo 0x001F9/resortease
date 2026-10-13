@@ -101,6 +101,9 @@
                                 </span>
                             </span>
                             {{ field }}
+                            {% if field.name == "category" %}
+                            {% include "inventory/partials/asset_category_options.html" %}
+                            {% endif %}
                             {% if field.help_text %}<span class="mt-1 text-xs text-base-content/60">{{ field.help_text }}</span>{% endif %}
                             {% for error in field.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
                         </label>

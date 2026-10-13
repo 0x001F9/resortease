@@ -17,6 +17,7 @@ class InventoryAsset(models.Model):
     name = models.CharField(max_length=150)
     asset_tag = models.CharField(max_length=100, unique=True)
     category = models.CharField(max_length=100)
+    brand = models.CharField(max_length=100, blank=True)
     serial_number = models.CharField(max_length=150, null=True, blank=True)
     status = models.CharField(
         max_length=20,
