@@ -47,7 +47,13 @@ class UserManager(BaseUserManager):
         extra.setdefault('is_active', True)
         extra.setdefault('role', User.Role.Employee)
 
-        return self.create_user(email=email,  password=password, first_name=first_name, last_name=last_name, **extra)
+        return self.create_user(
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            **extra,
+        )
 
 class User(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
