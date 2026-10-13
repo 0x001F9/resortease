@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.shortcuts import redirect
 from dashboard.models.branches_facilities import Branch, Facility, Maintenance
+from dashboard.models.inventory import Inventory, InventoryTransaction
+from dashboard.models.inventory_assets import InventoryAsset, InventoryAssetHistory
 
 class SuperUserAdmin(admin.AdminSite):
     def has_permission(self, request):
@@ -19,3 +21,7 @@ admin_site.register(get_user_model())
 admin_site.register(Branch)
 admin_site.register(Facility)
 admin_site.register(Maintenance)
+admin_site.register(Inventory)
+admin_site.register(InventoryTransaction)
+admin_site.register(InventoryAsset)
+admin_site.register(InventoryAssetHistory)

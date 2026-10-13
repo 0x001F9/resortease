@@ -1842,12 +1842,16 @@ class InventoryViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["hide_aside"])
+        self.assertNotContains(response, "<aside")
         self.assertContains(response, "Pool Vacuum")
         self.assertContains(response, "ASSET-POOL-01")
         self.assertContains(response, "Pool equipment")
         self.assertContains(response, "Asset history")
         self.assertContains(response, "Borrowed")
         self.assertContains(response, 'name="status"')
+        self.assertContains(response, 'name="notes"')
+        self.assertContains(response, "Add an asset history note")
         self.assertContains(response, 'option value="active"')
         self.assertNotContains(response, 'option value="borrowed"')
         self.assertNotContains(response, "Edit asset")
@@ -1883,6 +1887,7 @@ class InventoryViewTests(TestCase):
             ),
             {
                 "status": InventoryAsset.Status.ACTIVE,
+                "notes": "Returned after scheduled cleaning.",
             },
         )
 
@@ -1900,6 +1905,7 @@ class InventoryViewTests(TestCase):
         event = self.asset.history.first()
         self.assertEqual(event.event_type, InventoryAssetHistory.Event.RETURNED)
         self.assertEqual(event.borrower, self.user)
+        self.assertEqual(event.notes, "Returned after scheduled cleaning.")
 
     def test_inventory_asset_rejects_invalid_status_transition(self):
         response = self.client.post(
@@ -1907,13 +1913,31 @@ class InventoryViewTests(TestCase):
                 "inventory-asset-detail",
                 kwargs={"branch": self.branch.slug, "asset_id": self.asset.pk},
             ),
-            {"status": InventoryAsset.Status.DISPOSED},
+            {
+                "status": InventoryAsset.Status.DISPOSED,
+                "notes": "Attempted an invalid transition.",
+            },
         )
 
         self.assertEqual(response.status_code, 200)
         self.asset.refresh_from_db()
         self.assertEqual(self.asset.status, InventoryAsset.Status.BORROWED)
         self.assertEqual(self.asset.history.count(), 1)
+
+    def test_inventory_asset_status_change_requires_history_notes(self):
+        response = self.client.post(
+            reverse(
+                "inventory-asset-detail",
+                kwargs={"branch": self.branch.slug, "asset_id": self.asset.pk},
+            ),
+            {"status": InventoryAsset.Status.ACTIVE, "notes": ""},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, InventoryAsset.Status.BORROWED)
+        self.assertEqual(self.asset.history.count(), 1)
+        self.assertContains(response, "This field is required.")
 
     def test_creating_inventory_and_asset_records_transaction_and_history(self):
         item = Inventory.objects.create(
@@ -2010,9 +2034,13 @@ class InventoryViewTests(TestCase):
         )
 
         self.assertEqual(stock_response.status_code, 200)
+        self.assertTrue(stock_response.context["hide_aside"])
+        self.assertNotContains(stock_response, "<aside")
         self.assertContains(stock_response, "Add stock item")
         self.assertContains(stock_response, "Opening quantity")
         self.assertEqual(asset_response.status_code, 200)
+        self.assertTrue(asset_response.context["hide_aside"])
+        self.assertNotContains(asset_response, "<aside")
         self.assertContains(asset_response, "Add tracked asset")
         self.assertContains(asset_response, "Asset tag")
         self.assertContains(asset_response, 'list="resort-asset-categories"')

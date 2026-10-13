@@ -11,20 +11,20 @@
         </a>
     </div>
 
-    <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Reservation summary">
-        <article class="card bg-base-100 shadow-sm">
+    <section class="p-3 overflow-x-auto flex gap-4" aria-label="Reservation summary">
+        <article class="card bg-base-100 shadow-sm flex-1 min-w-[200px]">
             <div class="card-body p-5">
                 <h2 class="text-sm text-base-content/60">Total reservations</h2>
                 <p class="text-2xl font-bold">{{ total_reservations }}</p>
             </div>
         </article>
-        <article class="card bg-base-100 shadow-sm">
+        <article class="card bg-base-100 shadow-sm flex-1 min-w-[200px]">
             <div class="card-body p-5">
                 <h2 class="text-sm text-base-content/60">Awaiting confirmation</h2>
                 <p class="text-2xl font-bold">{{ pending_reservations }}</p>
             </div>
         </article>
-        <article class="card bg-base-100 shadow-sm">
+        <article class="card bg-base-100 shadow-sm flex-1 min-w-[200px]">
             <div class="card-body p-5">
                 <h2 class="text-sm text-base-content/60">Calendar bookings</h2>
                 <p class="text-2xl font-bold">{{ total_bookings }}</p>

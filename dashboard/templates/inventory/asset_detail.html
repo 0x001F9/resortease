@@ -48,16 +48,38 @@
                     >
                         {% csrf_token %}
                         {{ status_form.status }}
+                        <dialog id="status-change-dialog" class="modal">
+                            <div class="modal-box">
+                                <h3 class="text-lg font-bold">Add an asset history note</h3>
+                                <p class="py-2 text-sm text-base-content/70">
+                                    Describe why this asset's status is changing. This note will be saved in its history.
+                                </p>
+                                <label for="{{ status_form.notes.id_for_label }}" class="label">
+                                    <span class="label-text font-medium">{{ status_form.notes.label }}</span>
+                                </label>
+                                {{ status_form.notes }}
+                                {% for error in status_form.notes.errors %}
+                                <span class="mt-1 block text-sm text-error">{{ error }}</span>
+                                {% endfor %}
+                                <div class="modal-action mt-4">
+                                    <button type="button" class="btn btn-ghost" id="cancel-status-change">Cancel</button>
+                                    <button type="submit" class="btn btn-primary">Save status</button>
+                                </div>
+                            </div>
+                        </dialog>
                         <script>
-                            const statusSelect = document.currentScript.previousElementSibling;
+                            const statusSelect = document.getElementById("{{ status_form.status.id_for_label }}");
+                            const statusDialog = document.getElementById("status-change-dialog");
                             statusSelect.addEventListener("change", () => {
-                                if (!statusSelect.value) return;
-                                if (confirm("Are you sure you want to make this status change?")) {
-                                    statusSelect.form.requestSubmit();
-                                } else {
-                                    statusSelect.value = "";
-                                }
+                                if (statusSelect.value) statusDialog.showModal();
                             });
+                            statusDialog.addEventListener("close", () => {
+                                statusSelect.value = "";
+                            });
+                            document.getElementById("cancel-status-change").addEventListener("click", () => {
+                                statusDialog.close();
+                            });
+                            if (statusSelect.value) statusDialog.showModal();
                         </script>
                         {% for error in status_form.status.errors %}
                         <span class="w-full text-sm text-error">{{ error }}</span>

@@ -202,6 +202,7 @@ class InventoryAssetDetailView(View):
             "asset": asset,
             "asset_events": asset_events,
             "status_form": form or InventoryAssetStatusForm(asset=asset),
+            "hide_aside": True,
         }
 
     def get(self, request, asset_id):
@@ -224,6 +225,7 @@ class InventoryAssetDetailView(View):
                 asset.record_event(
                     event_type=form.event_type,
                     performed_by=request.user,
+                    notes=form.cleaned_data["notes"],
                 )
             except ValueError as error:
                 asset.refresh_from_db()

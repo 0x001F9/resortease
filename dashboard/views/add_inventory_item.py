@@ -30,6 +30,7 @@ class AddInventoryItemView(View):
             "selected_type": selected_type,
             "stock_form": stock_form or InventoryItemCreateForm(),
             "asset_form": asset_form or InventoryAssetCreateForm(),
+            "hide_aside": True,
         }
 
     def get(self, request):

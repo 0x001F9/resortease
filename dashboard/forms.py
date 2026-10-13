@@ -326,6 +326,17 @@ class InventoryAssetStatusForm(forms.Form):
         choices=(),
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
     )
+    notes = forms.CharField(
+        label="History note",
+        widget=forms.Textarea(
+            attrs={
+                "class": "textarea textarea-bordered w-full",
+                "rows": 3,
+                "required": True,
+            }
+        ),
+    )
+
     def __init__(self, *args, asset, **kwargs):
         self.asset = asset
         super().__init__(*args, **kwargs)
