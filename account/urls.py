@@ -1,5 +1,6 @@
 from django.urls import path
 from account.views.logout import LogoutView
+from account.views.login import EmailVerificationView
 from account.views.security import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
@@ -8,9 +9,10 @@ from account.views.security import (
 )
 
 urlpatterns = [
+    path('verify-email/<str:token>/', EmailVerificationView.as_view(), name='verify-email'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('forgot-password/', PasswordResetRequestView.as_view(), name='forgot-password'),
     path('reset-password/', PasswordResetConfirmView.as_view(), name='reset-password'),
-    path('totp/setup/', TOTPSetupView.as_view(), name='totp-setup'),
-    path('totp/verify/', TOTPVerificationView.as_view(), name='totp-verify'),
+    path('security/totp/setup/', TOTPSetupView.as_view(), name='totp-setup'),
+    path('security/totp/verify/', TOTPVerificationView.as_view(), name='totp-verify'),
 ]

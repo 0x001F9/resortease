@@ -1,0 +1,24 @@
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="flex min-h-[60vh] items-center justify-center px-6 py-12">
+    <section class="card w-full max-w-lg border border-base-300 bg-base-100 shadow-xl">
+        <div class="card-body items-center gap-5 px-6 py-10 text-center sm:px-10">
+            <div class="flex size-16 items-center justify-center rounded-full bg-success/10 text-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m5 12 4 4L19 6" />
+                </svg>
+            </div>
+
+            <div class="space-y-2">
+                <h1 class="text-2xl font-bold sm:text-3xl">Email verified successfully</h1>
+                <p class="text-base-content/70">
+                    Your email address is confirmed and your account is ready to use. You can now sign in to ResortEase.
+                </p>
+            </div>
+
+            <a href="{% url 'login' %}" class="btn btn-primary mt-2 w-full">Continue to sign in</a>
+        </div>
+    </section>
+</main>
+{% endblock %}

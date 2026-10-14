@@ -1,13 +1,97 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.forms import ReadOnlyPasswordHashWidget
 from django.forms import PasswordInput
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from .forms import AdminUserChangeForm, AdminUserCreationForm
 from .models import User
 from .views.security import mask_email
+
+
+class EmailVerificationLoginTests(TestCase):
+    def create_unverified_user(self, username):
+        return User.object.create_user(
+            username=username,
+            email=f"{username}@example.com",
+            password="TestPassword123!",
+            first_name="Test",
+            last_name="User",
+            phone_number_code="+1",
+            phone_number="5555550300",
+            email_confirmation_token="old-token",
+        )
+
+    def log_in(self, user):
+        return self.client.post(
+            reverse("login"),
+            {"username": user.username, "password": "TestPassword123!"},
+        )
+
+    @patch("account.views.login.send_mail")
+    def test_unverified_login_generates_and_emails_token_with_24_hour_expiry(self, send_mail):
+        user = self.create_unverified_user("verify_login")
+        generated_at = timezone.now()
+        user.email_confirmation_expiresat = None
+        user.save(update_fields=["email_confirmation_expiresat"])
+
+        with patch("account.views.login.timezone.now", return_value=generated_at):
+            response = self.log_in(user)
+
+        user.refresh_from_db()
+        self.assertTemplateUsed(response, "verify_email.html")
+        self.assertEqual(user.email_confirmation_expiresat, generated_at + timedelta(hours=24))
+        self.assertNotEqual(user.email_confirmation_token, "old-token")
+        send_mail.assert_called_once()
+        self.assertIn(user.email_confirmation_token, send_mail.call_args.kwargs["message"])
+
+    @patch("account.views.login.send_mail")
+    def test_unverified_login_renews_at_80_percent_elapsed_boundary(self, send_mail):
+        user = self.create_unverified_user("verify_boundary")
+        now = timezone.now()
+        user.email_confirmation_expiresat = now + timedelta(hours=4, minutes=48)
+        user.save(update_fields=["email_confirmation_expiresat"])
+
+        with patch("account.views.login.timezone.now", return_value=now):
+            self.log_in(user)
+
+        send_mail.assert_called_once()
+        user.refresh_from_db()
+        self.assertEqual(user.email_confirmation_expiresat, now + timedelta(hours=24))
+
+    @patch("account.views.login.send_mail")
+    def test_unverified_login_does_not_renew_before_80_percent_elapsed(self, send_mail):
+        user = self.create_unverified_user("verify_not_due")
+        now = timezone.now()
+        expires_at = now + timedelta(hours=4, minutes=49)
+        user.email_confirmation_expiresat = expires_at
+        user.save(update_fields=["email_confirmation_expiresat"])
+
+        response = self.log_in(user)
+
+        self.assertTemplateUsed(response, "verify_email.html")
+        send_mail.assert_not_called()
+        user.refresh_from_db()
+        self.assertEqual(user.email_confirmation_expiresat, expires_at)
+
+    def test_verification_link_confirms_email_and_clears_token(self):
+        user = self.create_unverified_user("verify_link")
+        user.email_confirmation_expiresat = timezone.now() + timedelta(hours=24)
+        user.save(update_fields=["email_confirmation_expiresat"])
+
+        response = self.client.get(
+            reverse("verify-email", kwargs={"token": user.email_confirmation_token})
+        )
+
+        user.refresh_from_db()
+        self.assertTemplateUsed(response, "email_verified.html")
+        self.assertContains(response, "Email verified successfully")
+        self.assertIsNotNone(user.email_confirmed_at)
+        self.assertIsNone(user.email_confirmation_token)
+        self.assertIsNone(user.email_confirmation_expiresat)
 
 
 class AdminUserPasswordFormTests(TestCase):

@@ -32,7 +32,7 @@ PhoneNumberCodeValidator = RegexValidator(
 
 
 def email_confirmation_expiry():
-    return timezone.now() + timedelta(hours=1)
+    return timezone.now() + timedelta(hours=24)
 
 
 class UserManager(BaseUserManager):

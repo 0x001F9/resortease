@@ -11,11 +11,11 @@ from django.views import View
 from account.models import User
 
 
-def mask_email(email):
+def mask_email(email: str) -> str:
     local_part, separator, domain = email.partition("@")
     if not separator:
-        return "*" * max(len(email), 3)
-    return f"{local_part[:1]}{'*' * max(len(local_part) - 1, 3)}@{domain}"
+        return "*" * 5
+    return f"{local_part[:1]}{'*' * 6}@{domain}"
 
 
 def build_qr_code_data_url(value):
@@ -88,6 +88,7 @@ class TOTPSetupView(View):
 
 class TOTPVerificationView(View):
     template_name = "totp_verify.html"
+    template_verify_email = "verify_email.html"
 
     def get_user_from_session(self, request):
         user_id = request.session.get("pending_tfa_user_id")

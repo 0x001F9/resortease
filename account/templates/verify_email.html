@@ -1,0 +1,33 @@
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="flex min-h-[60vh] items-center justify-center px-6 py-12">
+    <section class="card w-full max-w-lg border border-base-300 bg-base-100 shadow-xl">
+        <div class="card-body items-center gap-5 px-6 py-10 text-center sm:px-10">
+            <div class="flex size-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5 10.2 13a3 3 0 0 0 3.6 0L21 7.5M5.25 19h13.5A2.25 2.25 0 0 0 21 16.75v-9.5A2.25 2.25 0 0 0 18.75 5H5.25A2.25 2.25 0 0 0 3 7.25v9.5A2.25 2.25 0 0 0 5.25 19Z" />
+                </svg>
+            </div>
+
+            <div class="space-y-2">
+                <h1 class="text-2xl font-bold sm:text-3xl">Check your email</h1>
+                <p class="text-base-content/70">
+                    We sent a verification link to:
+                </p>
+                <p class="font-semibold">{{ masked_email }}</p>
+            </div>
+
+            <div class="alert alert-info text-left">
+                <svg xmlns="http://www.w3.org/2000/svg" class="size-6 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path stroke-linecap="round" d="M12 11v5m0-8h.01" />
+                </svg>
+                <span>Open the message and follow its link to verify your email. If it isn’t in your inbox, check your spam folder.</span>
+            </div>
+
+            <a href="/login/" class="btn btn-primary mt-2 w-full">Back to sign in</a>
+        </div>
+    </section>
+</main>
+{% endblock %}
