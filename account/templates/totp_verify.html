@@ -13,36 +13,42 @@
       <div class="card-body gap-4">
         <div class="text-center">
           <h1 class="text-2xl font-bold">Two-step verification</h1>
-          <p class="py-2 text-sm text-base-content/70">Complete the verification for {{ user.email }}.</p>
+          <p class="py-2 text-sm text-base-content/70">Complete the verification for {{ user.username }}.</p>
         </div>
 
         {% if error %}
           <div class="alert alert-error">{{ error }}</div>
         {% endif %}
 
-        <form method="post" class="flex flex-col gap-4">
-          {% csrf_token %}
-          <fieldset class="fieldset">
-            <label class="label" for="totp_code">Authenticator code</label>
-            <input id="totp_code" type="text" name="totp_code" class="input input-bordered w-full" inputmode="numeric" maxlength="6" />
-          </fieldset>
-          <button type="submit" class="btn btn-primary w-full">Verify with TOTP</button>
-        </form>
-
-        <form method="post" class="flex flex-col gap-4">
-          {% csrf_token %}
-          <input type="hidden" name="method" value="email" />
-          <button type="submit" class="btn btn-outline w-full">Send email OTP instead</button>
-        </form>
-
         {% if sent_email_otp %}
+          <p class="text-sm text-base-content/70">A security code was sent to {{ masked_email }}.</p>
           <form method="post" class="flex flex-col gap-4">
             {% csrf_token %}
             <fieldset class="fieldset">
               <label class="label" for="email_code">Email verification code</label>
-              <input id="email_code" type="text" name="email_code" class="input input-bordered w-full" inputmode="numeric" maxlength="6" />
+              <input id="email_code" type="text" name="email_code" class="input input-bordered w-full" inputmode="numeric" maxlength="6" required />
             </fieldset>
             <button type="submit" class="btn btn-secondary w-full">Verify with email code</button>
+          </form>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="method" value="totp" />
+            <button type="submit" class="btn btn-outline w-full">Use authenticator code instead</button>
+          </form>
+        {% else %}
+          <form method="post" class="flex flex-col gap-4">
+            {% csrf_token %}
+            <fieldset class="fieldset">
+              <label class="label" for="totp_code">Authenticator code</label>
+              <input id="totp_code" type="text" name="totp_code" class="input input-bordered w-full" inputmode="numeric" maxlength="6" />
+            </fieldset>
+            <button type="submit" class="btn btn-primary w-full">Verify with TOTP</button>
+          </form>
+
+          <form method="post" class="flex flex-col gap-4">
+            {% csrf_token %}
+            <input type="hidden" name="method" value="email" />
+            <button type="submit" class="btn btn-outline w-full">Send email OTP instead</button>
           </form>
         {% endif %}
       </div>

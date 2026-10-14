@@ -1,9 +1,13 @@
+from unittest.mock import patch
+
 from django.contrib.auth.forms import ReadOnlyPasswordHashWidget
 from django.forms import PasswordInput
 from django.test import TestCase
+from django.urls import reverse
 
 from .forms import AdminUserChangeForm, AdminUserCreationForm
 from .models import User
+from .views.security import mask_email
 
 
 class AdminUserPasswordFormTests(TestCase):
@@ -74,3 +78,104 @@ class UserRoleCreationTests(TestCase):
         for role, _label in User.Role.choices:
             with self.subTest(role=role):
                 self.assertEqual(User.object.filter(role=role).count(), 1)
+
+
+class OtpEmailMaskingTests(TestCase):
+    def test_mask_email_hides_local_part_except_first_character(self):
+        self.assertEqual(mask_email("jane.doe@example.com"), "j*******@example.com")
+
+    def test_two_factor_page_displays_only_masked_email(self):
+        user = User.object.create_user(
+            username="otp_mask_test",
+            email="jane.doe@example.com",
+            password="A-strong-password-42",
+            first_name="Jane",
+            last_name="Doe",
+            phone_number_code="+1",
+            phone_number="5555550199",
+            totp_enabled=True,
+        )
+        session = self.client.session
+        session["pending_tfa_user_id"] = user.pk
+        session.save()
+
+        response = self.client.get(reverse("totp-verify"))
+
+        self.assertContains(response, "j*******@example.com")
+        self.assertNotContains(response, "jane.doe@example.com")
+
+    @patch.object(User, "send_otp_email")
+    def test_two_factor_email_otp_notice_displays_only_masked_email(self, send_otp_email):
+        user = User.object.create_user(
+            username="otp_notice_test",
+            email="jane.doe@example.com",
+            password="A-strong-password-42",
+            first_name="Jane",
+            last_name="Doe",
+            phone_number_code="+1",
+            phone_number="5555550200",
+            totp_enabled=True,
+        )
+        session = self.client.session
+        session["pending_tfa_user_id"] = user.pk
+        session.save()
+
+        response = self.client.post(reverse("totp-verify"), {"method": "email"})
+
+        send_otp_email.assert_called_once_with("two-factor verification")
+        self.assertContains(response, "j*******@example.com")
+        self.assertNotContains(response, "jane.doe@example.com")
+        self.assertContains(response, 'name="email_code"')
+        self.assertNotContains(response, 'name="totp_code"')
+
+    def test_two_factor_page_shows_only_totp_form_by_default(self):
+        user = User.object.create_user(
+            username="totp_only_test",
+            email="totp.only@example.com",
+            password="A-strong-password-42",
+            first_name="Totp",
+            last_name="Only",
+            phone_number_code="+1",
+            phone_number="5555550201",
+            totp_enabled=True,
+        )
+        session = self.client.session
+        session["pending_tfa_user_id"] = user.pk
+        session.save()
+
+        response = self.client.get(reverse("totp-verify"))
+
+        self.assertContains(response, 'name="totp_code"')
+        self.assertNotContains(response, 'name="email_code"')
+
+    def test_two_factor_can_switch_back_to_totp_form(self):
+        user = User.object.create_user(
+            username="totp_switch_test",
+            email="totp.switch@example.com",
+            password="A-strong-password-42",
+            first_name="Totp",
+            last_name="Switch",
+            phone_number_code="+1",
+            phone_number="5555550202",
+            totp_enabled=True,
+        )
+        session = self.client.session
+        session["pending_tfa_user_id"] = user.pk
+        session.save()
+
+        response = self.client.post(reverse("totp-verify"), {"method": "totp"})
+
+        self.assertContains(response, 'name="totp_code"')
+        self.assertNotContains(response, 'name="email_code"')
+
+    def test_reset_code_form_masks_email_without_submitting_it(self):
+        session = self.client.session
+        session["password_reset_email"] = "jane.doe@example.com"
+        session.save()
+
+        response = self.client.get(reverse("reset-password"))
+        content = response.content.decode()
+
+        self.assertContains(response, "j*******@example.com")
+        self.assertNotContains(response, "jane.doe@example.com")
+        self.assertNotIn('name="email"', content)

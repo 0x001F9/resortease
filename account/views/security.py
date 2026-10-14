@@ -11,6 +11,13 @@ from django.views import View
 from account.models import User
 
 
+def mask_email(email):
+    local_part, separator, domain = email.partition("@")
+    if not separator:
+        return "*" * max(len(email), 3)
+    return f"{local_part[:1]}{'*' * max(len(local_part) - 1, 3)}@{domain}"
+
+
 def build_qr_code_data_url(value):
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(value)
@@ -103,6 +110,7 @@ class TOTPVerificationView(View):
             self.template_name,
             {
                 "user": user,
+                "masked_email": mask_email(user.email),
                 "can_use_email_fallback": user.totp_enabled,
             },
         )
@@ -122,7 +130,21 @@ class TOTPVerificationView(View):
             return render(
                 request,
                 self.template_name,
-                {"user": user, "sent_email_otp": True},
+                {
+                    "user": user,
+                    "masked_email": mask_email(user.email),
+                    "sent_email_otp": True,
+                },
+            )
+
+        if request.POST.get("method") == "totp":
+            return render(
+                request,
+                self.template_name,
+                {
+                    "user": user,
+                    "masked_email": mask_email(user.email),
+                },
             )
 
         if totp_code and user.verify_totp(totp_code):
@@ -135,11 +157,24 @@ class TOTPVerificationView(View):
             login(request, user)
             return redirect("/")
 
+        if email_code:
+            return render(
+                request,
+                self.template_name,
+                {
+                    "user": user,
+                    "masked_email": mask_email(user.email),
+                    "sent_email_otp": True,
+                    "error": "The verification code was invalid or expired.",
+                },
+            )
+
         return render(
             request,
             self.template_name,
             {
                 "user": user,
+                "masked_email": mask_email(user.email),
                 "error": "The verification code was invalid or expired.",
             },
         )
@@ -175,41 +210,63 @@ class PasswordResetConfirmView(View):
 
     def get(self, request):
         email = request.session.get("password_reset_email")
-        return render(request, self.template_name, {"email": email})
+        if not email:
+            return redirect("forgot-password")
+        return render(
+            request,
+            self.template_name,
+            {"masked_email": mask_email(email)},
+        )
 
     def post(self, request):
-        email = (request.POST.get("email") or "").strip().lower()
+        email = request.session.get("password_reset_email")
+        if not email:
+            return redirect("forgot-password")
+
         code = (request.POST.get("otp_code") or "").strip()
         password = request.POST.get("password") or ""
         confirm_password = request.POST.get("confirm_password") or ""
+        masked_email = mask_email(email)
 
         user = User.object.filter(email__iexact=email).first()
         if user is None:
             return render(
                 request,
                 self.template_name,
-                {"error": "We could not find an account with that email address."},
+                {
+                    "masked_email": masked_email,
+                    "error": "We could not find an account with that email address.",
+                },
             )
 
         if not user.verify_otp(code):
             return render(
                 request,
                 self.template_name,
-                {"email": email, "error": "The OTP code is invalid or has expired."},
+                {
+                    "masked_email": masked_email,
+                    "error": "The OTP code is invalid or has expired.",
+                },
             )
 
         if password != confirm_password:
             return render(
                 request,
                 self.template_name,
-                {"email": email, "error": "The new passwords do not match."},
+                {
+                    "masked_email": masked_email,
+                    "error": "The new passwords do not match.",
+                },
             )
 
         if len(password) < 8:
             return render(
                 request,
                 self.template_name,
-                {"email": email, "error": "Password must be at least 8 characters long."},
+                {
+                    "masked_email": masked_email,
+                    "error": "Password must be at least 8 characters long.",
+                },
             )
 
         user.set_password(password)
