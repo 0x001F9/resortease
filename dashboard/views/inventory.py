@@ -182,6 +182,66 @@ class InventoryAssetActivityView(View):
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
 @method_decorator(check_branch_dashboard, name="dispatch")
+class InventoryItemDetailView(View):
+    template_name = "inventory/item_detail.html"
+
+    def get_item(self, request, item_id):
+        return get_object_or_404(
+            Inventory.objects.select_related("branch"),
+            pk=item_id,
+            branch=request.branch,
+        )
+
+    def get_context(self, item):
+        transactions = item.transactions.select_related("performed_by").order_by(
+            "-created_at"
+        )
+        return {
+            "title": item.name,
+            "item": item,
+            "transactions": transactions,
+            "hide_aside": True,
+        }
+
+    def get(self, request, item_id):
+        item = self.get_item(request, item_id)
+        return render(
+            request,
+            self.template_name,
+            self.get_context(item),
+        )
+
+
+@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(check_branch_dashboard, name="dispatch")
+class InventoryTransactionDetailView(View):
+    template_name = "inventory/transaction_detail.html"
+
+    def get_transaction(self, request, transaction_id):
+        return get_object_or_404(
+            InventoryTransaction.objects.select_related("inventory", "performed_by"),
+            pk=transaction_id,
+            inventory__branch=request.branch,
+        )
+
+    def get_context(self, transaction):
+        return {
+            "title": f"{transaction.inventory.name} transaction",
+            "transaction": transaction,
+            "hide_aside": True,
+        }
+
+    def get(self, request, transaction_id):
+        transaction = self.get_transaction(request, transaction_id)
+        return render(
+            request,
+            self.template_name,
+            self.get_context(transaction),
+        )
+
+
+@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(check_branch_dashboard, name="dispatch")
 class InventoryAssetDetailView(View):
     template_name = "inventory/asset_detail.html"
 

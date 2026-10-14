@@ -1833,6 +1833,42 @@ class InventoryViewTests(TestCase):
         self.assertEqual(len(asset_activity_response.context["asset_events"]), 3)
         self.assertContains(asset_activity_response, "Extra asset 0")
 
+    def test_inventory_item_detail_shows_details_and_history(self):
+        response = self.client.get(
+            reverse(
+                "inventory-item-detail",
+                kwargs={"branch": self.branch.slug, "item_id": self.inventory_item.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["hide_aside"])
+        self.assertNotContains(response, "<aside")
+        self.assertContains(response, "Pool Towels")
+        self.assertContains(response, "POOL-TOWELS")
+        self.assertContains(response, "Item details")
+        self.assertContains(response, "Inventory history")
+        self.assertContains(response, "Initial stock")
+        self.assertContains(response, "12")
+
+    def test_inventory_transaction_detail_shows_transaction_details(self):
+        response = self.client.get(
+            reverse(
+                "inventory-transaction-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "transaction_id": self.inventory_item.transactions.first().pk,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["hide_aside"])
+        self.assertContains(response, "Pool Towels")
+        self.assertContains(response, "Transaction details")
+        self.assertContains(response, "Balance after")
+        self.assertContains(response, "Initial stock")
+
     def test_inventory_asset_detail_shows_details_and_history(self):
         response = self.client.get(
             reverse(

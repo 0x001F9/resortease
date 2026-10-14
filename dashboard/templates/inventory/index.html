@@ -103,7 +103,9 @@
                 <article class="rounded-box border border-base-content/10 bg-base-100 p-4">
                     <div class="flex min-w-0 items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <h3 class="break-words font-semibold">{{ item.name }}</h3>
+                            <h3 class="break-words font-semibold">
+                                <a href="{% url 'inventory-item-detail' branch=request.branch.slug item_id=item.pk %}" class="link link-hover">{{ item.name }}</a>
+                            </h3>
                             {% if item.notes %}<p class="mt-1 break-words text-xs text-base-content/60">{{ item.notes|truncatechars:80 }}</p>{% endif %}
                         </div>
                         {% if item.quantity_on_hand == 0 %}
@@ -165,7 +167,7 @@
                         {% for item in inventory_items %}
                         <tr>
                             <td>
-                                <div class="font-medium">{{ item.name }}</div>
+                                <a href="{% url 'inventory-item-detail' branch=request.branch.slug item_id=item.pk %}" class="link link-hover font-medium">{{ item.name }}</a>
                                 {% if item.notes %}<div class="text-xs text-base-content/60">{{ item.notes|truncatechars:50 }}</div>{% endif %}
                             </td>
                             <td>{{ item.sku|default:"—" }}</td>
@@ -207,7 +209,7 @@
                 {% for transaction in recent_transactions %}
                 <div class="rounded-lg border border-base-content/10 bg-base-200/40 p-3">
                     <div class="flex items-center justify-between gap-3">
-                        <span class="font-medium">{{ transaction.inventory.name }}</span>
+                        <a href="{% url 'inventory-transaction-detail' branch=request.branch.slug transaction_id=transaction.pk %}" class="link link-hover font-medium">{{ transaction.inventory.name }}</a>
                         <span class="badge {% if transaction.quantity_change > 0 %}badge-success{% else %}badge-warning{% endif %} badge-soft">
                             {{ transaction.transaction_type|title }}
                         </span>

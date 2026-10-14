@@ -29,7 +29,9 @@
                     {% for transaction in transactions %}
                     <tr>
                         <td>{{ transaction.created_at|date:"M d, Y H:i" }}</td>
-                        <td>{{ transaction.inventory.name }}</td>
+                        <td>
+                            <a href="{% url 'inventory-transaction-detail' branch=request.branch.slug transaction_id=transaction.pk %}" class="link link-hover">{{ transaction.inventory.name }}</a>
+                        </td>
                         <td>{{ transaction.get_transaction_type_display }}</td>
                         <td>{{ transaction.quantity_change|floatformat:"0" }}</td>
                         <td>{{ transaction.balance_after }}</td>
