@@ -2,3 +2,6 @@ django
 mysqlclient
 python-dotenv
 pytailwindcss
+pyotp
+qrcode
+pillow
