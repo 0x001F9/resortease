@@ -12,7 +12,10 @@ class FacilitiesMaintenanceView(View):
     def get(self, request):
         branch_model: Branch = request.branch
         facilities = Facility.objects.filter(branch=branch_model)
-        maintenance = Maintenance.objects.filter(facility__in=facilities)
+        all_maintenance = Maintenance.objects.filter(facility__in=facilities)
+        maintenance = all_maintenance.filter(
+            status__in=(Maintenance.Status.PENDING, Maintenance.Status.CANCELLED)
+        ).select_related("facility", "issued_by")
 
         return render(
             request,
@@ -21,11 +24,30 @@ class FacilitiesMaintenanceView(View):
                 "facilities": facilities,
                 "facilities_count": len(facilities),
                 "maintenance": maintenance,
-                "maintenance_pending_count": maintenance.filter(
+                "maintenance_pending_count": all_maintenance.filter(
                     status=Maintenance.Status.PENDING
                 ).count(),
-                "maintenance_in_progress_count": maintenance.filter(
+                "maintenance_in_progress_count": all_maintenance.filter(
                     status=Maintenance.Status.IN_PROGRESS
                 ).count(),
             }
+        )
+
+
+@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(check_branch_dashboard, name="dispatch")
+class MaintenanceHistoryView(View):
+    def get(self, request):
+        branch_model: Branch = request.branch
+        maintenance = Maintenance.objects.filter(
+            facility__branch=branch_model
+        ).select_related("facility", "issued_by")
+
+        return render(
+            request,
+            "facilities-maintenance/history.html",
+            {
+                "maintenance": maintenance,
+                "branch": branch_model,
+            },
         )

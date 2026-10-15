@@ -35,7 +35,7 @@ class TOTPSetupView(View):
         if not request.user.is_authenticated:
             return redirect("login")
 
-        if not request.user.totp_secret:
+        if not request.user.totp_enabled:
             request.user.generate_totp_secret()
             request.user.save(update_fields=["totp_secret", "updated_at"])
 
@@ -48,6 +48,7 @@ class TOTPSetupView(View):
             request,
             self.template_name,
             {
+                "title": "ResortEase | Setup TOTP",
                 "secret": request.user.totp_secret,
                 "otpauth_url": otpauth_url,
                 "qr_code_data_url": build_qr_code_data_url(otpauth_url),
@@ -78,6 +79,7 @@ class TOTPSetupView(View):
             request,
             self.template_name,
             {
+                "title": "ResortEase | Setup TOTP",
                 "secret": request.user.totp_secret,
                 "otpauth_url": otpauth_url,
                 "qr_code_data_url": build_qr_code_data_url(otpauth_url),
@@ -112,7 +114,7 @@ class TOTPVerificationView(View):
             {
                 "user": user,
                 "masked_email": mask_email(user.email),
-                "can_use_email_fallback": user.totp_enabled,
+                "can_use_totp": user.totp_enabled,
             },
         )
 
@@ -121,11 +123,13 @@ class TOTPVerificationView(View):
         if user is None:
             return redirect("login")
 
+        is_user_enabled_totp = user.totp_enabled
         totp_code = (request.POST.get("totp_code") or "").strip()
         email_code = (request.POST.get("email_code") or "").strip()
-        send_email_otp = request.POST.get("method") == "email"
 
-        if send_email_otp:
+        if not email_code and (
+            not is_user_enabled_totp or request.POST.get("method") == "email"
+        ):
             user.send_otp_email(request, "two-factor verification")
             messages.info(request, "A security code has been sent to your email.")
             return render(
@@ -135,20 +139,22 @@ class TOTPVerificationView(View):
                     "user": user,
                     "masked_email": mask_email(user.email),
                     "sent_email_otp": True,
+                    "can_use_totp": is_user_enabled_totp,
                 },
             )
 
-        if request.POST.get("method") == "totp":
+        if request.POST.get("method") == "totp" and is_user_enabled_totp:
             return render(
                 request,
                 self.template_name,
                 {
                     "user": user,
                     "masked_email": mask_email(user.email),
+                    "can_use_totp": is_user_enabled_totp,
                 },
             )
 
-        if totp_code and user.verify_totp(totp_code):
+        if is_user_enabled_totp and totp_code and user.verify_totp(totp_code):
             self.clear_pending_login(request)
             login(request, user)
             return redirect("/")
@@ -156,6 +162,14 @@ class TOTPVerificationView(View):
         if email_code and user.verify_otp(email_code):
             self.clear_pending_login(request)
             login(request, user)
+
+            if not is_user_enabled_totp:
+                messages.info(
+                    request,
+                    "You have successfully logged in. For enhanced security, consider enabling TOTP.",
+                )
+                return redirect("totp-setup")
+
             return redirect("/")
 
         if email_code:
@@ -167,6 +181,7 @@ class TOTPVerificationView(View):
                     "masked_email": mask_email(user.email),
                     "sent_email_otp": True,
                     "error": "The verification code was invalid or expired.",
+                    "can_use_totp": is_user_enabled_totp,
                 },
             )
 
@@ -177,6 +192,7 @@ class TOTPVerificationView(View):
                 "user": user,
                 "masked_email": mask_email(user.email),
                 "error": "The verification code was invalid or expired.",
+                "can_use_totp": is_user_enabled_totp,
             },
         )
 

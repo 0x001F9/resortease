@@ -232,7 +232,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         )
 
         mail = EmailMultiAlternatives(
-            subject=f"ResortEase | {purpose}",
+            subject=f"ResortEase | {purpose.title()}",
             body=text_content,
             from_email=f"ResortEase Security <{settings.EMAIL_HOST_USER}>",
             to=[self.email]

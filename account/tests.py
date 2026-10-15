@@ -206,7 +206,8 @@ class OtpEmailMaskingTests(TestCase):
 
         response = self.client.post(reverse("totp-verify"), {"method": "email"})
 
-        send_otp_email.assert_called_once_with("two-factor verification")
+        send_otp_email.assert_called_once()
+        self.assertEqual(send_otp_email.call_args.args[1], "two-factor verification")
         self.assertContains(response, "j*******@example.com")
         self.assertNotContains(response, "jane.doe@example.com")
         self.assertContains(response, 'name="email_code"')
@@ -231,6 +232,61 @@ class OtpEmailMaskingTests(TestCase):
 
         self.assertContains(response, 'name="totp_code"')
         self.assertNotContains(response, 'name="email_code"')
+
+    @patch.object(User, "send_otp_email")
+    def test_two_factor_defaults_to_email_when_totp_is_disabled(self, send_otp_email):
+        user = User.object.create_user(
+            username="email_otp_default_test",
+            email="email.otp.default@example.com",
+            first_name="Email",
+            last_name="Default",
+            phone_number_code="+1",
+            phone_number="5555550203",
+        )
+        session = self.client.session
+        session["pending_tfa_user_id"] = user.pk
+        session.save()
+
+        response = self.client.get(reverse("totp-verify"))
+
+        self.assertNotContains(response, 'name="totp_code"')
+        self.assertContains(response, 'name="method" value="email"')
+        self.assertContains(response, "Send email OTP")
+
+        response = self.client.post(reverse("totp-verify"), {"method": "email"})
+
+        send_otp_email.assert_called_once()
+        self.assertEqual(send_otp_email.call_args.args[1], "two-factor verification")
+        self.assertContains(response, 'name="email_code"')
+        self.assertNotContains(response, 'name="totp_code"')
+        self.assertNotContains(response, "Use authenticator code instead")
+
+    @patch.object(User, "send_otp_email")
+    @patch.object(User, "verify_otp", return_value=True)
+    def test_email_code_verifies_when_totp_is_disabled(
+        self, verify_otp, send_otp_email
+    ):
+        user = User.object.create_user(
+            username="email_otp_verify_test",
+            email="email.otp.verify@example.com",
+            first_name="Email",
+            last_name="Verify",
+            phone_number_code="+1",
+            phone_number="5555550204",
+        )
+        session = self.client.session
+        session["pending_tfa_user_id"] = user.pk
+        session.save()
+
+        response = self.client.post(
+            reverse("totp-verify"),
+            {"email_code": "123456"},
+        )
+
+        self.assertRedirects(response, "/")
+        verify_otp.assert_called_once_with("123456")
+        send_otp_email.assert_not_called()
+        self.assertNotIn("pending_tfa_user_id", self.client.session)
 
     def test_two_factor_can_switch_back_to_totp_form(self):
         user = User.object.create_user(

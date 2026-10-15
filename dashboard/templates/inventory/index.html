@@ -98,7 +98,7 @@
                 </div>
             </div>
 
-            <div class="space-y-3 p-3 md:hidden">
+            <div class="space-y-3 p-3 xl:hidden">
                 {% for item in inventory_items %}
                 <article class="rounded-box border border-base-content/10 bg-base-100 p-4">
                     <div class="flex min-w-0 items-start justify-between gap-3">
@@ -150,8 +150,8 @@
                 {% endfor %}
             </div>
 
-            <div class="hidden overflow-x-auto md:block">
-                <table class="table table-zebra">
+            <div class="hidden overflow-x-auto xl:block">
+                <table class="table table-zebra min-w-[48rem]">
                     <thead>
                         <tr>
                             <th>Item</th>
@@ -165,7 +165,7 @@
                     </thead>
                     <tbody>
                         {% for item in inventory_items %}
-                        <tr>
+                        <tr class="bg-base-100">
                             <td>
                                 <a href="{% url 'inventory-item-detail' branch=request.branch.slug item_id=item.pk %}" class="link link-hover font-medium">{{ item.name }}</a>
                                 {% if item.notes %}<div class="text-xs text-base-content/60">{{ item.notes|truncatechars:50 }}</div>{% endif %}
@@ -270,7 +270,7 @@
             </div>
         </div>
 
-        <div class="space-y-3 p-3 md:hidden">
+        <div class="space-y-3 p-3 xl:hidden">
             {% for asset in inventory_assets %}
             <article class="rounded-box border border-base-content/10 bg-base-100 p-4">
                 <div class="flex min-w-0 items-start justify-between gap-3">
@@ -325,8 +325,8 @@
             {% endfor %}
         </div>
 
-        <div class="hidden overflow-x-auto md:block">
-            <table class="table table-zebra">
+        <div class="hidden overflow-x-auto xl:block">
+            <table class="table table-zebra min-w-[64rem]">
                 <thead>
                     <tr>
                         <th>Asset</th>

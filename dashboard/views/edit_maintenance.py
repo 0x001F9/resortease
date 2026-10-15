@@ -1,5 +1,6 @@
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views import View
 
 from account.models import User
@@ -125,6 +126,10 @@ class EditFacilitiesMaintenanceView(View):
         if context["can_manage"]:
             maintenance.priority = form_data["priority"]
             maintenance.status = form_data["status"]
+            if maintenance.status == Maintenance.Status.COMPLETED:
+                maintenance.completed_at = maintenance.completed_at or timezone.now()
+            else:
+                maintenance.completed_at = None
         maintenance.save()
 
         return redirect(

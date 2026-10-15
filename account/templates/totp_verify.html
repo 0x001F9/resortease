@@ -30,12 +30,14 @@
             </fieldset>
             <button type="submit" class="btn btn-secondary w-full">Verify with email code</button>
           </form>
-          <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="method" value="totp" />
-            <button type="submit" class="btn btn-outline w-full">Use authenticator code instead</button>
-          </form>
-        {% else %}
+          {% if can_use_totp %}
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="method" value="totp" />
+              <button type="submit" class="btn btn-outline w-full">Use authenticator code instead</button>
+            </form>
+          {% endif %}
+        {% elif can_use_totp %}
           <form method="post" class="flex flex-col gap-4">
             {% csrf_token %}
             <fieldset class="fieldset">
@@ -49,6 +51,13 @@
             {% csrf_token %}
             <input type="hidden" name="method" value="email" />
             <button type="submit" class="btn btn-outline w-full">Send email OTP instead</button>
+          </form>
+        {% else %}
+          <p class="text-sm text-base-content/70">Verify your account with a code sent to {{ masked_email }}.</p>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="method" value="email" />
+            <button type="submit" class="btn btn-primary w-full">Send email OTP</button>
           </form>
         {% endif %}
       </div>

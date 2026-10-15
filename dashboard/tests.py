@@ -14,6 +14,7 @@ from dashboard.models import (
     Inventory,
     InventoryAsset,
     InventoryTransaction,
+    Maintenance,
     Payment,
     Reservation,
 )
@@ -86,6 +87,176 @@ class CalendarEntryViewTests(TestCase):
             for day in week
             if day is not None and day["date"] == selected_day
         )
+
+    def test_maintenance_issue_type_suggests_resort_issues_and_accepts_custom_values(self):
+        add_url = f"/dashboard/{self.branch.slug}/add-maintenance/"
+        add_response = self.client.get(add_url)
+
+        self.assertEqual(add_response.status_code, 200)
+        self.assertContains(add_response, 'list="maintenance-issue-types"')
+        self.assertContains(add_response, 'value="Plumbing"')
+        self.assertContains(add_response, 'value="Pool / Spa"')
+
+        response = self.client.post(
+            add_url,
+            {
+                "facility": str(self.facility.pk),
+                "title": "Replace room television",
+                "issue_type": "Guest room television",
+                "priority": Maintenance.Priority.MEDIUM,
+                "description": "Television does not turn on.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            Maintenance.objects.filter(issue_type="Guest room television").exists()
+        )
+
+        maintenance = Maintenance.objects.get(issue_type="Guest room television")
+        edit_response = self.client.get(
+            reverse(
+                "edit-maintenance",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "maintenance_id": maintenance.pk,
+                },
+            )
+        )
+
+        self.assertEqual(edit_response.status_code, 200)
+        self.assertContains(edit_response, 'list="maintenance-issue-types"')
+        self.assertContains(edit_response, 'value="Plumbing"')
+        self.assertContains(edit_response, 'value="Guest room television"')
+
+    def test_maintenance_main_table_filters_statuses_and_history_shows_all(self):
+        status_titles = {
+            Maintenance.Status.PENDING: "Pending",
+            Maintenance.Status.IN_PROGRESS: "In progress",
+            Maintenance.Status.COMPLETED: "Completed",
+            Maintenance.Status.CANCELLED: "Cancelled",
+        }
+        maintenance_by_status = {}
+        for status in Maintenance.Status.values:
+            maintenance_by_status[status] = Maintenance.objects.create(
+                facility=self.facility,
+                title=f"{status_titles[status]} maintenance",
+                issue_type="Pool / Spa",
+                priority=(
+                    Maintenance.Priority.URGENT
+                    if status == Maintenance.Status.PENDING
+                    else Maintenance.Priority.HIGH
+                ),
+                status=status,
+                description=f"Test request in {status} status.",
+                issued_by=self.user,
+            )
+
+        main_response = self.client.get(
+            reverse(
+                "facilities-and-maintenance",
+                kwargs={"branch": self.branch.slug},
+            )
+        )
+
+        self.assertEqual(main_response.status_code, 200)
+        main_statuses = {
+            issue.status for issue in main_response.context["maintenance"]
+        }
+        self.assertEqual(
+            main_statuses,
+            {Maintenance.Status.PENDING, Maintenance.Status.CANCELLED},
+        )
+        self.assertNotContains(main_response, "In progress maintenance")
+        self.assertNotContains(main_response, "Completed maintenance")
+        self.assertContains(main_response, 'class="bg-error/20"')
+        self.assertContains(main_response, 'class="bg-warning/30"')
+
+        history_response = self.client.get(
+            reverse(
+                "maintenance-history",
+                kwargs={"branch": self.branch.slug},
+            )
+        )
+
+        self.assertEqual(history_response.status_code, 200)
+        self.assertEqual(
+            set(history_response.context["maintenance"]),
+            set(maintenance_by_status.values()),
+        )
+        history_html = history_response.content.decode()
+        for status in (
+            Maintenance.Status.IN_PROGRESS,
+            Maintenance.Status.COMPLETED,
+        ):
+            row_start = history_html.index(f"{status_titles[status]} maintenance")
+            row_start = history_html.rfind("<tr", 0, row_start)
+            row_open_end = history_html.index(">", row_start)
+            self.assertNotIn("class=", history_html[row_start:row_open_end])
+        for status in Maintenance.Status.values:
+            with self.subTest(status=status):
+                self.assertContains(
+                    history_response,
+                    f"{status_titles[status]} maintenance",
+                )
+
+    def test_marking_maintenance_completed_sets_completed_timestamp(self):
+        maintenance = Maintenance.objects.create(
+            facility=self.facility,
+            title="Repair pool pump",
+            issue_type="Pool / Spa",
+            priority=Maintenance.Priority.HIGH,
+            status=Maintenance.Status.PENDING,
+            description="Pump is not circulating water.",
+            issued_by=self.user,
+        )
+        edit_url = reverse(
+            "edit-maintenance",
+            kwargs={
+                "branch": self.branch.slug,
+                "maintenance_id": maintenance.pk,
+            },
+        )
+        edit_form_response = self.client.get(edit_url)
+        self.assertContains(edit_form_response, 'name="status"')
+        self.assertNotContains(edit_form_response, "Current status")
+        self.assertEqual(
+            edit_form_response.content.decode().count('name="status"'),
+            1,
+        )
+
+        response = self.client.post(
+            edit_url,
+            {
+                "facility": str(self.facility.pk),
+                "title": maintenance.title,
+                "issue_type": maintenance.issue_type,
+                "description": maintenance.description,
+                "priority": Maintenance.Priority.HIGH,
+                "status": Maintenance.Status.COMPLETED,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        maintenance.refresh_from_db()
+        self.assertEqual(maintenance.status, Maintenance.Status.COMPLETED)
+        self.assertIsNotNone(maintenance.completed_at)
+
+        edit_completed_response = self.client.get(edit_url)
+        self.assertContains(edit_completed_response, 'name="status"')
+        self.assertNotContains(edit_completed_response, "Current status")
+
+        detail_response = self.client.get(
+            reverse(
+                "maintenance-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "maintenance_id": maintenance.pk,
+                },
+            )
+        )
+        self.assertContains(detail_response, "Completed")
+        self.assertNotContains(detail_response, "Not completed")
 
     def test_reservation_list_defaults_to_pending_without_all_status_option(self):
         starts_at = timezone.make_aware(
@@ -1751,6 +1922,10 @@ class InventoryViewTests(TestCase):
         self.assertContains(response, "View all", count=2)
         self.assertContains(response, "Borrowed")
         self.assertContains(response, "Assigned for scheduled cleaning.")
+        self.assertContains(response, "space-y-3 p-3 xl:hidden", count=2)
+        self.assertContains(response, "hidden overflow-x-auto xl:block", count=2)
+        self.assertContains(response, "min-w-[48rem]")
+        self.assertContains(response, "min-w-[64rem]")
 
     def test_record_movement_page_renders_type_tabs_and_branch_items(self):
         response = self.client.get(

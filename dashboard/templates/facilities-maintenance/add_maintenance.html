@@ -105,12 +105,14 @@
                         <input
                             type="text"
                             name="issue_type"
+                            list="maintenance-issue-types"
                             maxlength="80"
                             value="{{ form_data.issue_type|default:'' }}"
-                            placeholder="e.g. Plumbing, electrical, equipment"
+                            placeholder="Select or enter an issue type"
                             class="input input-bordered w-full {% if errors.issue_type %}input-error{% endif %}"
                             required
                         />
+                        {% include "facilities-maintenance/partials/issue_type_options.html" %}
                         {% if errors.issue_type %}
                             <span class="mt-1 text-sm text-error">{{ errors.issue_type }}</span>
                         {% endif %}

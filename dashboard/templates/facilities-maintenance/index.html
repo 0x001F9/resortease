@@ -65,9 +65,17 @@
         </table>
     </div>
 
-    <h1 class="mt-10 text-3xl font-bold">
-        Maintenance
-    </h1>    
+    <div class="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 class="text-3xl font-bold">
+            Maintenance
+        </h1>
+        <a
+            href="{% url 'maintenance-history' branch=request.branch.slug %}"
+            class="btn btn-outline btn-sm"
+        >
+            View maintenance history
+        </a>
+    </div>
     <div class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100 mt-3">
         <table class="table">
             <!-- head -->
@@ -84,7 +92,12 @@
             </thead>
             <tbody>
                 {% for issue in maintenance %}
-                    <tr class="{% cycle 'bg-base-200' '' %}">
+                    <tr
+                        {% if issue.priority == "urgent" %}class="bg-error/20"
+                        {% elif issue.priority == "high" %}class="bg-warning/30"
+                        {% elif issue.priority == "medium" %}class="bg-info/20"
+                        {% else %}class="bg-success/20"{% endif %}
+                    >
                         <td>
                             <a
                                 href="/dashboard/{{ request.branch.slug }}/maintenance/{{ issue.pk }}/"
@@ -114,7 +127,7 @@
                         </td>
                     </tr>
                 {% empty %}
-                    <tr><td colspan="7">No maintenance requests found.</td></tr>
+                    <tr><td colspan="7">No pending or cancelled maintenance requests found.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

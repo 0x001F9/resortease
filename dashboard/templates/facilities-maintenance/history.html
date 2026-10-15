@@ -1,0 +1,81 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="p-4">
+    <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <a
+                href="{% url 'facilities-and-maintenance' branch=branch.slug %}"
+                class="btn btn-ghost btn-sm"
+            >
+                <span aria-hidden="true">&larr;</span>
+                Facilities &amp; Maintenance
+            </a>
+            <h1 class="mt-3 text-3xl font-bold">Maintenance history</h1>
+            <p class="mt-1 text-sm text-base-content/70">
+                All maintenance requests for {{ branch.name }}, across every status.
+            </p>
+        </div>
+    </div>
+
+    <div class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Facility</th>
+                    <th>Type</th>
+                    <th>Issued by</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Reported</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for issue in maintenance %}
+                    <tr
+                        {% if issue.status == "pending" or issue.status == "cancelled" %}
+                            {% if issue.priority == "urgent" %}class="bg-error/20"
+                            {% elif issue.priority == "high" %}class="bg-warning/30"
+                            {% elif issue.priority == "medium" %}class="bg-info/20"
+                            {% else %}class="bg-success/20"{% endif %}
+                        {% endif %}
+                    >
+                        <td>
+                            <a
+                                href="{% url 'maintenance-detail' branch=branch.slug maintenance_id=issue.pk %}"
+                                class="link link-hover font-medium"
+                            >
+                                {{ issue.title }}
+                            </a>
+                        </td>
+                        <td>{{ issue.facility.name }}</td>
+                        <td>{{ issue.issue_type }}</td>
+                        <td>
+                            {% if issue.issued_by %}
+                                {{ issue.issued_by.username }}
+                            {% else %}
+                                Former user
+                            {% endif %}
+                        </td>
+                        <td>{{ issue.get_status_display }}</td>
+                        <td>{{ issue.get_priority_display }}</td>
+                        <td>{{ issue.reported_at|date:"M j, Y, g:i a" }}</td>
+                        <td>
+                            <a
+                                href="{% url 'maintenance-detail' branch=branch.slug maintenance_id=issue.pk %}"
+                                class="btn btn-ghost btn-sm"
+                            >
+                                View
+                            </a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="8">No maintenance history found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</main>
+{% endblock %}

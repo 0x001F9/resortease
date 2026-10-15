@@ -1,6 +1,9 @@
 from django.urls import path
 from dashboard.views.dashboard import DashboardView, DashboardRedirectView
-from dashboard.views.facilities_maintenance import FacilitiesMaintenanceView
+from dashboard.views.facilities_maintenance import (
+    FacilitiesMaintenanceView,
+    MaintenanceHistoryView,
+)
 from dashboard.views.add_facilities import AddFacilitiesMaintenanceView
 from dashboard.views.edit_maintenance import EditFacilitiesMaintenanceView
 from dashboard.views.maintenance_detail import MaintenanceDetailView
@@ -136,7 +139,16 @@ urlpatterns = [
         RemoveCalendarEntryView.as_view(),
         name='remove-calendar-entry',
     ),
-    path('<str:branch>/facilities-and-maintenance/', FacilitiesMaintenanceView.as_view()),
+    path(
+        '<str:branch>/facilities-and-maintenance/',
+        FacilitiesMaintenanceView.as_view(),
+        name='facilities-and-maintenance',
+    ),
+    path(
+        '<str:branch>/maintenance/history/',
+        MaintenanceHistoryView.as_view(),
+        name='maintenance-history',
+    ),
     path('<str:branch>/add-maintenance/', AddFacilitiesMaintenanceView.as_view()),
     path(
         '<str:branch>/maintenance/<int:maintenance_id>/edit/',
