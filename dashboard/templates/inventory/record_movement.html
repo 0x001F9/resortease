@@ -1,0 +1,305 @@
+{% extends "../partials/layout.html" %}
+{% load static %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-3xl">
+        <a href="{% url 'inventory' branch=request.branch.slug %}" class="btn btn-ghost btn-sm mb-4">
+            <span aria-hidden="true">&larr;</span>
+            Inventory
+        </a>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-5 p-5 sm:p-8">
+                <header>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">Inventory</p>
+                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Record movement</h1>
+                    <p class="mt-2 text-sm text-base-content/70">
+                        Record a stock transaction or add an event to an asset's history. Changes are applied to the selected record.
+                    </p>
+                </header>
+
+                {% if messages %}
+                <div class="space-y-2">
+                    {% for message in messages %}
+                    <div role="status" class="alert alert-success">{{ message }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <nav role="tablist" class="tabs tabs-boxed w-full" aria-label="Movement type">
+                    <a
+                        role="tab"
+                        href="?type=inventory"
+                        aria-selected="{% if selected_type == 'inventory' %}true{% else %}false{% endif %}"
+                        class="tab flex-1 {% if selected_type == 'inventory' %}tab-active{% endif %}"
+                    >Inventory items</a>
+                    <a
+                        role="tab"
+                        href="?type=asset"
+                        aria-selected="{% if selected_type == 'asset' %}true{% else %}false{% endif %}"
+                        class="tab flex-1 {% if selected_type == 'asset' %}tab-active{% endif %}"
+                    >Assets</a>
+                </nav>
+
+                {% if selected_type == "inventory" %}
+                <div>
+                    <h2 class="text-lg font-semibold">Stock transaction</h2>
+                    <p class="mt-1 text-sm text-base-content/70">
+                        Received and returned amounts add stock; consumed amounts subtract stock. Adjustments can increase or decrease the balance.
+                    </p>
+                </div>
+                <form method="post" class="space-y-5" id="inventory-movement-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="item_type" value="inventory">
+
+                    {% if inventory_form.non_field_errors %}
+                    <div role="alert" class="alert alert-error">
+                        {% for error in inventory_form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% if not inventory_form.fields.inventory.queryset %}
+                    <div role="status" class="alert">
+                        No inventory items are available for this branch. Add an inventory item before recording a movement.
+                    </div>
+                    {% endif %}
+
+                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        {% for field in inventory_form %}
+                        {% if field.name == "unit_cost" %}
+                        <label id="movement-unit-cost-field" class="form-control w-full" {% if inventory_form.data.transaction_type and inventory_form.data.transaction_type != "received" %}hidden{% endif %}>
+                        {% else %}
+                        <label class="form-control w-full {% if field.name == 'notes' %}sm:col-span-2{% endif %}">
+                        {% endif %}
+                            <span class="label">
+                                <span class="label-text font-medium">
+                                    {% if field.name == "quantity" %}
+                                    <span id="movement-quantity-label">{% if inventory_form.data.transaction_type == "adjustment" %}New stock level{% else %}Quantity{% endif %}</span>
+                                    {% else %}
+                                    {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
+                                    {% endif %}
+                                    {% if field.name == "notes" %}<span id="movement-notes-required-marker" class="text-error" {% if inventory_form.data.transaction_type != "adjustment" and inventory_form.data.transaction_type != "returned" %}hidden{% endif %}>*</span>{% endif %}
+                                </span>
+                            </span>
+                            {{ field }}
+                            {% if field.name == "quantity" %}
+                            <div id="movement-current-stock-field" class="mt-3" hidden>
+                                <span class="mb-1 block text-sm font-medium">Current stock</span>
+                                <div
+                                    id="movement-current-stock"
+                                    class="input input-bordered flex w-full cursor-default items-center bg-base-200"
+                                    role="status"
+                                    aria-live="polite"
+                                >Select an inventory item</div>
+                            </div>
+                            {% endif %}
+                            {% if field.name == "notes" %}
+                            <span class="mt-1 text-xs text-base-content/60">A unique transaction reference will be generated automatically.</span>
+                            {% endif %}
+                            {% if field.name == "unit_cost" %}
+                            <span class="mt-1 text-xs text-base-content/60">Optional transaction cost per stocked unit.</span>
+                            {% endif %}
+                            {% for error in field.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    <div class="card-actions flex-col-reverse justify-end gap-3 border-t border-base-300 pt-5 sm:flex-row">
+                        <a href="{% url 'inventory' branch=request.branch.slug %}" class="btn btn-ghost w-full sm:w-auto">Cancel</a>
+                        <button type="submit" class="btn btn-primary w-full sm:w-auto" {% if not inventory_form.fields.inventory.queryset %}disabled{% endif %}>Record transaction</button>
+                    </div>
+                </form>
+                {{ inventory_quantities|json_script:"inventory-quantities" }}
+                {% else %}
+                <div>
+                    <h2 class="text-lg font-semibold">Asset history event</h2>
+                    <p class="mt-1 text-sm text-base-content/70">
+                        Available events depend on the asset's current status. A return restores a borrowed asset to active.
+                    </p>
+                </div>
+                <form method="post" class="space-y-5" id="asset-movement-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="item_type" value="asset">
+
+                    {% if asset_form.non_field_errors %}
+                    <div role="alert" class="alert alert-error">
+                        {% for error in asset_form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% if not asset_form.fields.asset.queryset %}
+                    <div role="status" class="alert">
+                        No assets are available for this branch. Add a tracked asset before recording an event.
+                    </div>
+                    {% endif %}
+
+                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        {% for field in asset_form %}
+                        {% if field.name == "borrower" %}
+                        <div id="asset-borrower-field" class="form-control w-full" hidden>
+                            <span class="label">
+                                <span class="label-text font-medium">{{ field.label }} <span class="text-error">*</span></span>
+                            </span>
+                            <div
+                                class="form-control w-full"
+                                data-user-picker
+                                data-user-picker-required="false"
+                                data-search-url="{% url 'search-reservation-guests' request.branch.slug %}"
+                            >
+                                {{ field }}
+                                <button
+                                    type="button"
+                                    class="btn btn-outline w-full justify-start {% if field.errors %}btn-error{% endif %}"
+                                    data-user-picker-open
+                                    aria-haspopup="dialog"
+                                    aria-controls="asset-borrower-picker"
+                                >
+                                    <span data-user-picker-selection>
+                                        {% if asset_form.selected_borrower %}
+                                        {{ asset_form.selected_borrower.first_name }}{% if asset_form.selected_borrower.middle_name %} {{ asset_form.selected_borrower.middle_name }}{% endif %} {{ asset_form.selected_borrower.last_name }} ({{ asset_form.selected_borrower.email }})
+                                        {% else %}
+                                        Choose a borrower
+                                        {% endif %}
+                                    </span>
+                                </button>
+                                <span class="mt-1 text-sm text-error" data-user-picker-error {% if not field.errors %}hidden{% endif %}>
+                                    {% for error in field.errors %}{{ error }}{% empty %}Choose a borrower for this event.{% endfor %}
+                                </span>
+                                <dialog
+                                    id="asset-borrower-picker"
+                                    class="modal"
+                                    data-user-picker-dialog
+                                    aria-labelledby="asset-borrower-picker-title"
+                                >
+                                    <div class="modal-box max-h-[85svh] w-[calc(100%_-_2rem)] max-w-xl p-4 sm:p-6">
+                                        <div class="flex items-start justify-between gap-4">
+                                            <div>
+                                                <h2 id="asset-borrower-picker-title" class="text-lg font-semibold">Find a borrower</h2>
+                                                <p class="mt-1 text-sm text-base-content/70">Search by name, username, or email.</p>
+                                            </div>
+                                            <button type="button" class="btn btn-ghost btn-sm" data-user-picker-close aria-label="Close">✕</button>
+                                        </div>
+                                        <input
+                                            type="search"
+                                            class="input input-bordered mt-4 w-full"
+                                            placeholder="Search name, username, or email"
+                                            autocomplete="off"
+                                            data-user-picker-search
+                                        >
+                                        <p class="py-4 text-sm text-base-content/70" aria-live="polite" data-user-picker-status>Enter a name, username, or email to search.</p>
+                                        <ul class="max-h-72 space-y-2 overflow-y-auto" data-user-picker-results></ul>
+                                    </div>
+                                    <div class="modal-backdrop">
+                                        <button type="button" aria-label="Close" data-user-picker-backdrop></button>
+                                    </div>
+                                </dialog>
+                            </div>
+                        </div>
+                        {% else %}
+                        {% if field.name == "due_date" %}
+                        <label id="asset-{{ field.name }}-field" class="form-control w-full" {% if asset_form.data.event_type != "borrowed" %}hidden{% endif %}>
+                        {% else %}
+                        <label class="form-control w-full {% if field.name == 'notes' %}sm:col-span-2{% endif %}">
+                        {% endif %}
+                            <span class="label">
+                                <span class="label-text font-medium">
+                                    {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
+                                </span>
+                            </span>
+                            {{ field }}
+                            {% for error in field.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
+                        </label>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <div class="card-actions flex-col-reverse justify-end gap-3 border-t border-base-300 pt-5 sm:flex-row">
+                        <a href="{% url 'inventory' branch=request.branch.slug %}" class="btn btn-ghost w-full sm:w-auto">Cancel</a>
+                        <button type="submit" class="btn btn-primary w-full sm:w-auto" {% if not asset_form.fields.asset.queryset %}disabled{% endif %}>Record asset event</button>
+                    </div>
+                </form>
+                {{ asset_statuses|json_script:"asset-statuses" }}
+                {{ asset_status_events|json_script:"asset-status-events" }}
+                {% endif %}
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/reservation-user-picker.js' %}" defer></script>
+<script>
+    const inventoryMovementForm = document.getElementById("inventory-movement-form");
+    if (inventoryMovementForm) {
+        const transactionType = document.getElementById("id_transaction_type");
+        const inventorySelect = document.getElementById("id_inventory");
+        const quantityField = document.getElementById("id_quantity");
+        const quantityLabel = document.getElementById("movement-quantity-label");
+        const currentStockField = document.getElementById("movement-current-stock-field");
+        const currentStock = document.getElementById("movement-current-stock");
+        const notesField = document.getElementById("id_notes");
+        const notesRequiredMarker = document.getElementById("movement-notes-required-marker");
+        const unitCostField = document.getElementById("movement-unit-cost-field");
+        const inventoryQuantities = JSON.parse(document.getElementById("inventory-quantities").textContent);
+        const quantityByInventory = new Map(
+            inventoryQuantities.map((inventory) => [
+                String(inventory.id),
+                inventory.quantity_on_hand,
+            ]),
+        );
+        const updateInventoryFields = () => {
+            const adjusting = transactionType.value === "adjustment";
+            const notesRequired = adjusting || transactionType.value === "returned";
+            const stock = quantityByInventory.get(inventorySelect.value);
+            quantityLabel.textContent = adjusting ? "New stock level" : "Quantity";
+            quantityField.min = adjusting ? "0" : "1";
+            currentStockField.hidden = !adjusting;
+            currentStock.textContent = stock === undefined
+                ? "Select an inventory item"
+                : String(stock);
+            notesField.required = notesRequired;
+            notesRequiredMarker.hidden = !notesRequired;
+            unitCostField.hidden = transactionType.value !== "received";
+        };
+        transactionType.addEventListener("change", updateInventoryFields);
+        inventorySelect.addEventListener("change", updateInventoryFields);
+        updateInventoryFields();
+    }
+
+    const assetMovementForm = document.getElementById("asset-movement-form");
+    if (assetMovementForm) {
+        const assetSelect = document.getElementById("id_asset");
+        const eventSelect = document.getElementById("id_event_type");
+        const borrowerField = document.getElementById("asset-borrower-field");
+        const dueDateField = document.getElementById("asset-due_date-field");
+        const borrowerPicker = document.querySelector("#asset-borrower-field [data-user-picker]");
+        const assetStatuses = JSON.parse(document.getElementById("asset-statuses").textContent);
+        const eventsByStatus = JSON.parse(document.getElementById("asset-status-events").textContent);
+        const statusByAsset = new Map(assetStatuses.map((asset) => [String(asset.id), asset.status]));
+
+        const updateAssetFields = () => {
+            const status = statusByAsset.get(assetSelect.value);
+            const allowedEvents = eventsByStatus[status] || [];
+            Array.from(eventSelect.options).forEach((option) => {
+                if (!option.value) return;
+                const available = allowedEvents.includes(option.value);
+                option.hidden = !available;
+                option.disabled = !available;
+            });
+            if (eventSelect.value && !allowedEvents.includes(eventSelect.value)) {
+                eventSelect.value = "";
+            }
+
+            const borrowing = eventSelect.value === "borrowed";
+            borrowerField.hidden = !borrowing;
+            dueDateField.hidden = !borrowing;
+            borrowerPicker.dataset.userPickerRequired = borrowing ? "true" : "false";
+        };
+        assetSelect.addEventListener("change", updateAssetFields);
+        eventSelect.addEventListener("change", updateAssetFields);
+        updateAssetFields();
+    }
+</script>
+{% endblock %}

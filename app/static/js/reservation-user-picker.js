@@ -108,7 +108,7 @@ document.querySelectorAll("[data-user-picker]").forEach((picker) => {
         openButton.focus()
     })
     form.addEventListener("submit", (event) => {
-        if (selectedId.value) {
+        if (picker.dataset.userPickerRequired === "false" || selectedId.value) {
             return
         }
         event.preventDefault()

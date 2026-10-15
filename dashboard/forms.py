@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django import forms
+from django.contrib.auth import get_user_model
 from django.db.models import Sum
 from django.utils import timezone
 
@@ -12,6 +13,7 @@ from dashboard.models import (
     Payment,
     Reservation,
 )
+from dashboard.models.inventory import InventoryTransaction
 
 
 class PaymentForm(forms.ModelForm):
@@ -356,3 +358,177 @@ class InventoryAssetStatusForm(forms.Form):
         return self.STATUS_TRANSITIONS[self.asset.status][
             self.cleaned_data["status"]
         ]
+
+
+class InventoryMovementForm(forms.Form):
+    inventory = forms.ModelChoiceField(
+        queryset=Inventory.objects.none(),
+        label="Inventory item",
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+    transaction_type = forms.ChoiceField(
+        choices=InventoryTransaction.Type.choices,
+        initial=InventoryTransaction.Type.RECEIVED,
+        label="Movement type",
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+    quantity = forms.IntegerField(
+        min_value=0,
+        widget=forms.NumberInput(
+            attrs={"class": "input input-bordered w-full", "min": "0", "step": "1"}
+        ),
+    )
+    unit_cost = forms.DecimalField(
+        required=False,
+        min_value=0,
+        max_digits=10,
+        decimal_places=2,
+        label="Unit cost (PHP)",
+        widget=forms.NumberInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "min": "0",
+                "step": "0.01",
+            }
+        ),
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(
+            attrs={"class": "textarea textarea-bordered w-full", "rows": 3}
+        ),
+    )
+
+    def __init__(self, *args, branch, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["inventory"].queryset = Inventory.objects.filter(
+            branch=branch
+        ).order_by("name")
+        self.fields["inventory"].label_from_instance = lambda item: item.name
+
+    def clean(self):
+        cleaned_data = super().clean()
+        transaction_type = cleaned_data.get("transaction_type")
+        quantity = cleaned_data.get("quantity")
+
+        if transaction_type in {
+            InventoryTransaction.Type.ADJUSTMENT,
+            InventoryTransaction.Type.RETURNED,
+        }:
+            if not cleaned_data.get("notes", "").strip():
+                self.add_error(
+                    "notes",
+                    "A note is required for adjustments and returns.",
+                )
+
+        if transaction_type == InventoryTransaction.Type.ADJUSTMENT:
+            if quantity is not None:
+                cleaned_data["target_quantity"] = quantity
+        elif transaction_type == InventoryTransaction.Type.CONSUMED:
+            if quantity is not None and quantity > 0:
+                cleaned_data["quantity_change"] = -quantity
+        elif transaction_type in {
+            InventoryTransaction.Type.RECEIVED,
+            InventoryTransaction.Type.RETURNED,
+        }:
+            if quantity is not None and quantity > 0:
+                cleaned_data["quantity_change"] = quantity
+        if (
+            transaction_type != InventoryTransaction.Type.ADJUSTMENT
+            and quantity == 0
+        ):
+            self.add_error("quantity", "Enter a quantity greater than zero.")
+        if transaction_type != InventoryTransaction.Type.RECEIVED:
+            cleaned_data["unit_cost"] = None
+
+        return cleaned_data
+
+
+class InventoryAssetMovementForm(forms.Form):
+    ASSET_EVENT_CHOICES = (
+        ("", "Choose an event"),
+        *(
+            choice
+            for choice in InventoryAssetHistory.Event.choices
+            if choice[0] != InventoryAssetHistory.Event.ACQUIRED
+        ),
+    )
+
+    asset = forms.ModelChoiceField(
+        queryset=InventoryAsset.objects.none(),
+        label="Asset",
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+    event_type = forms.ChoiceField(
+        choices=ASSET_EVENT_CHOICES,
+        label="History event",
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+    borrower = forms.ModelChoiceField(
+        queryset=get_user_model().objects.none(),
+        required=False,
+        label="Borrower",
+        widget=forms.HiddenInput(attrs={"data-user-picker-id": ""}),
+    )
+    due_date = forms.DateTimeField(
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"],
+        required=False,
+        label="Due date",
+        widget=forms.DateTimeInput(
+            format="%Y-%m-%dT%H:%M",
+            attrs={"class": "input input-bordered w-full", "type": "datetime-local"},
+        ),
+    )
+    notes = forms.CharField(
+        label="History note",
+        widget=forms.Textarea(
+            attrs={
+                "class": "textarea textarea-bordered w-full",
+                "rows": 3,
+                "required": True,
+            }
+        ),
+    )
+
+    def __init__(self, *args, branch, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["asset"].queryset = InventoryAsset.objects.filter(
+            branch=branch
+        ).order_by("name")
+        self.fields["borrower"].queryset = (
+            get_user_model().objects.filter(is_active=True)
+            .order_by("first_name", "last_name", "username")
+        )
+        borrower_id = self.data.get("borrower") if self.is_bound else None
+        self.selected_borrower = None
+        if borrower_id and str(borrower_id).isdecimal():
+            self.selected_borrower = self.fields["borrower"].queryset.filter(
+                pk=borrower_id
+            ).first()
+
+    @staticmethod
+    def events_for_status(status):
+        return {
+            event_type
+            for event_type in InventoryAssetStatusForm.STATUS_TRANSITIONS.get(
+                status, {}
+            ).values()
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        asset = cleaned_data.get("asset")
+        event_type = cleaned_data.get("event_type")
+        if asset is not None and event_type is not None:
+            if event_type not in self.events_for_status(asset.status):
+                self.add_error(
+                    "event_type",
+                    "This event is not available for the asset's current status.",
+                )
+            if event_type == InventoryAssetHistory.Event.BORROWED:
+                if not cleaned_data.get("borrower"):
+                    self.add_error("borrower", "Choose a borrower for this event.")
+            else:
+                cleaned_data["borrower"] = None
+                cleaned_data["due_date"] = None
+        return cleaned_data

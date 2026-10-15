@@ -10,6 +10,44 @@
         <a href="{% url 'inventory' branch=request.branch.slug %}" class="btn btn-outline btn-sm">Back to inventory</a>
     </div>
 
+    {% if overdue_assets %}
+    <section class="mb-6 rounded-box border border-error/40 bg-base-100 shadow-sm">
+        <div class="border-b border-base-content/10 px-4 py-3">
+            <h2 class="text-xl font-semibold">Borrowed assets past due</h2>
+            <p class="text-sm text-base-content/60">Assets that are still borrowed after their due date and time.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="table table-zebra">
+                <thead>
+                    <tr>
+                        <th>Asset</th>
+                        <th>Asset tag</th>
+                        <th>Borrower</th>
+                        <th>Due date and time</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asset in overdue_assets %}
+                    <tr>
+                        <td>
+                            <a
+                                href="{% url 'inventory-asset-detail' branch=request.branch.slug asset_id=asset.pk %}"
+                                class="link link-hover font-medium"
+                            >{{ asset.name }}</a>
+                        </td>
+                        <td>{{ asset.asset_tag }}</td>
+                        <td>{{ asset.borrowed_by|default:"—" }}</td>
+                        <td>{{ asset.due_date|date:"M d, Y H:i" }}</td>
+                        <td><span class="badge badge-error badge-soft">Past due</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+
     <section class="rounded-box border border-base-content/10 bg-base-100 shadow-sm">
         <div class="overflow-x-auto">
             <table class="table table-zebra">
@@ -38,7 +76,7 @@
                         <td>{{ event.get_event_type_display }}</td>
                         <td>{{ event.get_status_before_display }} → {{ event.get_status_after_display }}</td>
                         <td>{{ event.borrower|default:"—" }}</td>
-                        <td>{{ event.due_date|date:"M d, Y"|default:"—" }}</td>
+                        <td>{{ event.due_date|date:"M d, Y H:i"|default:"—" }}</td>
                         <td>{{ event.performed_by|default:"—" }}</td>
                         <td>{{ event.notes|default:"—"|truncatechars:60 }}</td>
                     </tr>

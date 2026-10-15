@@ -1,15 +1,21 @@
 from decimal import Decimal
+from uuid import uuid4
 
 from django.contrib import messages
 from django.db.models import Q
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.decorations.branch_check import check_branch_dashboard
-from dashboard.forms import InventoryAssetStatusForm
+from dashboard.forms import (
+    InventoryAssetMovementForm,
+    InventoryAssetStatusForm,
+    InventoryMovementForm,
+)
 from dashboard.models.inventory import Inventory, InventoryTransaction
 from dashboard.models.inventory_assets import InventoryAsset, InventoryAssetHistory
 
@@ -161,6 +167,165 @@ class InventoryTransactionsView(View):
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
 @method_decorator(check_branch_dashboard, name="dispatch")
+class RecordInventoryMovementView(View):
+    template_name = "inventory/record_movement.html"
+
+    def get_context(self, request, selected_type, inventory_form=None, asset_form=None):
+        branch_assets = InventoryAsset.objects.filter(branch=request.branch).order_by(
+            "name"
+        )
+        inventory_form = inventory_form or InventoryMovementForm(
+            branch=request.branch
+        )
+        return {
+            "title": "Record inventory movement",
+            "selected_type": selected_type,
+            "inventory_form": inventory_form,
+            "inventory_quantities": list(
+                inventory_form.fields["inventory"].queryset.values(
+                    "id",
+                    "quantity_on_hand",
+                )
+            ),
+            "asset_form": asset_form
+            or InventoryAssetMovementForm(branch=request.branch),
+            "asset_status_events": {
+                status.value: list(
+                    InventoryAssetMovementForm.events_for_status(status.value)
+                )
+                for status in InventoryAsset.Status
+            },
+            "asset_statuses": list(branch_assets.values("id", "status")),
+            "hide_aside": True,
+        }
+
+    def get(self, request):
+        selected_type = (
+            "asset" if request.GET.get("type") == "asset" else "inventory"
+        )
+        return render(
+            request,
+            self.template_name,
+            self.get_context(request, selected_type),
+        )
+
+    def post(self, request):
+        selected_type = request.POST.get("item_type")
+        if selected_type == "inventory":
+            form = InventoryMovementForm(request.POST, branch=request.branch)
+            if form.is_valid():
+                item = form.cleaned_data["inventory"]
+                if (
+                    form.cleaned_data["transaction_type"]
+                    == InventoryTransaction.Type.ADJUSTMENT
+                ):
+                    transaction_data = {
+                        "target_quantity": form.cleaned_data["target_quantity"]
+                    }
+                else:
+                    transaction_data = {
+                        "quantity_change": form.cleaned_data["quantity_change"]
+                    }
+                try:
+                    item.record_transaction(
+                        transaction_type=form.cleaned_data["transaction_type"],
+                        **transaction_data,
+                        performed_by=request.user,
+                        unit_cost=form.cleaned_data["unit_cost"],
+                        reference=(
+                            f"INV-{timezone.localdate():%Y%m%d}-"
+                            f"{uuid4().hex[:8].upper()}"
+                        ),
+                        notes=form.cleaned_data["notes"],
+                    )
+                except ValueError as error:
+                    form.add_error(None, str(error))
+                else:
+                    messages.success(
+                        request,
+                        f"Recorded a movement for {item.name}.",
+                    )
+                    return redirect(
+                        "inventory-item-detail",
+                        branch=request.branch.slug,
+                        item_id=item.pk,
+                    )
+
+                return render(
+                    request,
+                    self.template_name,
+                    self.get_context(
+                        request,
+                        selected_type,
+                        inventory_form=form,
+                    ),
+                )
+
+            return render(
+                request,
+                self.template_name,
+                self.get_context(
+                    request,
+                    selected_type,
+                    inventory_form=form,
+                ),
+            )
+
+        if selected_type == "asset":
+            form = InventoryAssetMovementForm(request.POST, branch=request.branch)
+            if form.is_valid():
+                asset = form.cleaned_data["asset"]
+                try:
+                    asset.record_event(
+                        event_type=form.cleaned_data["event_type"],
+                        performed_by=request.user,
+                        borrower=form.cleaned_data["borrower"],
+                        due_date=form.cleaned_data["due_date"],
+                        notes=form.cleaned_data["notes"],
+                    )
+                except ValueError as error:
+                    asset.refresh_from_db()
+                    form = InventoryAssetMovementForm(
+                        request.POST,
+                        branch=request.branch,
+                    )
+                    form.add_error(None, str(error))
+                else:
+                    messages.success(
+                        request,
+                        f"Recorded a history event for {asset.name}.",
+                    )
+                    return redirect(
+                        "inventory-asset-detail",
+                        branch=request.branch.slug,
+                        asset_id=asset.pk,
+                    )
+
+                return render(
+                    request,
+                    self.template_name,
+                    self.get_context(
+                        request,
+                        selected_type,
+                        asset_form=form,
+                    ),
+                )
+
+            return render(
+                request,
+                self.template_name,
+                self.get_context(
+                    request,
+                    selected_type,
+                    asset_form=form,
+                ),
+            )
+
+        return HttpResponseBadRequest("Choose inventory items or assets.")
+
+
+@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(check_branch_dashboard, name="dispatch")
 class InventoryAssetActivityView(View):
     template_name = "inventory/asset_activity.html"
 
@@ -170,12 +335,23 @@ class InventoryAssetActivityView(View):
             .select_related("asset", "performed_by", "borrower")
             .order_by("-created_at")
         )
+        overdue_assets = (
+            InventoryAsset.objects.filter(
+                branch=request.branch,
+                status=InventoryAsset.Status.BORROWED,
+                due_date__isnull=False,
+                due_date__lte=timezone.now(),
+            )
+            .select_related("borrowed_by")
+            .order_by("due_date", "name")
+        )
         return render(
             request,
             self.template_name,
             {
                 "title": "Inventory asset activity",
                 "asset_events": asset_events,
+                "overdue_assets": overdue_assets,
             },
         )
 

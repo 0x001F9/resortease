@@ -31,7 +31,7 @@ class InventoryAsset(models.Model):
         blank=True,
         related_name="borrowed_inventory_assets",
     )
-    due_date = models.DateField(blank=True, null=True)
+    due_date = models.DateTimeField(blank=True, null=True)
     purchase_date = models.DateField(blank=True, null=True)
     purchase_cost = models.DecimalField(
         max_digits=10,
@@ -164,7 +164,7 @@ class InventoryAssetHistory(models.Model):
         blank=True,
         related_name="inventory_asset_borrowing_history",
     )
-    due_date = models.DateField(blank=True, null=True)
+    due_date = models.DateTimeField(blank=True, null=True)
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -96,7 +96,7 @@
             </div>
             <div>
                 <dt class="text-sm text-base-content/60">Due date</dt>
-                <dd class="mt-1 font-medium">{{ asset.due_date|date:"M d, Y"|default:"—" }}</dd>
+                <dd class="mt-1 font-medium">{{ asset.due_date|date:"M d, Y H:i"|default:"—" }}</dd>
             </div>
             <div>
                 <dt class="text-sm text-base-content/60">Purchase date</dt>
@@ -142,7 +142,7 @@
                         <td>{{ event.get_event_type_display }}</td>
                         <td>{{ event.get_status_before_display }} &rarr; {{ event.get_status_after_display }}</td>
                         <td>{{ event.borrower|default:"—" }}</td>
-                        <td>{{ event.due_date|date:"M d, Y"|default:"—" }}</td>
+                        <td>{{ event.due_date|date:"M d, Y H:i"|default:"—" }}</td>
                         <td>{{ event.performed_by|default:"—" }}</td>
                         <td>{{ event.notes|default:"—" }}</td>
                     </tr>

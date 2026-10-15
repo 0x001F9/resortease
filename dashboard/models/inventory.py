@@ -55,7 +55,8 @@ class Inventory(models.Model):
         self,
         *,
         transaction_type,
-        quantity_change,
+        quantity_change=None,
+        target_quantity=None,
         performed_by=None,
         unit_cost=None,
         reference="",
@@ -63,23 +64,47 @@ class Inventory(models.Model):
     ):
         if transaction_type not in InventoryTransaction.Type.values:
             raise ValueError(f"Unsupported inventory transaction type: {transaction_type}")
+        if target_quantity is not None and transaction_type != InventoryTransaction.Type.ADJUSTMENT:
+            raise ValueError("A target quantity can only be used for adjustments.")
+        if target_quantity is not None and quantity_change is not None:
+            raise ValueError("Specify either quantity_change or target_quantity, not both.")
+        if target_quantity is None and quantity_change is None:
+            raise ValueError("Inventory transaction quantity_change is required.")
         if quantity_change == 0:
             raise ValueError("Inventory transaction quantity_change cannot be zero.")
-        if (
-            transaction_type
-            in {InventoryTransaction.Type.RECEIVED, InventoryTransaction.Type.RETURNED}
-            and quantity_change < 0
-        ) or (
-            transaction_type == InventoryTransaction.Type.CONSUMED
-            and quantity_change > 0
+        if quantity_change is not None and (
+            (
+                transaction_type
+                in {
+                    InventoryTransaction.Type.RECEIVED,
+                    InventoryTransaction.Type.RETURNED,
+                }
+                and quantity_change < 0
+            )
+            or (
+                transaction_type == InventoryTransaction.Type.CONSUMED
+                and quantity_change > 0
+            )
         ):
             raise ValueError(
                 "Received and returned quantities must be positive; consumed quantities must be negative."
             )
+        if target_quantity is not None and target_quantity < 0:
+            raise ValueError("Inventory adjustment target cannot be negative.")
 
         with transaction.atomic():
             inventory = Inventory.objects.select_for_update().get(pk=self.pk)
             balance_before = inventory.quantity_on_hand
+            if target_quantity is not None:
+                quantity_change = target_quantity - balance_before
+                if quantity_change == 0:
+                    raise ValueError(
+                        "The adjustment target already matches the current stock."
+                    )
+                change_description = (
+                    "Increase" if quantity_change > 0 else "Decrease"
+                )
+                notes = f"{change_description} stock to {target_quantity}: {notes}"
             balance_after = balance_before + quantity_change
             if balance_after < 0:
                 raise ValueError("Inventory transaction would make stock negative.")

@@ -14,6 +14,7 @@ from dashboard.views.inventory import (
     InventoryTransactionDetailView,
     InventoryTransactionsView,
     InventoryView,
+    RecordInventoryMovementView,
 )
 from dashboard.views.add_inventory_item import AddInventoryItemView
 from dashboard.views.reservations import ReservationsCalendarView
@@ -49,6 +50,11 @@ urlpatterns = [
         '<str:branch>/inventory/transactions/',
         InventoryTransactionsView.as_view(),
         name='inventory-transactions',
+    ),
+    path(
+        '<str:branch>/inventory/movements/new/',
+        RecordInventoryMovementView.as_view(),
+        name='record-inventory-movement',
     ),
     path(
         '<str:branch>/inventory/items/<int:item_id>/',

@@ -12,7 +12,7 @@
             <a href="/dashboard/{{ request.branch.slug }}/inventory/add/" class="btn btn-primary btn-sm md:btn-md">
                 Create item
             </a>
-            <a href="/admin/dashboard/inventorytransaction/add/" class="btn btn-outline btn-sm md:btn-md">
+            <a href="{% url 'record-inventory-movement' branch=request.branch.slug %}" class="btn btn-outline btn-sm md:btn-md">
                 Record movement
             </a>
         </div>
@@ -310,7 +310,7 @@
                     </div>
                     <div>
                         <dt class="text-xs text-base-content/60">Due date</dt>
-                        <dd class="font-medium">{{ asset.due_date|date:"M d, Y"|default:"—" }}</dd>
+                        <dd class="font-medium">{{ asset.due_date|date:"M d, Y H:i"|default:"—" }}</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-base-content/60">Purchase cost</dt>
@@ -364,7 +364,7 @@
                             {% endif %}
                         </td>
                         <td>{{ asset.borrowed_by|default:"—" }}</td>
-                        <td>{{ asset.due_date|date:"M d, Y"|default:"—" }}</td>
+                        <td>{{ asset.due_date|date:"M d, Y H:i"|default:"—" }}</td>
                         <td>{% if asset.purchase_cost != None %}₱{{ asset.purchase_cost|floatformat:2 }}{% else %}—{% endif %}</td>
                     </tr>
                     {% empty %}

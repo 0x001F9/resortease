@@ -1752,6 +1752,341 @@ class InventoryViewTests(TestCase):
         self.assertContains(response, "Borrowed")
         self.assertContains(response, "Assigned for scheduled cleaning.")
 
+    def test_record_movement_page_renders_type_tabs_and_branch_items(self):
+        response = self.client.get(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Record movement")
+        self.assertContains(response, "Inventory items")
+        self.assertContains(response, "Assets")
+        self.assertContains(response, self.inventory_item.name)
+        self.assertContains(response, 'name="transaction_type"')
+        self.assertContains(response, 'id="movement-current-stock"')
+        self.assertNotContains(response, 'name="adjustment_direction"')
+        self.assertContains(response, 'href="?type=asset"')
+        self.assertContains(
+            response,
+            f'<option value="{self.inventory_item.pk}">{self.inventory_item.name}</option>',
+            html=True,
+        )
+        self.assertNotContains(
+            response,
+            f'<option value="{self.inventory_item.pk}">{self.branch.name} - {self.inventory_item.name}</option>',
+            html=True,
+        )
+
+    def test_record_inventory_movement_updates_stock_and_records_transaction(self):
+        response = self.client.post(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {
+                "item_type": "inventory",
+                "inventory": str(self.inventory_item.pk),
+                "transaction_type": InventoryTransaction.Type.RECEIVED,
+                "quantity": "4",
+                "unit_cost": "7.25",
+                "notes": "Four new packs.",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "inventory-item-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "item_id": self.inventory_item.pk,
+                },
+            ),
+        )
+        self.inventory_item.refresh_from_db()
+        transaction_record = self.inventory_item.transactions.first()
+        self.assertEqual(self.inventory_item.quantity_on_hand, 16)
+        self.assertEqual(transaction_record.quantity_change, 4)
+        self.assertEqual(transaction_record.balance_before, 12)
+        self.assertEqual(transaction_record.balance_after, 16)
+        self.assertEqual(transaction_record.unit_cost, Decimal("7.25"))
+        self.assertRegex(
+            transaction_record.reference,
+            r"^INV-\d{8}-[A-F0-9]{8}$",
+        )
+        self.assertEqual(transaction_record.performed_by, self.user)
+
+    def test_record_inventory_movement_rejects_consumption_below_zero(self):
+        response = self.client.post(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {
+                "item_type": "inventory",
+                "inventory": str(self.inventory_item.pk),
+                "transaction_type": InventoryTransaction.Type.CONSUMED,
+                "quantity": "13",
+                "notes": "Invalid over-consumption.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.inventory_item.refresh_from_db()
+        self.assertEqual(self.inventory_item.quantity_on_hand, 12)
+        self.assertEqual(self.inventory_item.transactions.count(), 1)
+        self.assertContains(response, "would make stock negative")
+
+    def test_adjustments_and_returns_require_notes(self):
+        url = reverse(
+            "record-inventory-movement",
+            kwargs={"branch": self.branch.slug},
+        )
+        for transaction_type in (
+            InventoryTransaction.Type.ADJUSTMENT,
+            InventoryTransaction.Type.RETURNED,
+        ):
+            with self.subTest(transaction_type=transaction_type):
+                response = self.client.post(
+                    url,
+                    {
+                        "item_type": "inventory",
+                        "inventory": str(self.inventory_item.pk),
+                        "transaction_type": transaction_type,
+                        "quantity": "2",
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(
+                    response,
+                    "A note is required for adjustments and returns.",
+                )
+                self.assertEqual(self.inventory_item.transactions.count(), 1)
+
+    def test_adjustment_sets_target_stock_and_prepends_server_generated_note(self):
+        url = reverse(
+            "record-inventory-movement",
+            kwargs={"branch": self.branch.slug},
+        )
+
+        increase_response = self.client.post(
+            url,
+            {
+                "item_type": "inventory",
+                "inventory": str(self.inventory_item.pk),
+                "transaction_type": InventoryTransaction.Type.ADJUSTMENT,
+                "quantity": "15",
+                "notes": "Cycle count found extra stock.",
+            },
+        )
+
+        self.assertRedirects(
+            increase_response,
+            reverse(
+                "inventory-item-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "item_id": self.inventory_item.pk,
+                },
+            ),
+        )
+        increase = self.inventory_item.transactions.first()
+        self.assertEqual(increase.quantity_change, 3)
+        self.assertEqual(increase.balance_before, 12)
+        self.assertEqual(increase.balance_after, 15)
+        self.assertEqual(
+            increase.notes,
+            "Increase stock to 15: Cycle count found extra stock.",
+        )
+
+        decrease_response = self.client.post(
+            url,
+            {
+                "item_type": "inventory",
+                "inventory": str(self.inventory_item.pk),
+                "transaction_type": InventoryTransaction.Type.ADJUSTMENT,
+                "quantity": "4",
+                "notes": "Damaged stock removed.",
+            },
+        )
+
+        self.assertRedirects(
+            decrease_response,
+            reverse(
+                "inventory-item-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "item_id": self.inventory_item.pk,
+                },
+            ),
+        )
+        decrease = self.inventory_item.transactions.first()
+        self.assertEqual(decrease.quantity_change, -11)
+        self.assertEqual(decrease.balance_before, 15)
+        self.assertEqual(decrease.balance_after, 4)
+        self.assertEqual(decrease.notes, "Decrease stock to 4: Damaged stock removed.")
+
+    def test_adjustment_rejects_target_matching_current_stock(self):
+        response = self.client.post(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {
+                "item_type": "inventory",
+                "inventory": str(self.inventory_item.pk),
+                "transaction_type": InventoryTransaction.Type.ADJUSTMENT,
+                "quantity": "12",
+                "notes": "No actual adjustment.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.inventory_item.refresh_from_db()
+        self.assertEqual(self.inventory_item.quantity_on_hand, 12)
+        self.assertEqual(self.inventory_item.transactions.count(), 1)
+        self.assertContains(response, "already matches the current stock")
+
+    def test_record_asset_return_updates_status_and_history(self):
+        response = self.client.post(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {
+                "item_type": "asset",
+                "asset": str(self.asset.pk),
+                "event_type": InventoryAssetHistory.Event.RETURNED,
+                "notes": "Returned to the equipment room.",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "inventory-asset-detail",
+                kwargs={"branch": self.branch.slug, "asset_id": self.asset.pk},
+            ),
+        )
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, InventoryAsset.Status.ACTIVE)
+        self.assertIsNone(self.asset.borrowed_by)
+        self.assertEqual(self.asset.history.count(), 2)
+        self.assertEqual(
+            self.asset.history.first().event_type,
+            InventoryAssetHistory.Event.RETURNED,
+        )
+
+    def test_asset_borrower_uses_search_picker_modal(self):
+        response = self.client.get(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {"type": "asset"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Find a borrower")
+        self.assertContains(response, 'data-user-picker')
+        self.assertContains(response, 'data-user-picker-id')
+        self.assertContains(
+            response,
+            reverse(
+                "search-reservation-guests",
+                kwargs={"branch": self.branch.slug},
+            ),
+        )
+        self.assertContains(response, "reservation-user-picker.js")
+        self.assertContains(response, 'name="borrower"')
+        self.assertContains(response, 'type="hidden"')
+        self.assertContains(response, 'name="due_date"')
+        self.assertContains(response, 'type="datetime-local"')
+
+    def test_record_asset_borrow_requires_borrower_and_updates_asset(self):
+        asset = InventoryAsset.objects.create(
+            branch=self.branch,
+            name="Available Pool Equipment",
+            asset_tag="ASSET-POOL-AVAILABLE",
+            category="Equipment",
+        )
+        url = reverse(
+            "record-inventory-movement",
+            kwargs={"branch": self.branch.slug},
+        )
+        response = self.client.post(
+            url,
+            {
+                "item_type": "asset",
+                "asset": str(asset.pk),
+                "event_type": InventoryAssetHistory.Event.BORROWED,
+                "notes": "Assigned for a shift.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        asset.refresh_from_db()
+        self.assertEqual(asset.status, InventoryAsset.Status.ACTIVE)
+        self.assertEqual(asset.history.count(), 0)
+        self.assertContains(response, "Choose a borrower for this event.")
+
+        response = self.client.post(
+            url,
+            {
+                "item_type": "asset",
+                "asset": str(asset.pk),
+                "event_type": InventoryAssetHistory.Event.BORROWED,
+                "borrower": str(self.user.pk),
+                "due_date": "2026-10-20T14:30",
+                "notes": "Assigned for a shift.",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "inventory-asset-detail",
+                kwargs={"branch": self.branch.slug, "asset_id": asset.pk},
+            ),
+        )
+        asset.refresh_from_db()
+        self.assertEqual(asset.status, InventoryAsset.Status.BORROWED)
+        self.assertEqual(asset.borrowed_by, self.user)
+        self.assertEqual(
+            timezone.localtime(asset.due_date).strftime("%Y-%m-%dT%H:%M"),
+            "2026-10-20T14:30",
+        )
+        event = asset.history.first()
+        self.assertEqual(event.event_type, InventoryAssetHistory.Event.BORROWED)
+        self.assertEqual(event.borrower, self.user)
+        self.assertEqual(
+            timezone.localtime(event.due_date).strftime("%Y-%m-%dT%H:%M"),
+            "2026-10-20T14:30",
+        )
+
+        response = self.client.post(
+            url,
+            {
+                "item_type": "asset",
+                "asset": str(asset.pk),
+                "event_type": InventoryAssetHistory.Event.MAINTENANCE_STARTED,
+                "notes": "This is not allowed while borrowed.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        asset.refresh_from_db()
+        self.assertEqual(asset.status, InventoryAsset.Status.BORROWED)
+        self.assertEqual(asset.history.count(), 1)
+        self.assertContains(
+            response,
+            "This event is not available for the asset's current status.",
+        )
+
     def test_inventory_search_shows_matching_items_and_assets_as_cards(self):
         response = self.client.get(
             reverse("inventory-search", kwargs={"branch": self.branch.slug}),
@@ -1832,6 +2167,61 @@ class InventoryViewTests(TestCase):
         self.assertEqual(asset_activity_response.status_code, 200)
         self.assertEqual(len(asset_activity_response.context["asset_events"]), 3)
         self.assertContains(asset_activity_response, "Extra asset 0")
+
+    def test_asset_activity_lists_only_past_due_borrowed_assets(self):
+        self.asset.due_date = timezone.now() - timedelta(minutes=1)
+        self.asset.save(update_fields=["due_date"])
+        due_soon_asset = InventoryAsset.objects.create(
+            branch=self.branch,
+            name="Due Soon Asset",
+            asset_tag="ASSET-DUE-SOON",
+            category="Equipment",
+            status=InventoryAsset.Status.BORROWED,
+            borrowed_by=self.user,
+            due_date=timezone.now() + timedelta(minutes=1),
+        )
+        other_branch = Branch.objects.create(
+            name="Other Overdue Branch",
+            slug="other-overdue-branch",
+            city="Other City",
+            address="4 Inventory Street",
+        )
+        InventoryAsset.objects.create(
+            branch=other_branch,
+            name="Other Branch Overdue Asset",
+            asset_tag="ASSET-OTHER-OVERDUE",
+            category="Equipment",
+            status=InventoryAsset.Status.BORROWED,
+            borrowed_by=self.user,
+            due_date=timezone.now() - timedelta(minutes=2),
+        )
+
+        response = self.client.get(
+            reverse(
+                "inventory-asset-activity",
+                kwargs={"branch": self.branch.slug},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        overdue_assets = list(response.context["overdue_assets"])
+        self.assertEqual([asset.pk for asset in overdue_assets], [self.asset.pk])
+        self.assertContains(response, "Borrowed assets past due")
+        self.assertContains(response, self.asset.asset_tag)
+        self.assertContains(response, str(self.user))
+        self.assertNotContains(response, due_soon_asset.asset_tag)
+        self.assertNotContains(response, "Other Branch Overdue Asset")
+
+    def test_asset_activity_hides_past_due_table_when_no_assets_are_overdue(self):
+        response = self.client.get(
+            reverse(
+                "inventory-asset-activity",
+                kwargs={"branch": self.branch.slug},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Borrowed assets past due")
 
     def test_inventory_item_detail_shows_details_and_history(self):
         response = self.client.get(
