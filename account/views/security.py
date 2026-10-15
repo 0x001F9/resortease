@@ -126,7 +126,7 @@ class TOTPVerificationView(View):
         send_email_otp = request.POST.get("method") == "email"
 
         if send_email_otp:
-            user.send_otp_email("two-factor verification")
+            user.send_otp_email(request, "two-factor verification")
             messages.info(request, "A security code has been sent to your email.")
             return render(
                 request,
@@ -198,7 +198,7 @@ class PasswordResetRequestView(View):
 
         user = User.object.filter(email__iexact=email).first()
         if user is not None:
-            user.send_otp_email("password reset")
+            user.send_otp_email(request, "password reset")
             request.session["password_reset_email"] = user.email
             return redirect("reset-password")
 

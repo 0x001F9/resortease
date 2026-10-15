@@ -4,7 +4,8 @@ from datetime import timedelta
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -12,6 +13,7 @@ from django.views import View
 
 from account.models import User, UsernameValidator
 from account.views.security import mask_email
+from app import settings
 from app.settings import DEFAULT_FROM_EMAIL
 
 
@@ -57,16 +59,28 @@ class LoginView(View):
                 verification_url = request.build_absolute_uri(
                     reverse("verify-email", kwargs={"token": token})
                 )
-                send_mail(
-                    subject="Verify your ResortEase email",
-                    message=(
-                        "Follow this link to verify your email address. "
-                        f"This link expires in 24 hours:\n{verification_url}"
-                    ),
-                    from_email=DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    fail_silently=False,
+
+                html_content = render_to_string(
+                    "email/verify_email_addr.html",
+                    {
+                        "action_url": verification_url,
+                    }
                 )
+                text_content = render_to_string(
+                    "email/verify_email_addr.txt",
+                    {
+                        "action_url": verification_url,
+                    }
+                )
+                mail = EmailMultiAlternatives(
+                    subject="Verify your ResortEase email",
+                    body=text_content,
+                    from_email=f"ResortEase Security <{settings.EMAIL_HOST_USER}>",
+                    to=[user.email]
+                )
+                mail.attach_alternative(html_content, "text/html")
+                mail.send()
+
                 user.email_confirmation_token = token
                 user.email_confirmation_expiresat = expires_at
                 user.save(

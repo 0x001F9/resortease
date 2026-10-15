@@ -1,0 +1,22 @@
+Use this One-time Password to {{ purpose }}. The One-time Password is only valid for 10 minutes.
+
+ResortEase
+
+************
+Hi {{ username|default:"there" }},
+************
+
+You recently requested to {{ purpose }} for your ResortEase account. Use the One-time Password below to complete the process. This {{ purpose }} is only valid for the next 10 minutes.
+
+{{ otp_code }}
+
+For security, this request was received from a {{operating_system}} device using {{browser_name}}, with IP address {{ip_address}}, located in {{located_in}}. If you did not request a {{ purpose }}, please ignore this email or contact support if you have any questions.
+
+Thanks,
+The The ResortEase Authors
+
+ResortEase Authors
+
+ICCT Building. V.V. Soliven Ave. II, Cainta,
+
+Rizal, Philippines 1900
