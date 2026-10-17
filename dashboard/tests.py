@@ -1892,6 +1892,30 @@ class InventoryViewTests(TestCase):
             notes="Assigned for scheduled cleaning.",
         )
 
+    def test_dashboard_shows_red_overdue_assets_card_linking_to_asset_activity(self):
+        self.asset.due_date = timezone.now() - timedelta(minutes=1)
+        self.asset.save(update_fields=["due_date"])
+
+        response = self.client.get(f"/dashboard/{self.branch.slug}/")
+
+        activity_url = reverse(
+            "inventory-asset-activity",
+            kwargs={"branch": self.branch.slug},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["overdue_assets_count"], 1)
+        self.assertContains(response, "Borrowed assets past due")
+        self.assertContains(response, 'class="card bg-error text-error-content')
+        self.assertContains(response, f'href="{activity_url}"')
+        self.assertContains(response, ">1</p>")
+
+    def test_dashboard_hides_overdue_assets_card_when_none_are_past_due(self):
+        response = self.client.get(f"/dashboard/{self.branch.slug}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["overdue_assets_count"], 0)
+        self.assertNotContains(response, "Borrowed assets past due")
+
     def test_inventory_page_renders_summary_and_recent_activity(self):
         response = self.client.get(
             reverse("inventory", kwargs={"branch": self.branch.slug})
@@ -1903,6 +1927,25 @@ class InventoryViewTests(TestCase):
         self.assertContains(response, "Initial stock")
         self.assertContains(response, "12")
         self.assertContains(response, "Low stock")
+
+    def test_inventory_page_shows_overdue_assets_card_linking_to_asset_activity(self):
+        self.asset.due_date = timezone.now() - timedelta(minutes=1)
+        self.asset.save(update_fields=["due_date"])
+
+        response = self.client.get(
+            reverse("inventory", kwargs={"branch": self.branch.slug})
+        )
+
+        activity_url = reverse(
+            "inventory-asset-activity",
+            kwargs={"branch": self.branch.slug},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["overdue_assets_count"], 1)
+        self.assertContains(response, "Borrowed assets past due")
+        self.assertContains(response, 'class="card mt-4 bg-error text-error-content')
+        self.assertContains(response, f'href="{activity_url}"')
+        self.assertContains(response, ">1</p>")
         self.assertContains(response, "Recent activity")
         self.assertContains(response, "Inventory assets")
         self.assertContains(response, "At/below reorder level:")

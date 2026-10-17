@@ -58,6 +58,18 @@
         </div>
     </div>
 
+    {% if overdue_assets_count %}
+    <a
+        href="{% url 'inventory-asset-activity' branch=request.branch.slug %}"
+        class="card mt-4 bg-error text-error-content shadow-sm transition-colors hover:bg-error/90"
+    >
+        <div class="card-body p-4">
+            <h2 class="card-title">Borrowed assets past due</h2>
+            <p class="text-3xl font-bold">{{ overdue_assets_count }}</p>
+        </div>
+    </a>
+    {% endif %}
+
     <form
         method="get"
         action="{% url 'inventory-search' branch=request.branch.slug %}"

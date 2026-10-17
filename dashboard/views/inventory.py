@@ -51,6 +51,12 @@ class InventoryView(View):
             .select_related("borrowed_by")
             .order_by("name")
         )
+        overdue_assets_count = InventoryAsset.objects.filter(
+            branch=request.branch,
+            status=InventoryAsset.Status.BORROWED,
+            due_date__isnull=False,
+            due_date__lte=timezone.now(),
+        ).count()
         recent_asset_events = (
             InventoryAssetHistory.objects.filter(asset__branch=request.branch)
             .select_related("asset", "performed_by", "borrower")
@@ -70,6 +76,7 @@ class InventoryView(View):
                 "recent_transactions": recent_transactions,
                 "inventory_assets": inventory_assets,
                 "inventory_assets_count": inventory_assets.count(),
+                "overdue_assets_count": overdue_assets_count,
                 "recent_asset_events": recent_asset_events,
                 "inventory_count_by_status": {
                     "healthy": sum(
