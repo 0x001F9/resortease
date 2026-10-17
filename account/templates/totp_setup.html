@@ -3,7 +3,7 @@
 {% block content %}
 <main class="mx-auto flex py-10 max-w-lg items-center justify-center">
   <div class="w-full max-w-md text-center">
-    <h1 class="text-2xl font-bold">Set up TOTP</h1>
+    <h1 class="text-2xl font-bold">{% if is_changing_totp %}Change authenticator app{% else %}Set up TOTP{% endif %}</h1>
     <p class="py-2 text-sm text-base-content/70">Scan the QR code with your authenticator app.</p>
 
     {% if error %}
@@ -20,8 +20,9 @@
         <label class="label" for="code">Verification code</label>
         <input id="code" type="text" name="code" class="input input-bordered w-full" inputmode="numeric" maxlength="6" required />
       </fieldset>
-      <button type="submit" class="btn btn-primary w-full">Enable TOTP</button>
+      <button type="submit" class="btn btn-primary w-full">{% if is_changing_totp %}Update authenticator{% else %}Enable TOTP{% endif %}</button>
     </form>
+    <a href="{% url 'user-settings' request.user.username %}" class="btn btn-ghost mt-3 w-full">Cancel</a>
   </div>
 </main>
 {% endblock %}

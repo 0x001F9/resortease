@@ -1,0 +1,113 @@
+{% extends "partials/pub_layout.html" %}
+{% load static %}
+
+{% block extra_head %}
+<link href="{% static 'css/profile.css' %}" rel="stylesheet" type="text/css" />
+{% endblock %}
+
+{% block content %}
+<main class="mx-auto max-w-2xl px-4 py-8 sm:px-6">
+    <a href="{% url 'user-profile' profile_user.username %}" class="link link-hover text-sm">← Back to profile</a>
+    <h1 class="mt-4 text-3xl font-bold">Settings</h1>
+    <p class="mt-2 text-base-content/65">Manage your personal information and account.</p>
+
+    <section class="profile-settings-panel mt-6 border border-base-300 bg-base-100 shadow-sm" aria-labelledby="edit-account-heading">
+        <h2 id="edit-account-heading" class="text-xl font-semibold">Edit account</h2>
+        <p class="mt-1 text-sm text-base-content/65">Update your personal information.</p>
+        <form method="post" class="mt-8 flex flex-col gap-5">
+            {% csrf_token %}
+            {% for field in form %}
+                {% if field.name == "phone_number_code" %}
+                    <div class="profile-phone-fields">
+                        <fieldset class="fieldset">
+                            <label class="label font-medium" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% for error in field.errors %}<p class="text-sm text-error">{{ error }}</p>{% endfor %}
+                        </fieldset>
+                        {% with phone_field=form.phone_number %}
+                            <fieldset class="fieldset">
+                                <label class="label font-medium" for="{{ phone_field.id_for_label }}">{{ phone_field.label }}</label>
+                                {{ phone_field }}
+                                {% for error in phone_field.errors %}<p class="text-sm text-error">{{ error }}</p>{% endfor %}
+                            </fieldset>
+                        {% endwith %}
+                    </div>
+                {% elif field.name != "phone_number" %}
+                    <fieldset class="fieldset">
+                        <label class="label font-medium" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<p class="label-text-alt">{{ field.help_text }}</p>{% endif %}
+                        {% for error in field.errors %}<p class="text-sm text-error">{{ error }}</p>{% endfor %}
+                    </fieldset>
+                {% endif %}
+            {% endfor %}
+            {% if form.non_field_errors %}
+                <div class="alert alert-error">
+                    {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+                </div>
+            {% endif %}
+            <div class="mt-2 flex flex-wrap gap-3">
+                <button type="submit" class="btn btn-primary">Save changes</button>
+                <a href="{% url 'user-profile' profile_user.username %}" class="btn btn-ghost">Cancel</a>
+            </div>
+        </form>
+    </section>
+
+    <section class="profile-settings-panel mt-6 border border-base-300 bg-base-100 shadow-sm" aria-labelledby="totp-settings-heading">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 id="totp-settings-heading" class="text-xl font-semibold">Two-factor authentication</h2>
+                <p class="mt-1 text-sm text-base-content/65">Use an authenticator app to add a layer of security to your account.</p>
+            </div>
+            {% if profile_user.totp_enabled %}
+                <span class="badge badge-success">Enabled</span>
+            {% else %}
+                <span class="badge badge-ghost">Off</span>
+            {% endif %}
+        </div>
+
+        {% if messages %}
+            <div class="mt-4 flex flex-col gap-2">
+                {% for message in messages %}
+                    <div class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}" role="status">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% if profile_user.totp_enabled %}
+            <div class="mt-6 grid gap-5 border-t border-base-300 pt-5">
+                <form method="post" action="{% url 'update-totp-settings' profile_user.username %}" class="flex flex-col">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="disable">
+                    <fieldset class="fieldset flex-1">
+                        <label class="label font-medium" for="disable-totp-code">Current authenticator code</label>
+                        <input id="disable-totp-code" type="text" name="totp_code" class="input w-full" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required>
+                    </fieldset>
+                    <button type="submit" class="btn btn-error btn-active">Turn off TOTP</button>
+                </form>
+
+                <div class="divider">OR</div>
+
+                <a 
+                    href="{% url 'change-totp-authenticator' profile_user.username %}" 
+                    class="btn btn-outline btn-primary self-start"
+                    >
+                    Change authenticator
+                </a>
+            </div>
+        {% else %}
+            <div class="mt-5">
+                <a href="{% url 'totp-setup' %}" class="btn btn-primary">Turn on TOTP</a>
+            </div>
+        {% endif %}
+    </section>
+
+    <section class="profile-delete-card mt-6 flex flex-col gap-4 border border-error/40 bg-base-100 shadow-sm sm:flex-row sm:items-center sm:justify-between" aria-labelledby="delete-account-heading">
+        <div>
+            <h2 id="delete-account-heading" class="text-lg font-semibold">Delete account</h2>
+            <p class="mt-1 text-sm">Permanently remove your account and its associated information. This action cannot be undone.</p>
+        </div>
+        <button type="button" class="btn btn-error btn-outline shrink-0">Delete account</button>
+    </section>
+</main>
+{% endblock %}

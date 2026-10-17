@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+import pyotp
 from django.contrib.auth.forms import ReadOnlyPasswordHashWidget
 from django.forms import PasswordInput
 from django.test import TestCase
@@ -8,8 +9,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .forms import AdminUserChangeForm, AdminUserCreationForm
-from .models import User
+from .models import OTP_EXPIRY_DURATION, User
 from .views.security import mask_email
+from dashboard.models import Branch, Calendar, Facility, Reservation
 
 
 class EmailVerificationLoginTests(TestCase):
@@ -162,6 +164,412 @@ class UserRoleCreationTests(TestCase):
         for role, _label in User.Role.choices:
             with self.subTest(role=role):
                 self.assertEqual(User.object.filter(role=role).count(), 1)
+
+
+class UserProfileTests(TestCase):
+    def setUp(self):
+        self.owner = User.object.create_user(
+            username="profile_owner",
+            email="owner@example.com",
+            password="TestPassword123!",
+            first_name="Profile",
+            middle_name="Middle",
+            last_name="Owner",
+            phone_number_code="+1",
+            phone_number="5555550301",
+            avatar_url=None,
+        )
+        self.other_user = User.object.create_user(
+            username="profile_other",
+            email="other@example.com",
+            password="TestPassword123!",
+            first_name="Other",
+            last_name="Person",
+            phone_number_code="+1",
+            phone_number="5555550302",
+        )
+
+    def test_owner_can_view_profile_with_contact_info_and_no_security_fields(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("user-profile", kwargs={"username": self.owner.username})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Profile Middle Owner")
+        self.assertContains(response, "owner@example.com")
+        self.assertContains(response, "5555550301")
+        self.assertContains(response, "Settings")
+        self.assertNotContains(response, "totp_secret")
+        self.assertNotContains(response, "otp_code")
+
+    def test_profile_shows_reservation_and_booking_history(self):
+        branch = Branch.objects.create(
+            name="Profile Resort",
+            slug="profile-resort",
+            city="Test City",
+            address="1 Test Street",
+        )
+        facility = Facility.objects.create(
+            branch=branch,
+            name="Ocean Pool",
+            slug="profile-ocean-pool",
+        )
+        starts_at = timezone.now() + timedelta(days=2)
+        ends_at = starts_at + timedelta(hours=3)
+        reservation = Reservation.objects.create(
+            guest=self.owner,
+            facility=facility,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            status=Reservation.Status.CONFIRMED,
+        )
+        Calendar.objects.create(
+            reservation=reservation,
+            facility=facility,
+            starts_at=starts_at,
+            ends_at=ends_at,
+        )
+        Reservation.objects.create(
+            guest=self.owner,
+            facility=facility,
+            starts_at=starts_at + timedelta(days=1),
+            ends_at=ends_at + timedelta(days=1),
+            status=Reservation.Status.PENDING,
+        )
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("user-profile", kwargs={"username": self.owner.username})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Reservation &amp; booking history")
+        self.assertContains(response, "Ocean Pool")
+        self.assertContains(response, "Booking")
+        self.assertContains(response, "Reservation")
+        self.assertContains(response, "Confirmed")
+        self.assertContains(response, "Pending")
+        self.assertContains(response, "2 total")
+
+    def test_superuser_profile_has_badge_after_username(self):
+        self.owner.is_superuser = True
+        self.owner.save(update_fields=["is_superuser"])
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("user-profile", kwargs={"username": self.owner.username})
+        )
+
+        self.assertContains(response, "@profile_owner")
+        self.assertContains(response, "profile-superuser-badge")
+        self.assertContains(response, ">Superuser</span>")
+
+    def test_anonymous_visitor_is_redirected_to_login(self):
+        response = self.client.get(
+            reverse("user-profile", kwargs={"username": self.owner.username})
+        )
+
+        self.assertRedirects(
+            response,
+            f"{reverse('login')}?next={reverse('user-profile', kwargs={'username': self.owner.username})}",
+        )
+
+    def test_regular_user_cannot_view_another_users_profile(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("user-profile", kwargs={"username": self.other_user.username})
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_non_user_role_can_view_another_users_profile(self):
+        employee = User.object.create_user(
+            username="profile_employee",
+            email="employee@example.com",
+            password="TestPassword123!",
+            first_name="Staff",
+            last_name="Member",
+            phone_number_code="+1",
+            phone_number="5555550303",
+            role=User.Role.Employee,
+        )
+        self.client.force_login(employee)
+
+        response = self.client.get(
+            reverse("user-profile", kwargs={"username": self.other_user.username})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Other Person")
+        self.assertNotContains(
+            response,
+            reverse("user-settings", kwargs={"username": self.other_user.username}),
+        )
+
+    def test_owner_can_manage_settings_without_exposing_avatar_url(self):
+        self.owner.avatar_url = "https://example.com/avatar.jpg"
+        self.owner.save(update_fields=["avatar_url"])
+        self.client.force_login(self.owner)
+
+        edit_url = reverse(
+            "user-settings", kwargs={"username": self.owner.username}
+        )
+        get_response = self.client.get(edit_url)
+        self.assertEqual(get_response.status_code, 200)
+        self.assertContains(get_response, "Settings")
+        self.assertNotContains(get_response, "Edit profile")
+        self.assertContains(get_response, "Delete account")
+        self.assertContains(get_response, "This action cannot be undone.")
+        self.assertContains(
+            get_response,
+            '<button type="button" class="btn btn-error btn-outline shrink-0">Delete account</button>',
+        )
+        self.assertNotContains(get_response, 'name="avatar_url"')
+
+        response = self.client.post(
+            edit_url,
+            {
+                "first_name": "Updated",
+                "middle_name": "",
+                "last_name": "Name",
+                "phone_number_code": "+1",
+                "phone_number": "5555550301",
+                "avatar_url": "",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("user-profile", kwargs={"username": self.owner.username}),
+        )
+        self.owner.refresh_from_db()
+        self.assertEqual(self.owner.first_name, "Updated")
+        self.assertEqual(self.owner.avatar_url, "https://example.com/avatar.jpg")
+
+    def test_user_cannot_edit_another_users_profile(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("user-settings", kwargs={"username": self.other_user.username}),
+            {"first_name": "Changed"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.other_user.refresh_from_db()
+        self.assertEqual(self.other_user.first_name, "Other")
+
+    def test_totp_settings_show_enable_button_when_totp_is_off(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("user-settings", kwargs={"username": self.owner.username})
+        )
+
+        self.assertContains(response, "Two-factor authentication")
+        self.assertContains(response, "Turn on TOTP")
+        self.assertNotContains(response, "Turn off TOTP")
+
+    def test_totp_settings_show_change_and_disable_forms_when_enabled(self):
+        self.owner.generate_totp_secret()
+        self.owner.totp_enabled = True
+        self.owner.save(update_fields=["totp_secret", "totp_enabled"])
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("user-settings", kwargs={"username": self.owner.username})
+        )
+
+        self.assertContains(response, "Change authenticator")
+        self.assertContains(
+            response,
+            reverse(
+                "change-totp-authenticator",
+                kwargs={"username": self.owner.username},
+            ),
+        )
+        self.assertNotContains(response, 'id="change-totp-code"')
+        self.assertContains(response, "Turn off TOTP")
+        self.assertContains(response, 'name="action" value="disable"')
+
+    def test_totp_can_be_disabled_after_current_code_is_verified(self):
+        self.owner.generate_totp_secret()
+        self.owner.totp_enabled = True
+        self.owner.save(update_fields=["totp_secret", "totp_enabled"])
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("update-totp-settings", kwargs={"username": self.owner.username}),
+            {
+                "action": "disable",
+                "totp_code": pyotp.TOTP(self.owner.totp_secret).now(),
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("user-settings", kwargs={"username": self.owner.username}),
+        )
+        self.owner.refresh_from_db()
+        self.assertFalse(self.owner.totp_enabled)
+        self.assertEqual(self.owner.totp_secret, "")
+
+    def test_totp_cannot_be_disabled_with_invalid_code(self):
+        self.owner.generate_totp_secret()
+        self.owner.totp_enabled = True
+        self.owner.save(update_fields=["totp_secret", "totp_enabled"])
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("update-totp-settings", kwargs={"username": self.owner.username}),
+            {"action": "disable", "totp_code": "000000"},
+            follow=True,
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("user-settings", kwargs={"username": self.owner.username}),
+        )
+        self.owner.refresh_from_db()
+        self.assertTrue(self.owner.totp_enabled)
+        self.assertContains(
+            response,
+            "The authenticator code was invalid or has expired.",
+        )
+
+    @patch.object(User, "send_otp_email")
+    def test_totp_authenticator_change_uses_email_otp_before_new_setup(
+        self, send_otp_email
+    ):
+        self.owner.generate_totp_secret()
+        old_secret = self.owner.totp_secret
+        self.owner.totp_enabled = True
+        self.owner.save(update_fields=["totp_secret", "totp_enabled"])
+        self.client.force_login(self.owner)
+
+        def send_test_email(request, purpose):
+            user = request.user
+            user.otp_code = "123456"
+            user.otp_expires_at = timezone.now() + OTP_EXPIRY_DURATION
+            user.save(update_fields=["otp_code", "otp_expires_at", "updated_at"])
+            return user.otp_code
+
+        send_otp_email.side_effect = send_test_email
+        change_url = reverse(
+            "change-totp-authenticator",
+            kwargs={"username": self.owner.username},
+        )
+        response = self.client.get(change_url)
+        self.assertEqual(response.status_code, 200)
+        send_otp_email.assert_called_once()
+        self.assertEqual(
+            send_otp_email.call_args.args[1],
+            "authenticator change confirmation",
+        )
+        self.assertContains(response, "Email confirmation code")
+        self.assertContains(response, "Resend code in")
+        self.assertContains(response, "o******@example.com")
+        self.owner.refresh_from_db()
+        self.assertEqual(self.owner.totp_secret, old_secret)
+        self.assertTrue(self.owner.totp_enabled)
+
+        response = self.client.post(
+            change_url,
+            {"action": "confirm_email", "email_code": "000000"},
+        )
+        self.assertRedirects(
+            response,
+            change_url,
+        )
+        self.owner.refresh_from_db()
+        self.assertEqual(self.owner.totp_secret, old_secret)
+        self.assertTrue(self.owner.totp_enabled)
+
+        self.owner.refresh_from_db()
+        response = self.client.post(
+            change_url,
+            {"action": "confirm_email", "email_code": "123456"},
+        )
+        self.assertRedirects(response, change_url)
+        self.assertNotIn("totp_change_email_user_id", self.client.session)
+        new_secret = self.client.session["totp_change_setup_secret"]
+        self.assertNotEqual(new_secret, old_secret)
+
+        response = self.client.get(change_url)
+        self.assertContains(response, "new-totp-code")
+        response = self.client.post(
+            change_url,
+            {
+                "action": "verify_totp",
+                "totp_code": pyotp.TOTP(new_secret).now(),
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("user-settings", kwargs={"username": self.owner.username}),
+        )
+        self.owner.refresh_from_db()
+        self.assertEqual(self.owner.totp_secret, new_secret)
+        self.assertTrue(self.owner.totp_enabled)
+
+    @patch.object(User, "send_otp_email")
+    def test_authenticator_change_resend_obeys_half_the_otp_expiry(
+        self, send_otp_email
+    ):
+        self.owner.generate_totp_secret()
+        self.owner.totp_enabled = True
+        self.owner.save(update_fields=["totp_secret", "totp_enabled"])
+        self.client.force_login(self.owner)
+        change_url = reverse(
+            "change-totp-authenticator",
+            kwargs={"username": self.owner.username},
+        )
+
+        def send_test_email(request, purpose):
+            user = request.user
+            user.otp_code = "123456"
+            user.otp_expires_at = timezone.now() + OTP_EXPIRY_DURATION
+            user.save(update_fields=["otp_code", "otp_expires_at", "updated_at"])
+
+        send_otp_email.side_effect = send_test_email
+        self.client.get(change_url)
+        send_otp_email.assert_called_once()
+
+        response = self.client.post(change_url, {"action": "resend_email"})
+        self.assertRedirects(response, change_url)
+        send_otp_email.assert_called_once()
+
+        session = self.client.session
+        session["totp_change_otp_sent_at"] -= (
+            OTP_EXPIRY_DURATION.total_seconds() / 2
+        ) + 1
+        session.save()
+        response = self.client.post(change_url, {"action": "resend_email"})
+        self.assertRedirects(response, change_url)
+        self.assertEqual(send_otp_email.call_count, 2)
+
+    @patch.object(User, "send_otp_email")
+    def test_authenticator_change_page_sends_email_code_automatically(
+        self, send_otp_email
+    ):
+        self.owner.generate_totp_secret()
+        self.owner.totp_enabled = True
+        self.owner.save(update_fields=["totp_secret", "totp_enabled"])
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse(
+                "change-totp-authenticator",
+                kwargs={"username": self.owner.username},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        send_otp_email.assert_called_once()
+        self.assertContains(response, "Email confirmation code")
 
 
 class OtpEmailMaskingTests(TestCase):

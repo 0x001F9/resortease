@@ -37,6 +37,8 @@ PhoneNumberCodeValidator = RegexValidator(
     message="Invalid phone number code.",
 )
 
+OTP_EXPIRY_DURATION = timedelta(minutes=10)
+
 
 def email_confirmation_expiry():
     return timezone.now() + timedelta(hours=24)
@@ -152,9 +154,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     totp_enabled = models.BooleanField(default=False)
     otp_code = models.CharField(max_length=6, blank=True, default="")
     otp_expires_at = models.DateTimeField(null=True, blank=True)
-    avatar_url = models.CharField(max_length=255, null=True)
+    avatar_url = models.URLField(max_length=255, blank=True, null=True)
     first_name = models.CharField(max_length=100, validators=[NameValidator])
-    middle_name = models.CharField(max_length=100, null=True, validators=[NameValidator])
+    middle_name = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        validators=[NameValidator],
+    )
     last_name = models.CharField(max_length=100, validators=[NameValidator])
 
     updated_at = models.DateTimeField(auto_now=True)
@@ -183,7 +190,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     def generate_otp_code(self):
         code = str(random.randint(100000, 999999))
         self.otp_code = code
-        self.otp_expires_at = timezone.now() + timedelta(minutes=10)
+        self.otp_expires_at = timezone.now() + OTP_EXPIRY_DURATION
         return code
 
     def verify_otp(self, code):

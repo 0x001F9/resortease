@@ -49,10 +49,11 @@
             <div class="dropdown dropdown-end">
                 <div class="avatar" role="button" tabindex="0">
                     <div class="ring-primary ring-offset-base-100 w-[30px] rounded-full ring-1 ring-offset-2">
-                        <img alt="User" src="https://img.daisyui.com/images/profile/demo/spiderperson@192.webp" />
+                        <img alt="User" src="{{ request.user.avatar_url|default:'https://img.daisyui.com/images/profile/demo/spiderperson@192.webp' }}" />
                     </div>
                 </div>
                 <ul tabindex="-1" class="rounded-md mt-2 dropdown-content menu bg-base-200 rounded-box z-1 w-52 shadow-sm">
+                    <li><a href="{% url 'user-profile' request.user.username %}">My Account</a></li>
                     {% if request.user.is_superuser %}
                         <li><a href="/admin">Admin</a></li>
                     {% endif %}
