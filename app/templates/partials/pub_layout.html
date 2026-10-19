@@ -8,59 +8,36 @@
     <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
     {% block extra_head %}{% endblock %}
 </head>
-<body>
-    <header class='flex justify-between items-center p-4'>
-        <div class='flex items-center'>
-            <h1 class='text-xl font-bold'>
-                <a href="/" class='text-blue-500 hover:text-blue-700'>
-                    ResortEase
-                </a>
-            </h1>
-        </div>
-
-        <div class='flex items-center justify-end gap-2 text-sm'>
-            {% if user.is_authenticated %}
-                <div class="dropdown dropdown-end">
-                    <div class="avatar" role="button" tabindex="0">
-                        <div class="ring-primary ring-offset-base-100 w-[30px] rounded-full ring-1 ring-offset-2">
-                            <img alt="User" src="{{ user.avatar_url|default:'https://img.daisyui.com/images/profile/demo/spiderperson@192.webp' }}" />
-                        </div>
-                    </div>
-                    <ul tabindex="-1" class="rounded-md mt-2 dropdown-content menu bg-base-200 rounded-box z-1 w-52 shadow-sm">
-                        <li><a href="{% url 'user-profile' user.username %}">My Account</a></li>
-                        {% if request.user.is_superuser %}
-                            <li><a href="/admin">Admin</a></li>
-                        {% endif %}
-                        
-                        {% if not request.user.is_normal_user %}
-                            <li><a href="/dashboard">Dashboard</a></li>
-                        {% endif %}
-
-                        <li><a>Reservations</a></li>
-
-                        <form action="/account/logout/" method="post">
-                            {% csrf_token %}
-                            <li><button type="submit">Logout</button></li>
-                        </form>
-                    </ul>
-                </div>
-            {% else %}
-                <a href="/login" class='text-sm'>
-                    Sign In
-                </a>
-                <a href="/inquiry" class='btn btn-primary rounded-full'>
-                    Inquiry
-                </a>
-            {% endif %}
+<body class="min-h-screen bg-base-100 text-base-content">
+    <header class="border-b border-base-300 bg-base-100">
+        <div class="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 px-4 py-3 sm:grid-cols-[1fr_auto_1fr] sm:px-6 lg:px-8">
+            <a class="col-start-1 row-start-1 w-fit text-xl font-bold text-primary sm:text-2xl" href="{% url 'home' %}" aria-label="ResortEase home">ResortEase</a>
+            <nav class="col-span-2 col-start-1 row-start-2 flex items-center justify-center gap-6 text-sm sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:gap-8" aria-label="Main navigation">
+                <a class="link link-hover" href="{% url 'branch-list' %}">Branches</a>
+                <a class="link link-hover" href="{% url 'facility-list' %}">Facilities</a>
+            </nav>
+            <div class="col-start-2 row-start-1 flex items-center justify-end gap-2 sm:col-start-3 sm:gap-4">
+                <button class="btn btn-primary btn-sm" type="button" disabled aria-disabled="true" title="Coming soon">Inquiry</button>
+                {% if user.is_authenticated %}
+                    <a class="link link-hover hidden text-sm sm:inline" href="{% url 'user-profile' user.username %}">My account</a>
+                    {% if not request.user.is_normal_user %}
+                        <a class="link link-hover hidden text-sm md:inline" href="/dashboard/">Dashboard</a>
+                    {% endif %}
+                {% else %}
+                    <a class="link link-hover hidden text-sm sm:inline" href="{% url 'login' %}">Sign in</a>
+                {% endif %}
+            </div>
         </div>
     </header>
-    {% block content %}
-    Default content
-    {% endblock %}
+    {% block content %}{% endblock %}
     {% block scripts %}{% endblock %}
 
-    <footer class='flex justify-center items-center p-4 py-8'>
-        &copy; 2026 ResortEase. All rights reserved.
+    <footer class="border-t border-base-300 bg-base-100">
+        <div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-sm text-base-content/70 sm:flex-row sm:px-6 lg:px-8">
+            <a class="font-bold text-primary" href="{% url 'home' %}">ResortEase</a>
+            <span>&copy; 2026 ResortEase. All rights reserved.</span>
+            <a class="link link-hover" href="{% url 'branch-list' %}">Explore branches</a>
+        </div>
     </footer>
 </body>
 </html>

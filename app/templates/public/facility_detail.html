@@ -1,0 +1,53 @@
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="min-h-[68vh]">
+    <div class="mx-auto flex max-w-7xl flex-wrap justify-between gap-4 px-4 pt-6 sm:px-6 lg:px-8">
+        <a class="link link-hover text-sm font-semibold text-primary" href="{% url 'branch-detail' facility.branch.slug %}"><span aria-hidden="true">&#8592;</span> {{ facility.branch.name }}</a>
+        <a class="link link-hover text-sm font-semibold text-primary" href="{% url 'facility-list' %}">All facilities <span aria-hidden="true">&#8594;</span></a>
+    </div>
+    <section class="mx-auto grid max-w-7xl grid-cols-1 items-center gap-8 px-4 py-8 sm:px-6 md:grid-cols-2 lg:px-8 lg:py-12">
+        <div class="relative aspect-[4/3] overflow-hidden rounded-box bg-base-300">
+            <img class="h-full w-full object-cover" src="{{ facility.public_image_url }}" alt="{{ facility.name }} at {{ facility.branch.name }}" onerror="this.remove()">
+            <span class="badge badge-neutral absolute bottom-4 left-4">{{ facility.get_facility_type_display }}</span>
+        </div>
+        <div class="py-4 md:px-4">
+            <p class="mb-3 text-sm font-semibold uppercase text-primary"><a class="link link-hover" href="{% url 'branch-detail' facility.branch.slug %}">{{ facility.branch.name }}</a> / {{ facility.get_facility_type_display }}</p>
+            <h1 class="text-4xl font-bold sm:text-5xl">{{ facility.name }}</h1>
+            <p class="mt-4 flex items-center gap-2 text-sm"><span class="badge badge-success badge-xs"></span>{{ facility.get_status_display }}</p>
+            {% if facility.description %}
+                <div class="mt-5 whitespace-pre-line leading-relaxed text-base-content/80">{{ facility.description }}</div>
+            {% else %}
+                <p class="mt-5 leading-relaxed text-base-content/80">Visit {{ facility.name }} at {{ facility.branch.name }}. Contact the branch for more information about this facility.</p>
+            {% endif %}
+            <dl class="mt-6 grid grid-cols-2 gap-4 border-y border-base-300 py-5">
+                {% if facility.capacity %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Capacity</dt><dd class="mt-1 font-semibold">{{ facility.capacity }} guests</dd></div>{% endif %}
+                {% if facility.rate_24hours %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">24-hour rate</dt><dd class="mt-1 font-semibold">{{ facility.rate_24hours }}</dd></div>{% endif %}
+                {% if facility.rate_22hours %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">22-hour rate</dt><dd class="mt-1 font-semibold">{{ facility.rate_22hours }}</dd></div>{% endif %}
+                {% if facility.rate_morning %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Morning rate</dt><dd class="mt-1 font-semibold">{{ facility.rate_morning }}</dd></div>{% endif %}
+                {% if facility.rate_evening %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Evening rate</dt><dd class="mt-1 font-semibold">{{ facility.rate_evening }}</dd></div>{% endif %}
+            </dl>
+            <a class="btn btn-outline btn-primary mt-5" href="{% url 'branch-detail' facility.branch.slug %}">View branch details</a>
+        </div>
+    </section>
+
+    {% if other_facilities %}
+        <section class="bg-base-200 px-4 py-12 sm:px-6 sm:py-16 lg:px-8" aria-labelledby="more-facilities-heading">
+            <div class="mx-auto max-w-7xl">
+                <div class="mb-7"><p class="mb-2 text-sm font-semibold uppercase text-primary">Keep exploring</p><h2 id="more-facilities-heading" class="text-3xl font-bold">More at {{ facility.branch.name }}</h2></div>
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                    {% for other in other_facilities %}
+                        <a class="group overflow-hidden rounded-box border border-base-300 bg-base-100 transition hover:-translate-y-1 hover:shadow-lg" href="{% url 'public-facility-detail' other.slug %}">
+                            <div class="relative aspect-[3/2] overflow-hidden bg-base-300">
+                                <img class="h-full w-full object-cover transition duration-300 group-hover:scale-105" src="{{ other.public_image_url }}" alt="{{ other.name }} at {{ facility.branch.name }}" loading="lazy" onerror="this.remove()">
+                                <span class="badge badge-neutral absolute left-3 top-3">{{ other.get_facility_type_display }}</span>
+                            </div>
+                            <div class="flex min-h-24 items-center justify-between gap-3 p-5"><div><h3 class="text-xl font-bold">{{ other.name }}</h3><p class="mt-2 text-sm text-base-content/70">{{ other.get_status_display }}</p></div><span class="btn btn-circle btn-ghost btn-sm" aria-hidden="true">&#8599;</span></div>
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+    {% endif %}
+</main>
+{% endblock %}

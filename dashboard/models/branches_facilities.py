@@ -22,6 +22,7 @@ class Branch(models.Model):
         }
     )
     image_url = models.CharField(max_length=255, null=True)
+    description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -52,6 +53,7 @@ class Facility(models.Model):
         choices=FacilityType,
         default=FacilityType.POOL
     )
+    image_url = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField(blank=True)
     status = models.CharField(
         max_length=30,

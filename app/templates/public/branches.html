@@ -1,0 +1,29 @@
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="min-h-[68vh]">
+    <section class="mx-auto max-w-3xl px-4 py-14 text-center sm:px-6 sm:py-20">
+        <p class="mb-2 text-sm font-semibold uppercase text-primary">Choose your setting</p>
+        <h1 class="text-4xl font-bold sm:text-5xl">Branches</h1>
+        <p class="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-base-content/70">Discover the character of each ResortEase location and find the right backdrop for your time away.</p>
+    </section>
+    <section class="px-4 pb-16 sm:px-6 lg:px-8" aria-label="Resort branches">
+        <div class="mx-auto grid max-w-7xl grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {% for branch in branches %}
+                <a class="group overflow-hidden rounded-box border border-base-300 bg-base-100 transition hover:-translate-y-1 hover:shadow-lg" href="{% url 'branch-detail' branch.slug %}">
+                    <div class="relative aspect-[3/2] overflow-hidden bg-base-300">
+                        <img class="h-full w-full object-cover transition duration-300 group-hover:scale-105" src="{{ branch.image_url|default:branch_image_fallback }}" alt="View of {{ branch.name }}" loading="lazy" onerror="this.remove()">
+                        <span class="badge badge-neutral absolute bottom-3 right-3">{{ forloop.counter|stringformat:"02d" }}</span>
+                    </div>
+                    <div class="flex min-h-24 items-center justify-between gap-3 p-5">
+                        <div><p class="text-xs font-semibold uppercase text-base-content/60">{{ branch.city }}</p><h2 class="mt-1 text-xl font-bold">{{ branch.name }}</h2></div>
+                        <span class="btn btn-circle btn-ghost btn-sm" aria-hidden="true">&#8599;</span>
+                    </div>
+                </a>
+            {% empty %}
+                <p class="col-span-full rounded-box border border-dashed border-base-300 p-6 text-base-content/70">No branches are available yet.</p>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}

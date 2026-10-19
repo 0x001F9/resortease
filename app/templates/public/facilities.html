@@ -1,0 +1,33 @@
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="min-h-[68vh]">
+    <section class="mx-auto max-w-3xl px-4 py-14 text-center sm:px-6 sm:py-20">
+        <p class="mb-2 text-sm font-semibold uppercase text-primary">Ways to spend your time</p>
+        <h1 class="text-4xl font-bold sm:text-5xl">Facilities</h1>
+        <p class="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-base-content/70">Explore the spaces and amenities across our branches, including current availability.</p>
+    </section>
+    <section class="bg-base-200 px-4 py-12 sm:px-6 lg:px-8" aria-label="Resort facilities">
+        <div class="mx-auto grid max-w-7xl grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {% for facility in facilities %}
+                <a class="group overflow-hidden rounded-box border border-base-300 bg-base-100 transition hover:-translate-y-1 hover:shadow-lg" href="{% url 'public-facility-detail' facility.slug %}">
+                    <div class="relative aspect-[3/2] overflow-hidden bg-base-300">
+                        <img class="h-full w-full object-cover transition duration-300 group-hover:scale-105" src="{{ facility.public_image_url }}" alt="{{ facility.name }} at {{ facility.branch.name }}" loading="lazy" onerror="this.remove()">
+                        <span class="badge badge-neutral absolute left-3 top-3">{{ facility.get_facility_type_display }}</span>
+                    </div>
+                    <div class="flex min-h-24 items-center justify-between gap-3 p-5">
+                        <div>
+                            <h2 class="text-xl font-bold">{{ facility.name }}</h2>
+                            <p class="mt-1 text-sm text-base-content/70">{{ facility.branch.name }} <span aria-hidden="true">&middot;</span> {{ facility.branch.city }}</p>
+                            <p class="mt-2 flex items-center gap-2 text-sm"><span class="badge badge-success badge-xs"></span>{{ facility.get_status_display }}</p>
+                        </div>
+                        <span class="btn btn-circle btn-ghost btn-sm" aria-hidden="true">&#8599;</span>
+                    </div>
+                </a>
+            {% empty %}
+                <p class="col-span-full rounded-box border border-dashed border-base-300 p-6 text-base-content/70">No facilities are available yet.</p>
+            {% endfor %}
+        </div>
+    </section>
+</main>
+{% endblock %}
