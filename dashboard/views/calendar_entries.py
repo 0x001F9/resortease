@@ -417,26 +417,40 @@ class EditCalendarEntryView(View):
         reservation = entry.reservation if entry.reservation_id else None
         guest = None
         status = ""
-        party_size = 1
+        party_size = reservation.party_size if reservation else 1
         special_requests = ""
         if reservation:
             guest = reservation.guest
             status = request.POST.get("status", "")
             if status not in Reservation.Status.values:
                 errors["status"] = "Select a valid reservation status."
+            party_size_value = request.POST.get(
+                "party_size", str(reservation.party_size)
+            )
             try:
-                party_size = int(request.POST.get("party_size", ""))
-                if party_size < 1:
+                party_size = int(party_size_value)
+                if not 1 <= party_size <= 2147483647:
                     raise ValueError
             except ValueError:
-                errors["party_size"] = "Party size must be at least 1."
+                errors["party_size"] = (
+                    "Enter a party size from 1 to 2,147,483,647."
+                )
+            if (
+                facility is not None
+                and "party_size" not in errors
+                and not facility.has_capacity_for(party_size)
+            ):
+                errors["party_size"] = (
+                    f"This facility can accommodate up to "
+                    f"{facility.capacity} guests."
+                )
             special_requests = request.POST.get(
                 "special_requests", ""
             ).strip()
             form_data.update(
                 {
                     "status": status,
-                    "party_size": request.POST.get("party_size", ""),
+                    "party_size": party_size_value,
                     "special_requests": special_requests,
                 }
             )

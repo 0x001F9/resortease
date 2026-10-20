@@ -49,6 +49,7 @@ def public_reservation(request, slug):
                 "rate_package",
                 "starts_at",
                 "days",
+                "party_size",
                 "special_requests",
             )
             if key in pending
@@ -78,6 +79,7 @@ def public_reservation(request, slug):
                 facility=facility,
                 starts_at=starts_at,
                 ends_at=ends_at,
+                party_size=form.cleaned_data["party_size"],
                 status=Reservation.Status.PENDING,
                 special_requests=form.cleaned_data["special_requests"],
             )
@@ -98,6 +100,7 @@ def public_reservation(request, slug):
                     "%Y-%m-%dT%H:%M"
                 ),
                 "days": form.cleaned_data["days"],
+                "party_size": form.cleaned_data["party_size"],
                 "special_requests": form.cleaned_data["special_requests"],
             }
             auth_modal = True
@@ -148,6 +151,7 @@ def resume_public_reservation(request):
         facility=facility,
         starts_at=starts_at,
         ends_at=ends_at,
+        party_size=form.cleaned_data["party_size"],
         status=Reservation.Status.PENDING,
         special_requests=form.cleaned_data["special_requests"],
     )

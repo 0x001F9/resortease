@@ -39,6 +39,21 @@ class PublicReservationForm(forms.Form):
             }
         ),
     )
+    party_size = forms.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=2147483647,
+        initial=1,
+        widget=forms.NumberInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "min": 1,
+                "step": 1,
+                "data-party-size-input": "",
+            }
+        ),
+        label="Number of guests",
+    )
     special_requests = forms.CharField(
         required=False,
         max_length=2000,
@@ -65,6 +80,15 @@ class PublicReservationForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
+        facility = cleaned_data.get("facility")
+        party_size = cleaned_data.get("party_size") or 1
+        cleaned_data["party_size"] = party_size
+        if facility is not None and not facility.has_capacity_for(party_size):
+            self.add_error(
+                "party_size",
+                f"This facility can accommodate up to {facility.capacity} guests.",
+            )
+
         starts_at = cleaned_data.get("starts_at")
         rate_package = cleaned_data.get("rate_package")
         if starts_at is None or rate_package is None:

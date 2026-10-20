@@ -108,6 +108,7 @@ class PublicReservationFlowTests(TestCase):
             name="Harbor Pool",
             slug="harbor-pool",
             rate_24hours=1000,
+            capacity=4,
         )
         self.user = User.objects.create_user(
             username="reservation_guest",
@@ -132,6 +133,7 @@ class PublicReservationFlowTests(TestCase):
                 "%Y-%m-%dT%H:%M"
             ),
             "days": "1",
+            "party_size": "3",
             "special_requests": "Please prepare towels.",
         }
         self.url = reverse(
@@ -201,6 +203,7 @@ class PublicReservationFlowTests(TestCase):
         reservation = Reservation.objects.get()
         self.assertEqual(reservation.guest.username, "res_guest_new")
         self.assertEqual(reservation.status, Reservation.Status.PENDING)
+        self.assertEqual(reservation.party_size, 3)
         self.assertEqual(reservation.special_requests, "Please prepare towels.")
         self.assertEqual(reservation.discount, 0)
         self.assertFalse(Calendar.objects.filter(reservation=reservation).exists())
@@ -212,6 +215,7 @@ class PublicReservationFlowTests(TestCase):
             )
         )
         self.assertContains(detail_response, "Reservation details")
+        self.assertContains(detail_response, ">3</dd>")
         self.assertContains(detail_response, "first paid, first reserved")
         self.assertContains(
             detail_response,
@@ -242,8 +246,19 @@ class PublicReservationFlowTests(TestCase):
         )
         reservation = Reservation.objects.get()
         self.assertEqual(reservation.status, Reservation.Status.PENDING)
+        self.assertEqual(reservation.party_size, 3)
         self.assertEqual(reservation.discount, 0)
         self.assertFalse(Calendar.objects.filter(reservation=reservation).exists())
+
+    def test_public_reservation_rejects_party_size_above_facility_capacity(self):
+        response = self.client.post(
+            self.url,
+            {**self.payload, "party_size": "5"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This facility can accommodate up to 4 guests.")
+        self.assertFalse(Reservation.objects.exists())
 
     def test_reservation_detail_is_only_visible_to_its_guest(self):
         reservation = Reservation.objects.create(

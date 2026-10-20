@@ -36,6 +36,12 @@
                     <dt class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Guests</dt>
                     <dd class="mt-1 font-semibold">{{ reservation.party_size }}</dd>
                 </div>
+                {% if reservation.facility.capacity %}
+                    <div class="rounded-box bg-base-200 p-4">
+                        <dt class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Facility capacity</dt>
+                        <dd class="mt-1 font-semibold">{{ reservation.facility.capacity }} guests</dd>
+                    </div>
+                {% endif %}
                 {% if reservation.total_amount is not None %}
                     <div class="rounded-box bg-base-200 p-4">
                         <dt class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Estimated total</dt>

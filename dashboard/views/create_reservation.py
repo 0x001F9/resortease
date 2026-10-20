@@ -133,6 +133,7 @@ class CreateReservationView(View):
         starts_at_value = request.POST.get("starts_at", "").strip()
         rate_package = request.POST.get("rate_package", "").strip()
         days_value = request.POST.get("days", "1").strip() or "1"
+        party_size_value = request.POST.get("party_size", "1").strip() or "1"
         discount_value = request.POST.get("discount", "0.00").strip() or "0.00"
         status = (
             Reservation.Status.CONFIRMED
@@ -147,6 +148,7 @@ class CreateReservationView(View):
             "starts_at": starts_at_value,
             "rate_package": rate_package,
             "days": days_value,
+            "party_size": party_size_value,
             "discount": discount_value,
             "special_requests": special_requests,
         }
@@ -163,6 +165,22 @@ class CreateReservationView(View):
             errors["facility"] = "Select a facility in this branch."
         if guest is None:
             errors["guest"] = "Select an active user."
+
+        try:
+            party_size = int(party_size_value)
+            if not 1 <= party_size <= 2147483647:
+                raise ValueError
+        except ValueError:
+            party_size = None
+            errors["party_size"] = "Enter a party size from 1 to 2,147,483,647."
+        if (
+            facility is not None
+            and party_size is not None
+            and not facility.has_capacity_for(party_size)
+        ):
+            errors["party_size"] = (
+                f"This facility can accommodate up to {facility.capacity} guests."
+            )
 
         starts_at = parse_datetime(starts_at_value)
         if starts_at is None:
@@ -266,6 +284,7 @@ class CreateReservationView(View):
                 facility=facility,
                 starts_at=starts_at,
                 ends_at=ends_at,
+                party_size=party_size,
                 discount=discount,
                 status=status,
                 special_requests=special_requests,

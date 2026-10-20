@@ -69,6 +69,19 @@ class PaymentForm(forms.ModelForm):
 
 
 class ReservationEditForm(forms.ModelForm):
+    party_size = forms.IntegerField(
+        required=False,
+        min_value=1,
+        widget=forms.NumberInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "min": 1,
+                "step": 1,
+            }
+        ),
+        label="Party size",
+    )
+
     starts_at = forms.DateTimeField(
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"],
         widget=forms.DateTimeInput(
@@ -92,6 +105,16 @@ class ReservationEditForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        facility = self.instance.facility
+        if facility is not None and facility.capacity > 0:
+            self.fields["party_size"].widget.attrs["max"] = facility.capacity
+            self.fields["party_size"].help_text = (
+                f"Maximum capacity: {facility.capacity} guests."
+            )
+        else:
+            self.fields["party_size"].help_text = (
+                "Enter the number of guests for this reservation."
+            )
         if self.instance.pk and not self.is_bound:
             self.initial["starts_at"] = timezone.localtime(
                 self.instance.starts_at
@@ -105,6 +128,7 @@ class ReservationEditForm(forms.ModelForm):
         fields = (
             "starts_at",
             "ends_at",
+            "party_size",
             "special_requests",
             "discount",
             "status",
@@ -133,6 +157,20 @@ class ReservationEditForm(forms.ModelForm):
         if discount < 0:
             raise forms.ValidationError("Discount cannot be negative.")
         return discount
+
+    def clean_party_size(self):
+        party_size = self.cleaned_data.get("party_size")
+        if party_size is None:
+            return self.instance.party_size
+        if (
+            self.instance.facility is not None
+            and not self.instance.facility.has_capacity_for(party_size)
+        ):
+            raise forms.ValidationError(
+                "Party size cannot exceed the facility capacity "
+                f"of {self.instance.facility.capacity} guests."
+            )
+        return party_size
 
     def clean(self):
         cleaned_data = super().clean()

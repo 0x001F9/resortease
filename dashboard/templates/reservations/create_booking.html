@@ -59,13 +59,22 @@
                                 <span class="label">
                                     <span class="label-text font-medium">Facility <span class="text-error">*</span></span>
                                 </span>
-                                <select name="facility" class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}" required {% if not facilities %}disabled{% endif %}>
+                                <select name="facility" data-capacity-select class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}" required {% if not facilities %}disabled{% endif %}>
                                     <option value="" disabled {% if not form_data.facility %}selected{% endif %}>Choose a facility</option>
                                     {% for facility in facilities %}
-                                        <option value="{{ facility.pk }}" data-rate-24-hours="{{ facility.rate_24hours|default_if_none:'' }}" data-rate-22-hours="{{ facility.rate_22hours|default_if_none:'' }}" data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}" data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
+                                        <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" data-rate-24-hours="{{ facility.rate_24hours|default_if_none:'' }}" data-rate-22-hours="{{ facility.rate_22hours|default_if_none:'' }}" data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}" data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
                                     {% endfor %}
                                 </select>
                                 {% if errors.facility %}<span class="mt-1 text-sm text-error">{{ errors.facility }}</span>{% endif %}
+                            </label>
+
+                            <label class="form-control w-full">
+                                <span class="label">
+                                    <span class="label-text font-medium">Party size <span class="text-error">*</span></span>
+                                </span>
+                                <input type="number" name="party_size" min="1" max="{% if selected_facility.capacity %}{{ selected_facility.capacity }}{% endif %}" value="{{ form_data.party_size|default:'1' }}" class="input input-bordered w-full {% if errors.party_size %}input-error{% endif %}" data-party-size-input required>
+                                <span class="text-xs text-base-content/60" data-capacity-hint></span>
+                                {% if errors.party_size %}<span class="mt-1 text-sm text-error">{{ errors.party_size }}</span>{% endif %}
                             </label>
 
                             {% include "reservations/partials/rate_selection.html" %}
@@ -107,4 +116,5 @@
 {% block scripts %}
 <script src="{% static 'js/reservation-price-preview.js' %}" defer></script>
 <script src="{% static 'js/reservation-user-picker.js' %}" defer></script>
+<script src="{% static 'js/facility-capacity.js' %}" defer></script>
 {% endblock %}

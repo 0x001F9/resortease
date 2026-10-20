@@ -46,6 +46,9 @@
                                 <span class="label-text font-medium">{{ field.label }}</span>
                             </label>
                             {{ field }}
+                            {% if field.help_text %}
+                                <p class="mt-1 text-xs text-base-content/60">{{ field.help_text }}</p>
+                            {% endif %}
                             {% for error in field.errors %}
                                 <p class="mt-1 text-sm text-error">{{ error }}</p>
                             {% endfor %}

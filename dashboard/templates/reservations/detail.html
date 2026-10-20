@@ -85,6 +85,12 @@
                             <dt class="text-sm text-base-content/60">Party size</dt>
                             <dd class="font-medium">{{ reservation.party_size }}</dd>
                         </div>
+                        {% if reservation.facility.capacity %}
+                            <div>
+                                <dt class="text-sm text-base-content/60">Facility capacity</dt>
+                                <dd class="font-medium">{{ reservation.facility.capacity }} guests</dd>
+                            </div>
+                        {% endif %}
                         <div>
                             <dt class="text-sm text-base-content/60">Created</dt>
                             <dd class="font-medium">{{ reservation.created_at|date:"M j, Y H:i" }}</dd>

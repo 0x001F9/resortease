@@ -84,6 +84,9 @@ class Facility(models.Model):
     def __str__(self):
         return f"{self.branch.name} - {self.name}"
 
+    def has_capacity_for(self, party_size):
+        return self.capacity == 0 or party_size <= self.capacity
+
 
 class Maintenance(models.Model):
     class Priority(models.TextChoices):

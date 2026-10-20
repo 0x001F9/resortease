@@ -425,7 +425,7 @@ class CalendarEntryViewTests(TestCase):
         )
         self.assertContains(response, "Price summary")
         self.assertContains(response, "/static/js/reservation-price-preview.js")
-        self.assertNotContains(response, 'name="party_size"')
+        self.assertContains(response, 'name="party_size"')
         self.assertContains(response, '<option value="confirmed" selected>')
         self.assertContains(
             response,
@@ -475,7 +475,7 @@ class CalendarEntryViewTests(TestCase):
         )
         self.assertContains(response, "Price summary")
         self.assertContains(response, "/static/js/reservation-price-preview.js")
-        self.assertNotContains(response, 'name="party_size"')
+        self.assertContains(response, 'name="party_size"')
         self.assertNotContains(response, "special_requests")
         self.assertNotContains(response, "name=\"status\"")
 
@@ -664,7 +664,8 @@ class CalendarEntryViewTests(TestCase):
 
     def test_edit_pending_reservation_updates_requests_discount_and_status(self):
         self.facility.rate_24hours = 100
-        self.facility.save(update_fields=["rate_24hours", "updated_at"])
+        self.facility.capacity = 5
+        self.facility.save(update_fields=["rate_24hours", "capacity", "updated_at"])
         starts_at = timezone.make_aware(
             datetime.combine(
                 timezone.localdate() + timedelta(days=1),
@@ -696,6 +697,7 @@ class CalendarEntryViewTests(TestCase):
                 "ends_at": timezone.localtime(
                     new_starts_at + timedelta(hours=24)
                 ).strftime("%Y-%m-%dT%H:%M"),
+                "party_size": "4",
                 "special_requests": "Please prepare towels.",
                 "discount": "20.00",
                 "status": Reservation.Status.CONFIRMED,
@@ -718,6 +720,7 @@ class CalendarEntryViewTests(TestCase):
             "Please prepare towels.",
         )
         self.assertEqual(reservation.discount, Decimal("20.00"))
+        self.assertEqual(reservation.party_size, 4)
         self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
         self.assertEqual(reservation.starts_at, new_starts_at)
         self.assertEqual(reservation.raw_amount, Decimal("100.00"))
@@ -725,6 +728,51 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
         self.assertEqual(entry.starts_at, new_starts_at)
         self.assertEqual(entry.ends_at, new_starts_at + timedelta(hours=24))
+
+    def test_edit_reservation_rejects_party_size_above_facility_capacity(self):
+        self.facility.capacity = 4
+        self.facility.save(update_fields=["capacity", "updated_at"])
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        reservation.status = Reservation.Status.PENDING
+        reservation.save(update_fields=["status", "updated_at"])
+        response = self.client.post(
+            reverse(
+                "edit-reservation",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+            {
+                "starts_at": timezone.localtime(starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(
+                    starts_at + timedelta(hours=24)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "party_size": "5",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Reservation.Status.PENDING,
+            },
+        )
+
+        reservation.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "Party size cannot exceed the facility capacity of 4 guests.",
+        )
+        self.assertEqual(reservation.party_size, 1)
 
     def test_edit_reservation_rejects_discount_above_raw_amount(self):
         starts_at = timezone.make_aware(
@@ -1029,6 +1077,40 @@ class CalendarEntryViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+    def test_create_reservation_rejects_party_size_above_facility_capacity(self):
+        self.facility.rate_24hours = 100
+        self.facility.capacity = 4
+        self.facility.save(update_fields=["rate_24hours", "capacity", "updated_at"])
+        guest = User.object.create(
+            username="capacity_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234609",
+            email="capacity_guest@example.com",
+            first_name="Capacity",
+            last_name="Guest",
+        )
+        starts_at = timezone.localdate() + timedelta(days=1)
+
+        response = self.client.post(
+            reverse(
+                "create-reservation",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {
+                "facility": str(self.facility.pk),
+                "guest": str(guest.pk),
+                "starts_at": f"{starts_at.isoformat()}T08:00",
+                "rate_package": "24hours",
+                "days": "1",
+                "party_size": "5",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This facility can accommodate up to 4 guests.")
+        self.assertFalse(Reservation.objects.exists())
 
     def test_created_reservations_and_bookings_store_exact_package_rates(self):
         self.facility.rate_24hours = 120
@@ -1662,6 +1744,40 @@ class CalendarEntryViewTests(TestCase):
             updated_end,
         )
         self.assertEqual(reservation.raw_amount, Decimal("130.00"))
+
+    def test_edit_booking_rejects_party_size_above_selected_facility_capacity(self):
+        self.facility.capacity = 2
+        self.facility.save(update_fields=["capacity", "updated_at"])
+        starts_at = timezone.localdate() + timedelta(days=1)
+        reservation, entry = self.create_calendar_reservation(
+            timezone.make_aware(datetime.combine(starts_at, time(hour=9))),
+            timezone.make_aware(datetime.combine(starts_at, time(hour=10))),
+        )
+
+        response = self.client.post(
+            reverse(
+                "edit-calendar-entry",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "entry_id": entry.pk,
+                },
+            ),
+            {
+                "facility": str(self.facility.pk),
+                "starts_at": f"{starts_at.isoformat()}T09:00",
+                "ends_at": f"{starts_at.isoformat()}T10:00",
+                "party_size": "3",
+                "status": Reservation.Status.CONFIRMED,
+            },
+        )
+
+        reservation.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "This facility can accommodate up to 2 guests.",
+        )
+        self.assertEqual(reservation.party_size, 1)
 
     def test_reservation_rejects_a_past_date(self):
         guest = User.object.create(

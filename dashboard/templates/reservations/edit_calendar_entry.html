@@ -1,4 +1,5 @@
 {% extends "../partials/layout.html" %}
+{% load static %}
 
 {% block content %}
 <main class="px-4 py-6 sm:px-6 lg:px-8">
@@ -39,9 +40,9 @@
                         <span class="label">
                             <span class="label-text font-medium">Facility <span class="text-error">*</span></span>
                         </span>
-                        <select name="facility" class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}" required>
+                        <select name="facility" data-capacity-select class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}" required>
                             {% for facility in facilities %}
-                                <option value="{{ facility.pk }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>
+                                <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>
                                     {{ facility.name }}
                                 </option>
                             {% endfor %}
@@ -93,10 +94,12 @@
                                     type="number"
                                     name="party_size"
                                     min="1"
+                                    data-party-size-input
                                     value="{{ form_data.party_size }}"
                                     class="input input-bordered w-full {% if errors.party_size %}input-error{% endif %}"
                                     required
                                 >
+                                <span class="text-xs text-base-content/60" data-capacity-hint></span>
                                 {% if errors.party_size %}<span class="mt-1 text-sm text-error">{{ errors.party_size }}</span>{% endif %}
                             </label>
                             <label class="form-control w-full">
@@ -128,4 +131,8 @@
         </section>
     </div>
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/facility-capacity.js' %}" defer></script>
 {% endblock %}
