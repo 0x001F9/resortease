@@ -5,3 +5,7 @@ pytailwindcss
 pyotp
 qrcode
 pillow
+langchain
+langchain-google-genai
+langchain-core
+langchain-text-splitter
