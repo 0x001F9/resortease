@@ -1,7 +1,14 @@
-from django.test import TestCase
-from django.urls import reverse
+import re
+from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 
-from dashboard.models import Branch, Facility
+from django.core import mail
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
+
+from account.models import User
+from dashboard.models import Branch, Calendar, Facility, Reservation
 
 
 class PublicResortPagesTests(TestCase):
@@ -76,8 +83,246 @@ class PublicResortPagesTests(TestCase):
             "Currently closed for seasonal work.",
         )
 
-    def test_inquiry_is_a_nonfunctional_placeholder(self):
+    def test_reservation_call_to_action_leads_to_branch_selection(self):
         response = self.client.get(reverse("home"))
 
-        self.assertContains(response, 'type="button" disabled aria-disabled="true"')
-        self.assertContains(response, "Make an inquiry")
+        self.assertContains(
+            response,
+            f'href="{reverse("branch-list")}"',
+        )
+        self.assertContains(response, "Make a reservation")
+
+
+class PublicReservationFlowTests(TestCase):
+    def setUp(self):
+        self.branch = Branch.objects.create(
+            name="Harbor Branch",
+            slug="harbor-branch",
+            city="Harbor City",
+            address="1 Bay Road",
+            phone_number="+15555550613",
+            email="harbor@example.com",
+        )
+        self.facility = Facility.objects.create(
+            branch=self.branch,
+            name="Harbor Pool",
+            slug="harbor-pool",
+            rate_24hours=1000,
+        )
+        self.user = User.objects.create_user(
+            username="reservation_guest",
+            email="guest@example.com",
+            password="TestPassword123!Resort",
+            first_name="Harbor",
+            last_name="Guest",
+            phone_number_code="+1",
+            phone_number="5555550610",
+            email_confirmed_at=timezone.now(),
+        )
+        self.starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=4),
+                datetime.min.time().replace(hour=9),
+            )
+        )
+        self.payload = {
+            "facility": str(self.facility.pk),
+            "rate_package": "24hours",
+            "starts_at": timezone.localtime(self.starts_at).strftime(
+                "%Y-%m-%dT%H:%M"
+            ),
+            "days": "1",
+            "special_requests": "Please prepare towels.",
+        }
+        self.url = reverse(
+            "public-reservation",
+            kwargs={"slug": self.branch.slug},
+        )
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_guest_sign_up_resumes_available_reservation_as_pending(self):
+        response = self.client.post(self.url, self.payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Availability confirmed")
+        self.assertEqual(Reservation.objects.count(), 0)
+        self.assertEqual(
+            self.client.session["pending_public_reservation"]["facility"],
+            str(self.facility.pk),
+        )
+
+        sign_up_response = self.client.post(
+            reverse("sign-up"),
+            {
+                "username": "res_guest_new",
+                "email": "newguest@example.com",
+                "first_name": "New",
+                "middle_name": "",
+                "last_name": "Guest",
+                "phone_number_code": "+1",
+                "phone_number": "5555550611",
+                "address": "2 Bay Road",
+                "password1": "QwErTy!7890asDf",
+                "password2": "QwErTy!7890asDf",
+                "next": reverse("resume-public-reservation"),
+            },
+        )
+        self.assertEqual(sign_up_response.status_code, 200)
+        self.assertTemplateUsed(sign_up_response, "verify_email.html")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            User.objects.get(username="res_guest_new").address,
+            "2 Bay Road",
+        )
+
+        verification_url = re.search(
+            r"https?://testserver\S+",
+            mail.outbox[0].body,
+        ).group(0)
+        verification_path = urlsplit(verification_url)
+        verify_response = self.client.get(
+            f"{verification_path.path}?{verification_path.query}"
+        )
+
+        self.assertRedirects(
+            verify_response,
+            reverse("resume-public-reservation"),
+            fetch_redirect_response=False,
+        )
+        resume_response = self.client.get(reverse("resume-public-reservation"))
+        self.assertRedirects(
+            resume_response,
+            reverse(
+                "public-reservation-detail",
+                kwargs={"reservation_id": Reservation.objects.get().pk},
+            ),
+            fetch_redirect_response=False,
+        )
+        reservation = Reservation.objects.get()
+        self.assertEqual(reservation.guest.username, "res_guest_new")
+        self.assertEqual(reservation.status, Reservation.Status.PENDING)
+        self.assertEqual(reservation.special_requests, "Please prepare towels.")
+        self.assertEqual(reservation.discount, 0)
+        self.assertFalse(Calendar.objects.filter(reservation=reservation).exists())
+        self.assertNotIn("pending_public_reservation", self.client.session)
+        detail_response = self.client.get(
+            reverse(
+                "public-reservation-detail",
+                kwargs={"reservation_id": reservation.pk},
+            )
+        )
+        self.assertContains(detail_response, "Reservation details")
+        self.assertContains(detail_response, "first paid, first reserved")
+        self.assertContains(
+            detail_response,
+            "Submitting a request alone does not hold the time.",
+        )
+        self.assertContains(detail_response, "tel:+15555550613")
+        self.assertContains(detail_response, "mailto:harbor@example.com")
+
+    def test_authenticated_request_is_pending_and_ignores_staff_fields(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            self.url,
+            {
+                **self.payload,
+                "status": Reservation.Status.CONFIRMED,
+                "discount": "100",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "public-reservation-detail",
+                kwargs={"reservation_id": Reservation.objects.get().pk},
+            ),
+            fetch_redirect_response=False,
+        )
+        reservation = Reservation.objects.get()
+        self.assertEqual(reservation.status, Reservation.Status.PENDING)
+        self.assertEqual(reservation.discount, 0)
+        self.assertFalse(Calendar.objects.filter(reservation=reservation).exists())
+
+    def test_reservation_detail_is_only_visible_to_its_guest(self):
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+        )
+        detail_url = reverse(
+            "public-reservation-detail",
+            kwargs={"reservation_id": reservation.pk},
+        )
+
+        anonymous_response = self.client.get(detail_url)
+        self.assertRedirects(
+            anonymous_response,
+            f"{reverse('login')}?next={detail_url}",
+            fetch_redirect_response=False,
+        )
+
+        other_user = User.objects.create_user(
+            username="other_guest",
+            email="other@example.com",
+            password="TestPassword123!Resort",
+            first_name="Other",
+            last_name="Guest",
+            phone_number_code="+1",
+            phone_number="5555550612",
+            email_confirmed_at=timezone.now(),
+        )
+        self.client.force_login(other_user)
+        self.assertEqual(self.client.get(detail_url).status_code, 404)
+
+    def test_login_returns_to_a_safe_reservation_continuation(self):
+        response = self.client.post(
+            reverse("login"),
+            {
+                "username": self.user.username,
+                "password": "TestPassword123!Resort",
+                "next": reverse("resume-public-reservation"),
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("resume-public-reservation"),
+            fetch_redirect_response=False,
+        )
+
+    def test_unavailable_guest_request_does_not_open_auth_prompt(self):
+        Calendar.objects.create(
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+        )
+
+        response = self.client.post(self.url, self.payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "not available")
+        self.assertNotContains(response, "Availability confirmed")
+        self.assertEqual(Reservation.objects.count(), 0)
+
+    def test_public_form_labels_price_for_every_rate_option(self):
+        self.facility.rate_22hours = 800
+        self.facility.rate_morning = 500
+        self.facility.rate_evening = 600
+        self.facility.save(
+            update_fields=["rate_22hours", "rate_morning", "rate_evening"]
+        )
+
+        response = self.client.get(self.url)
+
+        for rate in ("24hours", "22hours", "morning", "evening"):
+            with self.subTest(rate=rate):
+                self.assertContains(response, f'data-rate-price-for="{rate}"')
+        self.assertContains(response, "24-hour rate")
+        self.assertContains(response, "22-hour rate")
+        self.assertContains(response, "Morning rate · 8 AM–5 PM")
+        self.assertContains(response, "Evening rate · 7 PM–6 AM")
+        self.assertContains(response, "per day")
+        self.assertContains(response, "per package")

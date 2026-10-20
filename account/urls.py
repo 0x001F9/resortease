@@ -1,6 +1,7 @@
 from django.urls import path
 from account.views.logout import LogoutView
 from account.views.login import EmailVerificationView
+from account.views.signup import SignUpView
 from account.views.security import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
@@ -14,6 +15,7 @@ from account.views import user_profile, user_settings
 urlpatterns = [
     path('u/<str:username>/settings/', user_settings, name='user-settings'),
     path('u/<str:username>/', user_profile, name='user-profile'),
+    path('sign-up/', SignUpView.as_view(), name='sign-up'),
     path('verify-email/<str:token>/', EmailVerificationView.as_view(), name='verify-email'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('forgot-password/', PasswordResetRequestView.as_view(), name='forgot-password'),

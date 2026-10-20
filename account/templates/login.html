@@ -20,12 +20,11 @@
               <h1 class="text-2xl font-bold">
                 Welcome Back
               </h1>
-              <p class="py-2">
-                Login with your Email account
-              </p>
+              <p class="py-2">Sign in with your username and password</p>
             </div>
-            <form class="flex flex-col gap-4" action="/login/" method="post">
+            <form class="flex flex-col gap-4" action="{% url 'login' %}" method="post">
               {% csrf_token %}
+              {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
               <fieldset class="fieldset">
                 <label class="label" for="username">Username</label>
                 <input type="text" id="username" name="username" class="input w-full" />
@@ -49,7 +48,7 @@
 
             <p class="text-center text-sm text-muted-foreground">
               Don't have an account? 
-              <a class="link" href='/create-account'>Sign up</a>
+              <a class="link" href="{% url 'sign-up' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Sign up</a>
             </p>
           </div>
           

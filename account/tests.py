@@ -252,6 +252,14 @@ class UserProfileTests(TestCase):
         self.assertContains(response, "Confirmed")
         self.assertContains(response, "Pending")
         self.assertContains(response, "2 total")
+        for reservation in self.owner.reservations.all():
+            self.assertContains(
+                response,
+                reverse(
+                    "public-reservation-detail",
+                    kwargs={"reservation_id": reservation.pk},
+                ),
+            )
 
     def test_superuser_profile_has_badge_after_username(self):
         self.owner.is_superuser = True

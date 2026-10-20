@@ -1,0 +1,85 @@
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="bg-base-200 px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+    <section class="card mx-auto w-full max-w-3xl border border-base-300 bg-base-100 shadow-sm">
+        <div class="card-body gap-5 p-5 sm:p-8">
+            <header>
+                <p class="text-sm font-semibold uppercase tracking-wide text-primary">
+                    {% if reservation.facility %}{{ reservation.facility.branch.name }}{% else %}ResortEase{% endif %}
+                </p>
+                <h1 class="card-title mt-1 text-2xl sm:text-3xl">Reservation details</h1>
+                <p class="mt-2 text-sm text-base-content/70">Request #{{ reservation.pk }}</p>
+            </header>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div role="status" class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-success{% endif %}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+
+            <div class="flex items-center justify-between gap-4 rounded-box border border-base-300 bg-base-200/50 p-4">
+                <span class="font-medium">Status</span>
+                <span class="badge badge-warning">{{ reservation.get_status_display }}</span>
+            </div>
+
+            <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div class="rounded-box bg-base-200 p-4">
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Facility</dt>
+                    <dd class="mt-1 font-semibold">{% if reservation.facility %}{{ reservation.facility.name }}{% else %}Unavailable{% endif %}</dd>
+                </div>
+                <div class="rounded-box bg-base-200 p-4">
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Dates</dt>
+                    <dd class="mt-1 font-semibold">{{ reservation.starts_at|date:"M j, Y, g:i A" }} – {{ reservation.ends_at|date:"M j, Y, g:i A" }}</dd>
+                </div>
+                <div class="rounded-box bg-base-200 p-4">
+                    <dt class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Guests</dt>
+                    <dd class="mt-1 font-semibold">{{ reservation.party_size }}</dd>
+                </div>
+                {% if reservation.total_amount is not None %}
+                    <div class="rounded-box bg-base-200 p-4">
+                        <dt class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Estimated total</dt>
+                        <dd class="mt-1 font-semibold">₱{{ reservation.total_amount|floatformat:2 }}</dd>
+                    </div>
+                {% endif %}
+                {% if reservation.special_requests %}
+                    <div class="rounded-box bg-base-200 p-4 sm:col-span-2">
+                        <dt class="text-xs font-semibold uppercase tracking-wide text-base-content/60">Special requests</dt>
+                        <dd class="mt-1 whitespace-pre-line">{{ reservation.special_requests }}</dd>
+                    </div>
+                {% endif %}
+            </dl>
+
+            <p class="text-sm leading-relaxed text-base-content/70">
+                Your reservation request is awaiting confirmation from the resort. You can review it again from your account.
+            </p>
+            {% if reservation.facility %}
+                <div role="note" class="alert alert-info items-start">
+                    <div>
+                        <p class="font-semibold">Payment and confirmation</p>
+                        <p class="mt-1 text-sm leading-relaxed">
+                            Contact {{ reservation.facility.branch.name }} to arrange payment and confirm your reservation. Availability can change, so reservations are secured in the order payment is received: first paid, first reserved. Submitting a request alone does not hold the time.
+                        </p>
+                        {% if reservation.facility.branch.phone_number or reservation.facility.branch.email %}
+                            <div class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                                {% if reservation.facility.branch.phone_number %}
+                                    <a class="link link-hover font-medium" href="tel:{{ reservation.facility.branch.phone_number }}">Call {{ reservation.facility.branch.phone_number }}</a>
+                                {% endif %}
+                                {% if reservation.facility.branch.email %}
+                                    <a class="link link-hover font-medium" href="mailto:{{ reservation.facility.branch.email }}">Email {{ reservation.facility.branch.email }}</a>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+            <div class="card-actions justify-end border-t border-base-300 pt-4">
+                <a class="btn btn-ghost" href="{% url 'user-profile' request.user.username %}">My reservations</a>
+                {% if reservation.facility %}
+                    <a class="btn btn-primary" href="{% url 'branch-detail' reservation.facility.branch.slug %}">Back to {{ reservation.facility.branch.name }}</a>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+</main>
+{% endblock %}

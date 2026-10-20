@@ -12,7 +12,7 @@
             <p class="mt-6 max-w-xl text-base leading-relaxed text-neutral-content/85 sm:text-lg">Unhurried days, welcoming places, and room to make the stay yours.</p>
             <div class="mt-8 flex flex-wrap items-center gap-3">
                 <a class="btn btn-primary" href="{% url 'branch-list' %}">Explore our branches <span aria-hidden="true">&#8594;</span></a>
-                <button class="btn btn-ghost border border-neutral-content/40 text-neutral-content" type="button" disabled aria-disabled="true" title="Coming soon">Make an inquiry</button>
+                <a class="btn btn-ghost border border-neutral-content/40 text-neutral-content" href="{% url 'branch-list' %}">Make a reservation <span aria-hidden="true">&#8594;</span></a>
             </div>
             </div>
         </div>
@@ -72,13 +72,6 @@
                     <p class="col-span-full rounded-box border border-dashed border-base-300 p-6 text-base-content/70">There are no operational facilities to show right now.</p>
                 {% endfor %}
             </div>
-        </div>
-    </section>
-
-    <section class="bg-primary px-4 py-12 text-primary-content sm:px-6 lg:px-8">
-        <div class="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
-            <div><p class="mb-2 text-sm font-semibold uppercase text-primary-content/70">Your next stay starts somewhere</p><h2 class="text-2xl font-bold sm:text-3xl">Take a look around.</h2></div>
-            <a class="btn btn-secondary" href="{% url 'branch-list' %}">Discover ResortEase <span aria-hidden="true">&#8594;</span></a>
         </div>
     </section>
 </main>

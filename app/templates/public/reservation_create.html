@@ -1,0 +1,171 @@
+{% extends "partials/pub_layout.html" %}
+{% load static %}
+
+{% block content %}
+<main class="bg-base-200 px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+    <div class="mx-auto max-w-3xl">
+        <a class="link link-hover text-sm font-semibold text-primary" href="{% url 'branch-detail' branch.slug %}"><span aria-hidden="true">&larr;</span> {{ branch.name }}</a>
+        <section class="card mt-4 border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-5 p-5 sm:p-8">
+                <header>
+                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">{{ branch.name }}</p>
+                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Request a reservation</h1>
+                    <p class="mt-2 text-sm text-base-content/70">Choose a facility and time. Your request will remain pending until the resort confirms it.</p>
+                </header>
+
+                {% if messages %}
+                    {% for message in messages %}
+                        <div role="status" class="alert {% if message.tags == 'error' %}alert-error{% else %}alert-info{% endif %}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+
+                {% if not facilities %}
+                    <div role="alert" class="alert alert-warning">
+                        <span>There are no operational facilities available for reservations at this branch right now.</span>
+                    </div>
+                {% else %}
+                    <form method="post" class="space-y-5">
+                        {% csrf_token %}
+                        {% if form.non_field_errors %}
+                            <div role="alert" class="alert alert-error">{{ form.non_field_errors }}</div>
+                        {% endif %}
+                        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <label class="form-control w-full sm:col-span-2">
+                                <span class="label"><span class="label-text font-medium">Facility <span class="text-error">*</span></span></span>
+                                <select name="facility" class="select select-bordered w-full {% if form.facility.errors %}select-error{% endif %}" required>
+                                    <option value="">Choose a facility</option>
+                                    {% for facility in facilities %}
+                                        <option
+                                            value="{{ facility.pk }}"
+                                            data-rate-24-hours="{{ facility.rate_24hours|default_if_none:'' }}"
+                                            data-rate-22-hours="{{ facility.rate_22hours|default_if_none:'' }}"
+                                            data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}"
+                                            data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}"
+                                            {% if form.facility.value|stringformat:"s" == facility.pk|stringformat:"s" %}selected{% endif %}
+                                        >{{ facility.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% for error in form.facility.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
+                            </label>
+
+                            <fieldset class="sm:col-span-2">
+                                <legend class="label-text mb-2 block font-medium">Choose a rate <span class="text-error">*</span></legend>
+                                <div class="grid gap-3 sm:grid-cols-2">
+                                    {% for value, label in form.RATE_CHOICES %}
+                                        <label class="flex cursor-pointer items-start gap-3 rounded-box border border-base-300 p-3">
+                                            <input class="radio radio-primary mt-1" type="radio" name="rate_package" value="{{ value }}" required {% if form.rate_package.value == value %}checked{% endif %}>
+                                            <span class="flex flex-1 flex-col gap-1">
+                                                <span class="font-medium">{{ label }}</span>
+                                                <span class="text-xs text-base-content/60">
+                                                    {% if value == "24hours" %}Choose a start time and number of days.
+                                                    {% elif value == "22hours" %}Ends automatically 22 hours after start.
+                                                    {% elif value == "morning" %}Start time is fixed at 8 AM.
+                                                    {% else %}Start time is fixed at 7 PM.
+                                                    {% endif %}
+                                                </span>
+                                                <span class="text-sm text-base-content/70">
+                                                    <span data-rate-price-for="{{ value }}">Select a facility</span>
+                                                    <span data-rate-unit-for="{{ value }}">{% if value == "24hours" %}per day{% else %}per package{% endif %}</span>
+                                                </span>
+                                            </span>
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                                {% for error in form.rate_package.errors %}<span class="mt-2 block text-sm text-error">{{ error }}</span>{% endfor %}
+                            </fieldset>
+
+                            <label class="form-control w-full sm:col-span-2" data-days-field hidden>
+                                <span class="label"><span class="label-text font-medium">Number of days</span></span>
+                                {{ form.days }}
+                                <span class="mt-1 text-xs text-base-content/60">Only used for 24-hour reservations.</span>
+                                {% for error in form.days.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
+                            </label>
+
+                            <label class="form-control w-full sm:col-span-2">
+                                <span class="label"><span class="label-text font-medium">Starts <span class="text-error">*</span></span></span>
+                                {{ form.starts_at }}
+                                <input
+                                    type="datetime-local"
+                                    value="{{ form.starts_at.value|default:'' }}"
+                                    class="input input-bordered w-full {% if form.starts_at.errors %}input-error{% endif %}"
+                                    data-start-picker
+                                    {% if not form.rate_package.value %}disabled{% endif %}
+                                    required
+                                >
+                                <span class="mt-1 text-xs text-base-content/60" data-start-help>Select a rate to choose a start date and time.</span>
+                                {% for error in form.starts_at.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
+                            </label>
+
+                            <div class="form-control w-full sm:col-span-2" aria-label="Calculated reservation end time">
+                                <span class="label"><span class="label-text font-medium">Ends</span></span>
+                                <div class="input input-bordered flex w-full items-center" data-end-display role="status" aria-live="polite">Choose a rate and start time</div>
+                            </div>
+                            <input type="hidden" name="ends_at" value="">
+                            <input type="hidden" name="discount" value="0.00">
+
+                            <label class="form-control w-full sm:col-span-2">
+                                <span class="label"><span class="label-text font-medium">Special requests</span></span>
+                                {{ form.special_requests }}
+                                {% for error in form.special_requests.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
+                            </label>
+                        </div>
+
+                        <section class="rounded-box border border-base-300 bg-base-200/30 p-4 sm:p-5" data-price-preview aria-labelledby="price-preview-title" aria-live="polite">
+                            <header class="mb-4 flex items-center justify-between gap-4">
+                                <div><h2 id="price-preview-title" class="font-semibold">Price summary</h2><p class="text-xs text-base-content/60">Estimated reservation cost</p></div>
+                                <span class="badge badge-ghost">Estimate</span>
+                            </header>
+                            <p class="mb-3 text-sm text-base-content/60" data-price-status>Choose a facility and rate-matching timeslot to preview the amount.</p>
+                            <dl class="flex justify-between gap-4 border-t border-base-300 pt-3">
+                                <dt class="font-semibold">Estimated total</dt>
+                                <dd class="text-xl font-bold text-primary" data-price-total>—</dd>
+                            </dl>
+                            <span class="hidden" data-price-raw></span>
+                            <span class="hidden" data-price-discount></span>
+                        </section>
+
+                        <div class="flex flex-col-reverse justify-end gap-3 border-t border-base-300 pt-5 sm:flex-row">
+                            <a class="btn btn-ghost" href="{% url 'branch-detail' branch.slug %}">Cancel</a>
+                            <button class="btn btn-primary" type="submit" {% if not facilities %}disabled{% endif %}>
+                                {% if request.user.is_authenticated %}Check availability &amp; request{% else %}Check availability{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+</main>
+
+{% if auth_modal %}
+    <div class="modal modal-open" role="dialog" aria-modal="true" aria-labelledby="reservation-auth-title">
+        <div class="modal-box">
+            <h2 id="reservation-auth-title" class="text-xl font-bold">Availability confirmed</h2>
+            <p class="mt-3 text-sm leading-relaxed text-base-content/70">This time is available. Sign in or create an account to submit your pending reservation request. We’ll keep your selection and continue automatically after you verify your email.</p>
+            <div class="mt-6 flex flex-col gap-3 sm:flex-row">
+                <a class="btn btn-primary flex-1" href="{{ signup_url }}">Create an account</a>
+                <a class="btn btn-outline flex-1" href="{{ login_url }}">Sign in</a>
+            </div>
+            <div class="modal-action">
+                <a class="btn btn-ghost" href="{% url 'public-reservation' branch.slug %}">Not now</a>
+            </div>
+        </div>
+        <a class="modal-backdrop" href="{% url 'public-reservation' branch.slug %}" aria-label="Close sign-in prompt"></a>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/reservation-price-preview.js' %}" defer></script>
+<script>
+    const form = document.querySelector("main form");
+    const startPicker = form?.querySelector("[data-start-picker]");
+    const rateInputs = form?.querySelectorAll('input[name="rate_package"]');
+    const syncStartAvailability = () => {
+        if (!startPicker) return;
+        startPicker.disabled = !form.querySelector('input[name="rate_package"]:checked');
+    };
+    rateInputs?.forEach((input) => input.addEventListener("change", syncStartAvailability));
+    syncStartAvailability();
+</script>
+{% endblock %}

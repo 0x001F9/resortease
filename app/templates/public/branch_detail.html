@@ -23,6 +23,7 @@
                 {% if branch.phone_number %}<a class="link link-hover" href="tel:{{ branch.phone_number }}">{{ branch.phone_number }}</a>{% endif %}
                 {% if branch.email %}<a class="link link-hover" href="mailto:{{ branch.email }}">{{ branch.email }}</a>{% endif %}
             </address>
+            <a class="btn btn-primary mt-6" href="{% url 'public-reservation' branch.slug %}">Make a reservation</a>
         </div>
     </section>
 

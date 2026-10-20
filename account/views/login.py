@@ -1,5 +1,6 @@
 import secrets
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
@@ -12,6 +13,7 @@ from django.utils import timezone
 from django.views import View
 
 from account.models import User, UsernameValidator
+from account.redirects import get_safe_next_url
 from account.views.security import mask_email
 from app import settings
 from app.settings import DEFAULT_FROM_EMAIL
@@ -21,31 +23,56 @@ class LoginView(View):
     template_verify_email = "verify_email.html"
 
     def get(self, request):
+        next_url = get_safe_next_url(request, request.GET.get("next"))
         if request.user.is_authenticated:
-            return redirect("/")
+            return redirect(next_url or "/")
 
-        return render(request, "login.html")
+        return render(request, "login.html", {"next": next_url})
 
     def post(self, request):
+        next_url = get_safe_next_url(
+            request,
+            request.POST.get("next") or request.GET.get("next"),
+        )
         if request.user.is_authenticated:
-            return redirect("/")
+            return redirect(next_url or "/")
 
         username = request.POST.get("username")
         password = request.POST.get("password")
 
         if username is None:
-            return render(request, "login.html", {"error": "Username is required."}, status=400)
+            return render(
+                request,
+                "login.html",
+                {"error": "Username is required.", "next": next_url},
+                status=400,
+            )
         if password is None:
-            return render(request, "login.html", {"error": "Password is required."}, status=400)
+            return render(
+                request,
+                "login.html",
+                {"error": "Password is required.", "next": next_url},
+                status=400,
+            )
 
         try:
             UsernameValidator(username or "")
         except ValidationError:
-            return render(request, "login.html", {"error": "Invalid username format."}, status=400)
+            return render(
+                request,
+                "login.html",
+                {"error": "Invalid username format.", "next": next_url},
+                status=400,
+            )
 
         user = authenticate(request, username=username, password=password)
         if user is None:
-            return render(request, "login.html", {"error": "Invalid username or password."}, status=401)
+            return render(
+                request,
+                "login.html",
+                {"error": "Invalid username or password.", "next": next_url},
+                status=401,
+            )
 
         if user.email_confirmed_at is None:
             now = timezone.now()
@@ -59,6 +86,10 @@ class LoginView(View):
                 verification_url = request.build_absolute_uri(
                     reverse("verify-email", kwargs={"token": token})
                 )
+                if next_url:
+                    verification_url = (
+                        f"{verification_url}?{urlencode({'next': next_url})}"
+                    )
 
                 html_content = render_to_string(
                     "email/verify_email_addr.html",
@@ -94,16 +125,19 @@ class LoginView(View):
             return render(
                 request,
                 self.template_verify_email,
-                {"masked_email": mask_email(user.email)},
+                {"masked_email": mask_email(user.email), "next": next_url},
             )
 
         if user.totp_enabled or user.role != user.Role.User:
             request.session["pending_tfa_user_id"] = user.pk
+            request.session.pop("pending_login_next", None)
+            if next_url:
+                request.session["pending_login_next"] = next_url
             return redirect("totp-verify")
 
         login(request, user)
         messages.success(request, "Welcome back!")
-        return redirect("/")
+        return redirect(next_url or "/")
 
 
 class EmailVerificationView(View):
@@ -128,4 +162,8 @@ class EmailVerificationView(View):
                 "updated_at",
             ]
         )
+        next_url = get_safe_next_url(request, request.GET.get("next"))
+        if next_url and user.role == User.Role.User and not user.totp_enabled:
+            login(request, user)
+            return redirect(next_url)
         return render(request, "email_verified.html")

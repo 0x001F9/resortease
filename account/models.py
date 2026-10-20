@@ -163,6 +163,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         validators=[NameValidator],
     )
     last_name = models.CharField(max_length=100, validators=[NameValidator])
+    address = models.TextField(blank=True, null=True)
 
     updated_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)

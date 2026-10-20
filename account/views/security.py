@@ -10,6 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from account.redirects import get_safe_next_url
 from django.views import View
 from django.views.decorators.http import require_POST
 
@@ -374,12 +375,22 @@ class TOTPVerificationView(View):
             )
 
         if is_user_enabled_totp and totp_code and user.verify_totp(totp_code):
+            next_url = get_safe_next_url(
+                request,
+                request.session.get("pending_login_next"),
+            )
             self.clear_pending_login(request)
+            request.session.pop("pending_login_next", None)
             login(request, user)
-            return redirect("/")
+            return redirect(next_url or "/")
 
         if email_code and user.verify_otp(email_code):
+            next_url = get_safe_next_url(
+                request,
+                request.session.get("pending_login_next"),
+            )
             self.clear_pending_login(request)
+            request.session.pop("pending_login_next", None)
             login(request, user)
 
             if not is_user_enabled_totp:
@@ -389,7 +400,7 @@ class TOTPVerificationView(View):
                 )
                 return redirect("totp-setup")
 
-            return redirect("/")
+            return redirect(next_url or "/")
 
         if email_code:
             return render(

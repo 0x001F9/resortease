@@ -85,6 +85,12 @@
                                                     Facility unavailable
                                                 {% endif %}
                                             </h3>
+                                            {% if is_owner %}
+                                                <a
+                                                    class="link link-primary text-sm font-medium"
+                                                    href="{% url 'public-reservation-detail' reservation.pk %}"
+                                                >View details</a>
+                                            {% endif %}
                                             {% if reservation.calendar_entry %}
                                                 <span class="badge badge-secondary badge-sm">Booking</span>
                                             {% else %}

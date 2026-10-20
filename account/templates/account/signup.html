@@ -1,0 +1,41 @@
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="bg-base-200 px-4 py-10 sm:px-6 sm:py-14">
+    <section class="card mx-auto w-full max-w-2xl border border-base-300 bg-base-100 shadow-sm">
+        <div class="card-body p-5 sm:p-8">
+            <header class="mb-2">
+                <p class="text-sm font-semibold uppercase tracking-wide text-primary">Join ResortEase</p>
+                <h1 class="mt-1 text-3xl font-bold">Create your account</h1>
+                <p class="mt-2 text-sm text-base-content/70">Verify your email to finish creating your account.</p>
+            </header>
+
+            <form method="post" class="space-y-5">
+                {% csrf_token %}
+                {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+                {% if form.non_field_errors %}
+                    <div role="alert" class="alert alert-error">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {% for field in form %}
+                        <label class="form-control w-full {% if field.name == 'address' %}sm:col-span-2{% endif %}">
+                            <span class="label"><span class="label-text font-medium">{{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}</span></span>
+                            {{ field }}
+                            {% if field.help_text %}<span class="mt-1 text-xs text-base-content/60">{{ field.help_text|safe }}</span>{% endif %}
+                            {% for error in field.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
+                        </label>
+                    {% endfor %}
+                </div>
+
+                <button class="btn btn-primary w-full" type="submit">Create account</button>
+            </form>
+
+            <p class="mt-4 text-center text-sm text-base-content/70">
+                Already have an account?
+                <a class="link link-primary" href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Sign in</a>
+            </p>
+        </div>
+    </section>
+</main>
+{% endblock %}

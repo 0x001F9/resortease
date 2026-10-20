@@ -17,7 +17,7 @@
                 <a class="link link-hover" href="{% url 'facility-list' %}">Facilities</a>
             </nav>
             <div class="col-start-2 row-start-1 flex items-center justify-end gap-2 sm:col-start-3 sm:gap-4">
-                <button class="btn btn-primary btn-sm" type="button" disabled aria-disabled="true" title="Coming soon">Inquiry</button>
+                <button class="btn btn-primary btn-sm" type="button">Inquiry</button>
                 {% if user.is_authenticated %}
                     <div class="dropdown dropdown-end">
                         <div class="avatar" role="button" tabindex="0">
@@ -47,7 +47,7 @@
                         </ul>
                     </div>
                 {% else %}
-                    <a class="link link-hover hidden text-sm sm:inline" href="{% url 'login' %}">Sign in</a>
+                    <a class="link link-hover hidden text-sm sm:inline" href="{% url 'login' %}{% if request.GET.next %}?next={{ request.GET.next|urlencode }}{% endif %}">Sign in</a>
                 {% endif %}
             </div>
         </div>

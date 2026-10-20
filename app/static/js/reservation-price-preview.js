@@ -157,12 +157,41 @@
             : null;
     }
 
+    function updateRateLabels(form) {
+        const facility = form.elements.namedItem("facility");
+        const option = facility?.selectedOptions[0];
+        const rateKeys = {
+            "24hours": "rate24Hours",
+            "22hours": "rate22Hours",
+            morning: "rateMorning",
+            evening: "rateEvening",
+        };
+
+        Object.entries(rateKeys).forEach(([ratePackage, rateKey]) => {
+            const label = form.querySelector(
+                `[data-rate-price-for="${ratePackage}"]`,
+            );
+            if (!label) {
+                return;
+            }
+
+            const rateValue = option?.dataset[rateKey];
+            const rate = rateValue === undefined || rateValue === ""
+                ? NaN
+                : Number(rateValue);
+            label.textContent = Number.isFinite(rate) && rate >= 0
+                ? money.format(rate)
+                : "Not available";
+        });
+    }
+
     function updatePriceSummary(form) {
         const preview = form.querySelector("[data-price-preview]");
         if (!preview) {
             return;
         }
 
+        updateRateLabels(form);
         const selected = updateReservationEnd(form);
         const rawAmount = selectedRate(form, selected);
         const discountInput = form.elements.namedItem("discount");
