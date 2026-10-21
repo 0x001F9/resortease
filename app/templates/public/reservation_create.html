@@ -38,8 +38,8 @@
                                         <option
                                             value="{{ facility.pk }}"
                                             data-capacity="{{ facility.capacity }}"
-                                            data-rate-24-hours="{{ facility.rate_24hours|default_if_none:'' }}"
-                                            data-rate-22-hours="{{ facility.rate_22hours|default_if_none:'' }}"
+                                            data-rate24-hours="{{ facility.rate_24hours|default_if_none:'' }}"
+                                            data-rate22-hours="{{ facility.rate_22hours|default_if_none:'' }}"
                                             data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}"
                                             data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}"
                                             {% if form.facility.value|stringformat:"s" == facility.pk|stringformat:"s" %}selected{% endif %}

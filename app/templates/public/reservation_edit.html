@@ -25,7 +25,7 @@
                             <select name="facility" data-capacity-select class="select select-bordered w-full {% if form.facility.errors %}select-error{% endif %}" required>
                                 <option value="">Choose a facility</option>
                                 {% for facility in facilities %}
-                                    <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" data-rate-24-hours="{{ facility.rate_24hours|default_if_none:'' }}" data-rate-22-hours="{{ facility.rate_22hours|default_if_none:'' }}" data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}" data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}" {% if form.facility.value|stringformat:"s" == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
+                                    <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" data-rate24-hours="{{ facility.rate_24hours|default_if_none:'' }}" data-rate22-hours="{{ facility.rate_22hours|default_if_none:'' }}" data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}" data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}" {% if form.facility.value|stringformat:"s" == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
                                 {% endfor %}
                             </select>
                             {% for error in form.facility.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}

@@ -146,6 +146,33 @@ class PublicReservationFlowTests(TestCase):
             kwargs={"slug": self.branch.slug},
         )
 
+    def test_public_reservation_forms_expose_numeric_rates_to_preview(self):
+        self.facility.rate_22hours = 800
+        self.facility.save(update_fields=["rate_22hours", "updated_at"])
+
+        create_response = self.client.get(self.url)
+        self.assertEqual(create_response.status_code, 200)
+        self.assertContains(create_response, 'data-rate24-hours="1000"')
+        self.assertContains(create_response, 'data-rate22-hours="800"')
+
+        self.client.force_login(self.user)
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+        )
+        edit_response = self.client.get(
+            reverse(
+                "edit-public-reservation",
+                kwargs={"reservation_id": reservation.pk},
+            )
+        )
+
+        self.assertEqual(edit_response.status_code, 200)
+        self.assertContains(edit_response, 'data-rate24-hours="1000"')
+        self.assertContains(edit_response, 'data-rate22-hours="800"')
+
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_guest_sign_up_resumes_available_reservation_as_pending(self):
         response = self.client.post(self.url, self.payload)

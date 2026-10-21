@@ -471,7 +471,7 @@ class CalendarEntryViewTests(TestCase):
         )
         self.assertContains(
             response,
-            f'value="{self.facility.pk}" data-rate-24-hours=""',
+            f'value="{self.facility.pk}" data-rate24-hours=""',
         )
         self.assertContains(response, "Price summary")
         self.assertContains(response, "/static/js/reservation-price-preview.js")
@@ -527,6 +527,21 @@ class CalendarEntryViewTests(TestCase):
                 self.assertNotContains(response, '<select name="guest"')
                 if route_name == "create-reservation":
                     self.assertNotContains(response, 'name="status"')
+
+    def test_reservation_and_booking_forms_expose_numeric_rates_to_preview(self):
+        self.facility.rate_24hours = 120
+        self.facility.rate_22hours = 110
+        self.facility.save(update_fields=["rate_24hours", "rate_22hours", "updated_at"])
+
+        for route_name in ("create-reservation", "create-booking"):
+            with self.subTest(route_name=route_name):
+                response = self.client.get(
+                    reverse(route_name, kwargs={"branch": self.branch.slug})
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'data-rate24-hours="120"')
+                self.assertContains(response, 'data-rate22-hours="110"')
 
     def test_calendar_booking_is_confirmed_and_added_to_calendar(self):
         self.facility.rate_morning = 90
