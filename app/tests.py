@@ -8,7 +8,12 @@ from django.urls import reverse
 from django.utils import timezone
 
 from account.models import User
-from dashboard.models import Branch, Calendar, Facility, Reservation
+from dashboard.models import (
+    Branch,
+    Calendar,
+    Facility,
+    Reservation,
+)
 
 
 class PublicResortPagesTests(TestCase):
@@ -259,6 +264,241 @@ class PublicReservationFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "This facility can accommodate up to 4 guests.")
         self.assertFalse(Reservation.objects.exists())
+
+    def test_guest_can_edit_their_pending_reservation_date(self):
+        self.client.force_login(self.user)
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+            party_size=2,
+        )
+        edit_url = reverse(
+            "edit-public-reservation",
+            kwargs={"reservation_id": reservation.pk},
+        )
+        get_response = self.client.get(edit_url)
+        self.assertEqual(get_response.status_code, 200)
+        self.assertContains(get_response, 'type="datetime-local"')
+
+        new_starts_at = self.starts_at + timedelta(days=2)
+        response = self.client.post(
+            edit_url,
+            {
+                "facility": str(self.facility.pk),
+                "rate_package": "24hours",
+                "starts_at": timezone.localtime(new_starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "days": "1",
+                "party_size": "3",
+                "special_requests": "Please prepare towels.",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "public-reservation-detail",
+                kwargs={"reservation_id": reservation.pk},
+            ),
+            fetch_redirect_response=False,
+        )
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.starts_at, new_starts_at)
+        self.assertEqual(reservation.ends_at, new_starts_at + timedelta(days=1))
+        self.assertEqual(reservation.party_size, 3)
+        self.assertEqual(reservation.special_requests, "Please prepare towels.")
+        self.assertEqual(reservation.status, Reservation.Status.PENDING)
+
+    def test_guest_can_edit_own_confirmed_upcoming_reservation_only(self):
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+        )
+        edit_url = reverse(
+            "edit-public-reservation",
+            kwargs={"reservation_id": reservation.pk},
+        )
+        other_user = User.objects.create_user(
+            username="reservation_editor_other",
+            email="editor-other@example.com",
+            password="TestPassword123!Other",
+            first_name="Other",
+            last_name="Editor",
+            phone_number_code="+1",
+            phone_number="5555550613",
+            email_confirmed_at=timezone.now(),
+        )
+        self.client.force_login(other_user)
+        self.assertEqual(self.client.get(edit_url).status_code, 404)
+
+        self.client.force_login(self.user)
+        reservation.status = Reservation.Status.CONFIRMED
+        reservation.save(update_fields=["status", "updated_at"])
+        response = self.client.get(edit_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Edit reservation")
+
+        reservation.starts_at = timezone.now() - timedelta(hours=1)
+        reservation.save(update_fields=["starts_at", "updated_at"])
+        self.assertEqual(self.client.get(edit_url).status_code, 302)
+
+    def test_confirmed_reservation_can_be_cancelled_with_required_reason(self):
+        self.client.force_login(self.user)
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+            status=Reservation.Status.CONFIRMED,
+        )
+        calendar_entry = Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+            status=Calendar.Status.CONFIRMED,
+        )
+        detail_url = reverse(
+            "public-reservation-detail",
+            kwargs={"reservation_id": reservation.pk},
+        )
+        cancel_url = reverse(
+            "cancel-public-reservation",
+            kwargs={"reservation_id": reservation.pk},
+        )
+
+        detail_response = self.client.get(detail_url)
+        self.assertContains(detail_response, "Cancel reservation")
+        self.assertContains(detail_response, "Edit reservation")
+        self.assertContains(detail_response, "Why are you cancelling?")
+
+        missing_reason_response = self.client.post(cancel_url, {"reason": "  "})
+        self.assertRedirects(
+            missing_reason_response,
+            detail_url,
+            fetch_redirect_response=False,
+        )
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
+        self.assertEqual(calendar_entry.notes, "")
+
+        response = self.client.post(
+            cancel_url,
+            {"reason": "Our travel dates changed."},
+        )
+        self.assertRedirects(
+            response,
+            detail_url,
+            fetch_redirect_response=False,
+        )
+        reservation.refresh_from_db()
+        calendar_entry.refresh_from_db()
+        self.assertEqual(reservation.status, Reservation.Status.CANCELLED)
+        self.assertEqual(calendar_entry.status, Calendar.Status.CANCELLED)
+        self.assertEqual(
+            calendar_entry.notes,
+            "Our travel dates changed.",
+        )
+        detail_response = self.client.get(detail_url)
+        self.assertContains(detail_response, "Calendar notes")
+        self.assertContains(detail_response, "Our travel dates changed.")
+        self.assertNotContains(detail_response, "Cancel reservation")
+        self.assertNotContains(detail_response, "Edit reservation")
+
+    def test_guest_can_cancel_confirmed_in_progress_but_not_ended_reservation(self):
+        self.client.force_login(self.user)
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=timezone.now() - timedelta(hours=1),
+            ends_at=timezone.now() + timedelta(hours=1),
+            status=Reservation.Status.CONFIRMED,
+        )
+        detail_url = reverse(
+            "public-reservation-detail",
+            kwargs={"reservation_id": reservation.pk},
+        )
+        cancel_url = reverse(
+            "cancel-public-reservation",
+            kwargs={"reservation_id": reservation.pk},
+        )
+        detail_response = self.client.get(detail_url)
+        self.assertContains(detail_response, "Cancel reservation")
+        self.assertNotContains(detail_response, "Edit reservation")
+
+        reservation.ends_at = timezone.now() - timedelta(minutes=1)
+        reservation.save(update_fields=["ends_at", "updated_at"])
+        self.assertEqual(
+            self.client.post(cancel_url, {"reason": "Plans changed."}).status_code,
+            404,
+        )
+
+    def test_guest_edit_rejects_past_dates_and_unavailable_times(self):
+        self.client.force_login(self.user)
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+        )
+        edit_url = reverse(
+            "edit-public-reservation",
+            kwargs={"reservation_id": reservation.pk},
+        )
+        past_start = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() - timedelta(days=1),
+                datetime.min.time().replace(hour=9),
+            )
+        )
+        base_payload = {
+            "facility": str(self.facility.pk),
+            "rate_package": "24hours",
+            "days": "1",
+            "party_size": "2",
+            "special_requests": "",
+        }
+        past_response = self.client.post(
+            edit_url,
+            {
+                **base_payload,
+                "starts_at": timezone.localtime(past_start).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+            },
+        )
+        self.assertEqual(past_response.status_code, 200)
+        self.assertContains(past_response, "Reservations cannot be made for past dates.")
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.starts_at, self.starts_at)
+
+        blocked_start = self.starts_at + timedelta(days=2)
+        Calendar.objects.create(
+            facility=self.facility,
+            starts_at=blocked_start,
+            ends_at=blocked_start + timedelta(days=1),
+        )
+        conflict_response = self.client.post(
+            edit_url,
+            {
+                **base_payload,
+                "starts_at": timezone.localtime(blocked_start).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+            },
+        )
+        self.assertEqual(conflict_response.status_code, 200)
+        self.assertContains(
+            conflict_response,
+            "This facility is not available during the selected time.",
+        )
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.starts_at, self.starts_at)
 
     def test_reservation_detail_is_only_visible_to_its_guest(self):
         reservation = Reservation.objects.create(

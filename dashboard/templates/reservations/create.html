@@ -69,6 +69,7 @@
                             <select
                                 name="facility"
                                 data-capacity-select
+                                data-capacity-advisory
                                 class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}"
                                 required
                                 {% if not facilities %}disabled{% endif %}
@@ -103,7 +104,6 @@
                                 type="number"
                                 name="party_size"
                                 min="1"
-                                max="{% if selected_facility.capacity %}{{ selected_facility.capacity }}{% endif %}"
                                 value="{{ form_data.party_size|default:'1' }}"
                                 class="input input-bordered w-full {% if errors.party_size %}input-error{% endif %}"
                                 data-party-size-input

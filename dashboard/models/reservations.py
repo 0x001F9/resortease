@@ -153,6 +153,7 @@ class Calendar(models.Model):
         choices=Status.choices,
         default=Status.CONFIRMED,
     )
+    notes = models.TextField(blank=True)
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)

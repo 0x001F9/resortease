@@ -107,9 +107,9 @@ class ReservationEditForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         facility = self.instance.facility
         if facility is not None and facility.capacity > 0:
-            self.fields["party_size"].widget.attrs["max"] = facility.capacity
             self.fields["party_size"].help_text = (
-                f"Maximum capacity: {facility.capacity} guests."
+                f"Facility capacity: {facility.capacity} guests. "
+                "Staff may record larger parties."
             )
         else:
             self.fields["party_size"].help_text = (
@@ -162,14 +162,6 @@ class ReservationEditForm(forms.ModelForm):
         party_size = self.cleaned_data.get("party_size")
         if party_size is None:
             return self.instance.party_size
-        if (
-            self.instance.facility is not None
-            and not self.instance.facility.has_capacity_for(party_size)
-        ):
-            raise forms.ValidationError(
-                "Party size cannot exceed the facility capacity "
-                f"of {self.instance.facility.capacity} guests."
-            )
         return party_size
 
     def clean(self):
@@ -180,6 +172,11 @@ class ReservationEditForm(forms.ModelForm):
 
         if starts_at is None or ends_at is None:
             return cleaned_data
+        if timezone.localtime(starts_at).date() < timezone.localdate():
+            self.add_error(
+                "starts_at",
+                "Reservations cannot be moved to a past date.",
+            )
         if ends_at <= starts_at:
             self.add_error("ends_at", "End time must be after start time.")
             return cleaned_data

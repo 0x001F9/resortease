@@ -99,6 +99,12 @@
                             <dt class="text-sm text-base-content/60">Special requests</dt>
                             <dd class="whitespace-pre-line">{% if reservation.special_requests %}{{ reservation.special_requests }}{% else %}<span class="text-base-content/50">None</span>{% endif %}</dd>
                         </div>
+                        {% if calendar_entry.notes %}
+                            <div class="sm:col-span-2">
+                                <dt class="text-sm text-base-content/60">Calendar notes</dt>
+                                <dd class="whitespace-pre-line">{{ calendar_entry.notes }}</dd>
+                            </div>
+                        {% endif %}
                     </dl>
                 </section>
 

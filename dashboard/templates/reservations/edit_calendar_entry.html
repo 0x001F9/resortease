@@ -40,7 +40,7 @@
                         <span class="label">
                             <span class="label-text font-medium">Facility <span class="text-error">*</span></span>
                         </span>
-                        <select name="facility" data-capacity-select class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}" required>
+                        <select name="facility" data-capacity-select data-capacity-advisory class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}" required>
                             {% for facility in facilities %}
                                 <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>
                                     {{ facility.name }}

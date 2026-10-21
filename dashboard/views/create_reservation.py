@@ -173,14 +173,6 @@ class CreateReservationView(View):
         except ValueError:
             party_size = None
             errors["party_size"] = "Enter a party size from 1 to 2,147,483,647."
-        if (
-            facility is not None
-            and party_size is not None
-            and not facility.has_capacity_for(party_size)
-        ):
-            errors["party_size"] = (
-                f"This facility can accommodate up to {facility.capacity} guests."
-            )
 
         starts_at = parse_datetime(starts_at_value)
         if starts_at is None:

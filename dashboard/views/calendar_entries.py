@@ -413,6 +413,13 @@ class EditCalendarEntryView(View):
             ends_at = timezone.make_aware(ends_at)
         if starts_at is not None and ends_at is not None and ends_at <= starts_at:
             errors["ends_at"] = "The end date and time must be after the start."
+        if (
+            starts_at is not None
+            and timezone.localtime(starts_at).date() < timezone.localdate()
+        ):
+            errors["starts_at"] = (
+                "Calendar entries cannot be moved to a past date."
+            )
 
         reservation = entry.reservation if entry.reservation_id else None
         guest = None
@@ -434,15 +441,6 @@ class EditCalendarEntryView(View):
             except ValueError:
                 errors["party_size"] = (
                     "Enter a party size from 1 to 2,147,483,647."
-                )
-            if (
-                facility is not None
-                and "party_size" not in errors
-                and not facility.has_capacity_for(party_size)
-            ):
-                errors["party_size"] = (
-                    f"This facility can accommodate up to "
-                    f"{facility.capacity} guests."
                 )
             special_requests = request.POST.get(
                 "special_requests", ""
