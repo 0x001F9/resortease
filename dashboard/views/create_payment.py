@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import Sum
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -11,7 +12,7 @@ from django.views import View
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.forms import PaymentForm
-from dashboard.models import Payment, Reservation
+from dashboard.models import Calendar, Payment, Reservation
 
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
@@ -23,12 +24,15 @@ class CreatePaymentView(View):
         reservations = Reservation.objects.prefetch_related("payments")
         if lock:
             reservations = reservations.select_for_update()
-        return get_object_or_404(
+        reservation = get_object_or_404(
             reservations,
             pk=reservation_id,
             facility__branch=request.branch,
             status=Reservation.Status.CONFIRMED,
         )
+        if reservation.current_status != Calendar.Status.CONFIRMED:
+            raise Http404
+        return reservation
 
     def get_payment_context(self, reservation, form):
         paid_total = (

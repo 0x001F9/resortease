@@ -232,13 +232,15 @@ def public_reservation_detail(request, reservation_id):
         {
             "reservation": reservation,
             "can_cancel": (
-                reservation.status == Reservation.Status.CONFIRMED
+                reservation.current_status == Calendar.Status.CONFIRMED
                 and reservation.ends_at > timezone.now()
                 and reservation.facility_id is not None
             ),
             "can_edit": (
                 reservation.status
                 in {Reservation.Status.PENDING, Reservation.Status.CONFIRMED}
+                and reservation.current_status
+                not in {Calendar.Status.CANCELLED, Calendar.Status.COMPLETED}
                 and reservation.starts_at > timezone.now()
             ),
             "calendar_notes": calendar_entry.notes if calendar_entry else "",
@@ -267,6 +269,14 @@ def edit_public_reservation(request, reservation_id):
             ),
         )
         if reservation.starts_at <= timezone.now():
+            return redirect(
+                "public-reservation-detail",
+                reservation_id=reservation.pk,
+            )
+        if reservation.current_status in {
+            Calendar.Status.CANCELLED,
+            Calendar.Status.COMPLETED,
+        }:
             return redirect(
                 "public-reservation-detail",
                 reservation_id=reservation.pk,
@@ -405,9 +415,15 @@ def cancel_public_reservation(request, reservation_id):
             ends_at__gt=timezone.now(),
             facility__isnull=False,
         )
-        reservation.status = Reservation.Status.CANCELLED
-        reservation.save(update_fields=["status", "updated_at"])
         calendar_entry = getattr(reservation, "calendar_entry", None)
+        if (
+            calendar_entry is not None
+            and calendar_entry.status != Calendar.Status.CONFIRMED
+        ):
+            return redirect(
+                "public-reservation-detail",
+                reservation_id=reservation.pk,
+            )
         if calendar_entry is None and reservation.facility is not None:
             calendar_entry = Calendar.objects.create(
                 reservation=reservation,

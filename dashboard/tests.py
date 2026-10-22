@@ -265,6 +265,7 @@ class CalendarEntryViewTests(TestCase):
                 time(hour=9),
             )
         )
+        reservations_by_status = {}
         for index, status in enumerate(
             (Reservation.Status.PENDING, Reservation.Status.CONFIRMED)
         ):
@@ -277,13 +278,38 @@ class CalendarEntryViewTests(TestCase):
                 first_name="Status",
                 last_name="Guest",
             )
-            Reservation.objects.create(
+            reservations_by_status[status] = Reservation.objects.create(
                 guest=guest,
                 facility=self.facility,
                 starts_at=starts_at,
                 ends_at=starts_at + timedelta(hours=1),
                 status=status,
             )
+
+        Calendar.objects.create(
+            reservation=reservations_by_status[Reservation.Status.CONFIRMED],
+            facility=self.facility,
+            starts_at=starts_at,
+            ends_at=starts_at + timedelta(hours=1),
+            status=Calendar.Status.CANCELLED,
+        )
+
+        overdue_guest = User.object.create(
+            username="overdue_status_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234589",
+            email="overdue_status_guest@example.com",
+            first_name="Overdue",
+            last_name="Guest",
+        )
+        overdue_reservation = Reservation.objects.create(
+            guest=overdue_guest,
+            facility=self.facility,
+            starts_at=timezone.now() - timedelta(hours=2),
+            ends_at=timezone.now() - timedelta(hours=1),
+            status=Reservation.Status.PENDING,
+        )
 
         url = reverse("reservations", kwargs={"branch": self.branch.slug})
         response = self.client.get(url)
@@ -302,6 +328,11 @@ class CalendarEntryViewTests(TestCase):
             [Reservation.Status.PENDING],
         )
         self.assertNotContains(response, "All statuses")
+        overdue_reservation.refresh_from_db()
+        self.assertEqual(
+            overdue_reservation.status,
+            Reservation.Status.DECLINED,
+        )
 
         confirmed_response = self.client.get(
             url,
@@ -317,7 +348,15 @@ class CalendarEntryViewTests(TestCase):
                     "status", flat=True
                 )
             ),
-            [Reservation.Status.CONFIRMED],
+            [],
+        )
+        cancelled_response = self.client.get(
+            url,
+            {"status": Calendar.Status.CANCELLED},
+        )
+        self.assertEqual(
+            [reservation.pk for reservation in cancelled_response.context["reservations"]],
+            [reservations_by_status[Reservation.Status.CONFIRMED].pk],
         )
 
     def test_calendar_day_dialog_shows_overlapping_entries(self):
@@ -696,6 +735,22 @@ class CalendarEntryViewTests(TestCase):
             starts_at + timedelta(hours=24),
         )
         new_starts_at = starts_at + timedelta(days=2)
+        conflicting_guest = User.object.create(
+            username="conflicting_pending_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234598",
+            email="conflicting_pending_guest@example.com",
+            first_name="Conflict",
+            last_name="Guest",
+        )
+        conflicting_reservation = Reservation.objects.create(
+            guest=conflicting_guest,
+            facility=self.facility,
+            starts_at=new_starts_at,
+            ends_at=new_starts_at + timedelta(hours=24),
+            status=Reservation.Status.PENDING,
+        )
         reservation.status = Reservation.Status.PENDING
         reservation.raw_amount = Decimal("100.00")
         reservation.save(update_fields=["status", "raw_amount", "updated_at"])
@@ -747,6 +802,11 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
         self.assertEqual(entry.starts_at, new_starts_at)
         self.assertEqual(entry.ends_at, new_starts_at + timedelta(hours=24))
+        conflicting_reservation.refresh_from_db()
+        self.assertEqual(
+            conflicting_reservation.status,
+            Reservation.Status.DECLINED,
+        )
 
     def test_edit_reservation_allows_party_size_above_facility_capacity(self):
         self.facility.capacity = 4
@@ -1730,7 +1790,7 @@ class CalendarEntryViewTests(TestCase):
         reservation.refresh_from_db()
         entry.refresh_from_db()
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(reservation.status, Reservation.Status.CANCELLED)
+        self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
         self.assertEqual(entry.status, Calendar.Status.CANCELLED)
 
         day_response = self.client.get(

@@ -8,6 +8,17 @@ from django.utils import timezone
 
 
 class ReservationManager(models.Manager):
+    def decline_conflicts(self, reservation):
+        return self.filter(
+            facility_id=reservation.facility_id,
+            status=Reservation.Status.PENDING,
+            starts_at__lt=reservation.ends_at,
+            ends_at__gt=reservation.starts_at,
+        ).exclude(pk=reservation.pk).update(
+            status=Reservation.Status.DECLINED,
+            updated_at=timezone.now(),
+        )
+
     def calculate_raw_amount(self, facility, starts_at, ends_at):
         duration = ends_at.astimezone(datetime_timezone.utc) - starts_at.astimezone(
             datetime_timezone.utc
@@ -60,8 +71,7 @@ class Reservation(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
         CONFIRMED = "confirmed", "Confirmed"
-        CANCELLED = "cancelled", "Cancelled"
-        COMPLETED = "completed", "Completed"
+        DECLINED = "declined", "Declined"
 
     guest = models.ForeignKey(
         "account.User",
@@ -120,6 +130,18 @@ class Reservation(models.Model):
         if self.raw_amount is None:
             return None
         return max(self.raw_amount - self.discount, Decimal("0.00"))
+
+    @property
+    def current_status(self):
+        calendar_entry = getattr(self, "calendar_entry", None)
+        return calendar_entry.status if calendar_entry else self.status
+
+    @property
+    def current_status_display(self):
+        calendar_entry = getattr(self, "calendar_entry", None)
+        if calendar_entry:
+            return calendar_entry.get_status_display()
+        return self.get_status_display()
 
 
 class Calendar(models.Model):

@@ -22,8 +22,8 @@
                             </p>
                         {% endif %}
                     </div>
-                    <span class="badge badge-lg {% if reservation.status == 'confirmed' %}badge-success{% elif reservation.status == 'cancelled' %}badge-error{% elif reservation.status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">
-                        {{ reservation.get_status_display }}
+                    <span class="badge badge-lg {% if reservation.current_status == 'confirmed' %}badge-success{% elif reservation.current_status == 'declined' or reservation.current_status == 'cancelled' %}badge-error{% elif reservation.current_status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">
+                        {{ reservation.current_status_display }}
                     </span>
                 </header>
 
@@ -143,7 +143,7 @@
                         </dl>
                     </section>
 
-                    {% if reservation.status == 'confirmed' %}
+                    {% if reservation.current_status == 'confirmed' %}
                         <div class="mt-4">
                             <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                                 <div>

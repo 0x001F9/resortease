@@ -345,7 +345,11 @@ class EditCalendarEntryView(View):
             "facilities": Facility.objects.filter(
                 branch=request.branch
             ).order_by("name"),
-            "status_choices": Reservation.Status.choices,
+            "status_choices": [
+                choice
+                for choice in Calendar.Status.choices
+                if choice[0] != Calendar.Status.UNAVAILABLE
+            ],
             "form_data": form_data or {
                 "facility": str(entry.facility_id),
                 "starts_at": timezone.localtime(entry.starts_at).strftime(
@@ -355,7 +359,7 @@ class EditCalendarEntryView(View):
                     "%Y-%m-%dT%H:%M"
                 ),
                 "guest": str(reservation.guest_id) if reservation else "",
-                "status": reservation.status if reservation else "",
+                "status": entry.status if reservation else "",
                 "party_size": reservation.party_size if reservation else 1,
                 "special_requests": (
                     reservation.special_requests if reservation else ""
@@ -429,8 +433,13 @@ class EditCalendarEntryView(View):
         if reservation:
             guest = reservation.guest
             status = request.POST.get("status", "")
-            if status not in Reservation.Status.values:
-                errors["status"] = "Select a valid reservation status."
+            valid_statuses = {
+                Calendar.Status.CONFIRMED,
+                Calendar.Status.CANCELLED,
+                Calendar.Status.COMPLETED,
+            }
+            if status not in valid_statuses:
+                errors["status"] = "Select a valid booking status."
             party_size_value = request.POST.get(
                 "party_size", str(reservation.party_size)
             )
@@ -478,8 +487,8 @@ class EditCalendarEntryView(View):
                     raw_amount is not None
                     and status
                     in {
-                        Reservation.Status.CONFIRMED,
-                        Reservation.Status.COMPLETED,
+                        Calendar.Status.CONFIRMED,
+                        Calendar.Status.COMPLETED,
                     }
                 )
             )
@@ -511,19 +520,29 @@ class EditCalendarEntryView(View):
                 reservation.starts_at = starts_at
                 reservation.ends_at = ends_at
                 reservation.raw_amount = raw_amount
-                reservation.status = status
+                reservation.status = Reservation.Status.CONFIRMED
                 reservation.party_size = party_size
                 reservation.special_requests = special_requests
-                reservation.save()
-                if status == Reservation.Status.CANCELLED:
-                    entry.status = Calendar.Status.CANCELLED
-                elif status == Reservation.Status.COMPLETED:
-                    entry.status = Calendar.Status.COMPLETED
-                elif status == Reservation.Status.CONFIRMED:
-                    entry.status = Calendar.Status.CONFIRMED
-                else:
-                    entry.status = Calendar.Status.CANCELLED
+                reservation.save(
+                    update_fields=[
+                        "guest",
+                        "facility",
+                        "starts_at",
+                        "ends_at",
+                        "raw_amount",
+                        "status",
+                        "party_size",
+                        "special_requests",
+                        "updated_at",
+                    ]
+                )
+                entry.status = status
             entry.save()
+            if (
+                reservation is not None
+                and status == Calendar.Status.CONFIRMED
+            ):
+                Reservation.objects.decline_conflicts(reservation)
 
         reservations_url = reverse(
             "reservations",
@@ -545,9 +564,6 @@ class RemoveCalendarEntryView(View):
                 facility__branch=request.branch,
             )
             if entry.reservation_id is not None:
-                reservation = entry.reservation
-                reservation.status = Reservation.Status.CANCELLED
-                reservation.save(update_fields=["status", "updated_at"])
                 entry.status = Calendar.Status.CANCELLED
                 entry.save(update_fields=["status", "updated_at"])
             else:

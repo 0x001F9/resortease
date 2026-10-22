@@ -425,7 +425,7 @@ class PublicReservationFlowTests(TestCase):
         )
         reservation.refresh_from_db()
         calendar_entry.refresh_from_db()
-        self.assertEqual(reservation.status, Reservation.Status.CANCELLED)
+        self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
         self.assertEqual(calendar_entry.status, Calendar.Status.CANCELLED)
         self.assertEqual(
             calendar_entry.notes,

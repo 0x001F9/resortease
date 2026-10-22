@@ -19,7 +19,7 @@
                                 {{ entry.reservation.guest.first_name }} {{ entry.reservation.guest.last_name }}
                             </p>
                             <p class="text-sm text-base-content/70">
-                                {{ entry.reservation.get_status_display }} reservation
+                                {{ entry.get_status_display }} booking
                             </p>
                         {% endif %}
                         <p class="mt-1 text-sm">{{ entry.facility.name }}</p>

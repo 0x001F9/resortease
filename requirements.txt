@@ -8,4 +8,4 @@ pillow
 langchain
 langchain-google-genai
 langchain-core
-langchain-text-splitter
+langchain-text-splitters

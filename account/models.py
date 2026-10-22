@@ -109,6 +109,7 @@ class UserManager(BaseUserManager):
         extra.setdefault("is_superuser", True)
         extra.setdefault("is_active", True)
         extra.setdefault("role", User.Role.Employee)
+        extra.setdefault("email_confirmed_at", timezone.now())
 
         if not extra.get("is_staff"):
             raise ValueError("Superuser must have is_staff=True.")

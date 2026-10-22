@@ -20,7 +20,7 @@
 
             <div class="flex items-center justify-between gap-4 rounded-box border border-base-300 bg-base-200/50 p-4">
                 <span class="font-medium">Status</span>
-                <span class="badge badge-warning">{{ reservation.get_status_display }}</span>
+                <span class="badge {% if reservation.current_status == 'confirmed' %}badge-success{% elif reservation.current_status == 'declined' or reservation.current_status == 'cancelled' %}badge-error{% elif reservation.current_status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">{{ reservation.current_status_display }}</span>
             </div>
 
             <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -63,11 +63,13 @@
             </dl>
 
             <p class="text-sm leading-relaxed text-base-content/70">
-                {% if reservation.status == "pending" %}
+                {% if reservation.current_status == "pending" %}
                     Your reservation request is awaiting confirmation from the resort. You can review it again from your account.
-                {% elif reservation.status == "confirmed" %}
+                {% elif reservation.current_status == "confirmed" %}
                     Your reservation is confirmed. You can update upcoming dates or cancel while it is upcoming or in progress.
-                {% elif reservation.status == "cancelled" %}
+                {% elif reservation.current_status == "declined" %}
+                    Your reservation request was declined.
+                {% elif reservation.current_status == "cancelled" %}
                     This reservation has been cancelled.
                 {% else %}
                     This reservation is complete.

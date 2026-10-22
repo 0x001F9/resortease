@@ -20,6 +20,16 @@ class ReservationsCalendarView(View):
     template_name = "reservations/index.html"
 
     def get(self, request, *args, **kwargs):
+        now = timezone.now()
+        Reservation.objects.filter(
+            facility__branch=request.branch,
+            status=Reservation.Status.PENDING,
+            starts_at__lte=now,
+        ).update(
+            status=Reservation.Status.DECLINED,
+            updated_at=now,
+        )
+
         month_parameter = request.GET.get("month", "")
         try:
             calendar_month = date.fromisoformat(f"{month_parameter}-01")
@@ -40,7 +50,11 @@ class ReservationsCalendarView(View):
                 output_field=CharField(),
             )
         )
-        status_choices = Reservation.Status.choices
+        status_choices = [
+            *Reservation.Status.choices,
+            (Calendar.Status.CANCELLED, Calendar.Status.CANCELLED.label),
+            (Calendar.Status.COMPLETED, Calendar.Status.COMPLETED.label),
+        ]
 
         selected_status = request.GET.get(
             "status",
@@ -49,7 +63,18 @@ class ReservationsCalendarView(View):
         valid_statuses = {value for value, _label in status_choices}
         if selected_status not in valid_statuses:
             selected_status = Reservation.Status.PENDING
-        reservations = reservations.filter(status=selected_status)
+        if selected_status in {
+            Calendar.Status.CANCELLED,
+            Calendar.Status.COMPLETED,
+        }:
+            reservations = reservations.filter(
+                calendar_entry__status=selected_status
+            )
+        else:
+            reservations = reservations.filter(
+                Q(status=selected_status, calendar_entry__isnull=True)
+                | Q(calendar_entry__status=selected_status)
+            )
 
         search_query = request.GET.get("q", "").strip()
         if search_query:

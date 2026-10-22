@@ -106,8 +106,8 @@
                                             </p>
                                         {% endif %}
                                     </div>
-                                    <span class="badge {% if reservation.status == 'confirmed' %}badge-success{% elif reservation.status == 'cancelled' %}badge-error{% elif reservation.status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">
-                                        {{ reservation.get_status_display }}
+                                    <span class="badge {% if reservation.current_status == 'confirmed' %}badge-success{% elif reservation.current_status == 'declined' or reservation.current_status == 'cancelled' %}badge-error{% elif reservation.current_status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">
+                                        {{ reservation.current_status_display }}
                                     </span>
                                 </div>
                             </li>
