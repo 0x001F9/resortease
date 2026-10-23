@@ -7,7 +7,7 @@ from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.decorations.branch_check import check_branch_dashboard
-from dashboard.models import Payment, Reservation
+from dashboard.models import Calendar, Payment, Reservation
 from dashboard.views.calendar_entries import has_calendar_conflict
 
 
@@ -27,17 +27,30 @@ class ReservationDetailView(View):
             facility__branch=request.branch,
         )
         payments = reservation.payments.all()
+        pending_payments = [
+            payment
+            for payment in payments
+            if payment.status == Payment.Status.PENDING
+        ]
         paid_total = (
             payments.filter(
                 status=Payment.Status.SUCCEEDED,
-                currency="PHP",
+            ).aggregate(total=Sum("amount"))["total"]
+            or Decimal("0.00")
+        )
+        pending_total = (
+            payments.filter(
+                status=Payment.Status.PENDING,
             ).aggregate(total=Sum("amount"))["total"]
             or Decimal("0.00")
         )
         total_amount = reservation.total_amount
+        show_payment_info = (
+            reservation.current_status == Calendar.Status.CONFIRMED
+        )
         remaining_balance = (
-            max(total_amount - paid_total, Decimal("0.00"))
-            if total_amount is not None
+            max(total_amount - paid_total + pending_total, Decimal("0.00"))
+            if total_amount is not None and show_payment_info
             else None
         )
         calendar_entry = getattr(reservation, "calendar_entry", None)
@@ -60,10 +73,14 @@ class ReservationDetailView(View):
                 "calendar_entry": calendar_entry,
                 "availability_conflict": availability_conflict,
                 "payments": payments,
+                "pending_payments": pending_payments,
+                "show_payment_info": show_payment_info,
+                "total_amount": total_amount,
                 "paid_total": paid_total,
+                "pending_total": pending_total,
                 "remaining_balance": remaining_balance,
                 "is_fully_paid": (
-                    total_amount is not None and paid_total >= total_amount
+                    total_amount is not None and remaining_balance == 0
                 ),
                 "hide_aside": True,
             },

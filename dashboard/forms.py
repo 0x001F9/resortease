@@ -2,7 +2,6 @@ from decimal import Decimal
 
 from django import forms
 from django.contrib.auth import get_user_model
-from django.db.models import Sum
 from django.utils import timezone
 
 from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
@@ -17,13 +16,51 @@ from dashboard.models.inventory import InventoryTransaction
 
 
 class PaymentForm(forms.ModelForm):
-    def __init__(self, *args, reservation, **kwargs):
-        self.reservation = reservation
+    name = forms.CharField(
+        max_length=100,
+        widget=forms.TextInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "list": "payment-name-options",
+            }
+        ),
+    )
+    status = forms.ChoiceField(
+        choices=(
+            (Payment.Status.PENDING, Payment.Status.PENDING.label),
+            (Payment.Status.SUCCEEDED, Payment.Status.SUCCEEDED.label),
+            (Payment.Status.REFUNDED, Payment.Status.REFUNDED.label),
+        ),
+        initial=Payment.Status.PENDING,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+
+    def __init__(self, *args, pending_only=False, **kwargs):
         super().__init__(*args, **kwargs)
+        if pending_only:
+            self.fields["status"].choices = (
+                (Payment.Status.PENDING, Payment.Status.PENDING.label),
+            )
+            self.initial["status"] = Payment.Status.PENDING
+        selected_status = (
+            self.data.get(self.add_prefix("status"))
+            if self.is_bound
+            else self.initial.get("status", Payment.Status.PENDING)
+        )
+        self.fields["method"].required = (
+            selected_status == Payment.Status.SUCCEEDED
+        )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("status") != Payment.Status.SUCCEEDED:
+            cleaned_data["method"] = ""
+            cleaned_data["transaction_reference"] = None
+        return cleaned_data
 
     class Meta:
         model = Payment
-        fields = ("amount", "type", "method", "transaction_reference")
+        fields = ("name", "amount", "status", "method", "transaction_reference")
         widgets = {
             "amount": forms.NumberInput(
                 attrs={
@@ -32,7 +69,6 @@ class PaymentForm(forms.ModelForm):
                     "step": "0.01",
                 }
             ),
-            "type": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "method": forms.TextInput(
                 attrs={"class": "input input-bordered w-full"}
             ),
@@ -41,6 +77,8 @@ class PaymentForm(forms.ModelForm):
             ),
         }
         labels = {
+            "name": "Payment name",
+            "amount": "Amount (PHP)",
             "method": "Payment method",
             "transaction_reference": "Transaction reference (optional)",
         }
@@ -49,22 +87,6 @@ class PaymentForm(forms.ModelForm):
         amount = self.cleaned_data["amount"]
         if amount <= 0:
             raise forms.ValidationError("Enter an amount greater than zero.")
-
-        paid_total = (
-            self.reservation.payments.filter(
-                status=Payment.Status.SUCCEEDED,
-                currency="PHP",
-            ).aggregate(total=Sum("amount"))["total"]
-            or Decimal("0.00")
-        )
-        remaining = max(
-            self.reservation.total_amount - paid_total,
-            Decimal("0.00"),
-        )
-        if amount > remaining:
-            raise forms.ValidationError(
-                f"Amount cannot exceed the remaining balance of PHP {remaining:.2f}."
-            )
         return amount
 
 

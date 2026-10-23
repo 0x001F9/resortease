@@ -642,9 +642,8 @@ class CalendarEntryViewTests(TestCase):
         reservation.save(update_fields=["raw_amount", "updated_at"])
         Payment.objects.create(
             reservation_id=reservation,
-            type=Payment.Type.DOWNPAYMENT,
+            name="Down payment",
             amount=Decimal("50.00"),
-            currency="PHP",
             method="cash",
             status=Payment.Status.SUCCEEDED,
             transaction_reference="receipt-123",
@@ -670,9 +669,9 @@ class CalendarEntryViewTests(TestCase):
         self.assertContains(response, "Price summary")
         self.assertContains(response, "Raw amount")
         self.assertNotContains(response, "Invoice reference")
-        self.assertContains(response, "₱120.00")
-        self.assertContains(response, "−₱15.00")
-        self.assertContains(response, "₱105.00")
+        self.assertContains(response, "PHP 120.00")
+        self.assertContains(response, "−PHP 15.00")
+        self.assertContains(response, "PHP 105.00")
         self.assertContains(response, "Total paid: PHP 50.00")
         self.assertContains(response, "Balance: PHP 55.00")
         self.assertContains(response, "Down payment")
@@ -687,17 +686,18 @@ class CalendarEntryViewTests(TestCase):
                 time(hour=8),
             )
         )
-        reservation, _entry = self.create_calendar_reservation(
+        reservation, entry = self.create_calendar_reservation(
             starts_at,
             starts_at + timedelta(hours=24),
         )
-        reservation.status = Reservation.Status.PENDING
+        entry.status = Calendar.Status.CANCELLED
+        entry.save(update_fields=["status", "updated_at"])
         reservation.raw_amount = Decimal("100.00")
-        reservation.save(update_fields=["status", "raw_amount", "updated_at"])
+        reservation.save(update_fields=["raw_amount", "updated_at"])
         Payment.objects.create(
             reservation_id=reservation,
+            name="Deposit",
             amount=Decimal("20.00"),
-            currency="PHP",
             method="cash",
             status=Payment.Status.SUCCEEDED,
             transaction_reference="pending-reservation-receipt",
@@ -718,7 +718,129 @@ class CalendarEntryViewTests(TestCase):
         self.assertNotContains(response, "Total paid")
         self.assertNotContains(response, "pending-reservation-receipt")
         self.assertNotContains(response, "Add payment")
-        self.assertContains(response, "Edit reservation")
+        self.assertNotContains(response, "Edit reservation")
+
+    def test_pending_reservation_detail_shows_pending_payment_items(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        guest = User.object.create(
+            username="pending_payment_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234580",
+            email="pending-payment-guest@example.com",
+            first_name="Pending",
+            last_name="Guest",
+        )
+        reservation = Reservation.objects.create(
+            guest=guest,
+            facility=self.facility,
+            starts_at=starts_at,
+            ends_at=starts_at + timedelta(hours=24),
+            status=Reservation.Status.PENDING,
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Pending deposit",
+            amount=Decimal("35.00"),
+            method="",
+            status=Payment.Status.PENDING,
+        )
+
+        response = self.client.get(
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Pending deposit")
+        self.assertContains(response, "PHP 35.00")
+        self.assertContains(response, "Add payment")
+        self.assertNotContains(response, "Payment activity")
+        self.assertNotContains(response, "Total paid")
+
+    def test_add_payment_to_pending_reservation_is_pending_only(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        guest = User.object.create(
+            username="pending_payment_form_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234581",
+            email="pending-payment-form-guest@example.com",
+            first_name="Payment",
+            last_name="Guest",
+        )
+        reservation = Reservation.objects.create(
+            guest=guest,
+            facility=self.facility,
+            starts_at=starts_at,
+            ends_at=starts_at + timedelta(hours=24),
+            status=Reservation.Status.PENDING,
+        )
+        payment_url = reverse(
+            "create-payment",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        get_response = self.client.get(payment_url)
+        self.assertEqual(get_response.status_code, 200)
+        self.assertEqual(
+            list(get_response.context["form"].fields["status"].choices),
+            [(Payment.Status.PENDING, Payment.Status.PENDING.label)],
+        )
+
+        rejected_response = self.client.post(
+            payment_url,
+            {
+                "amount": "35.00",
+                "name": "Down payment",
+                "status": Payment.Status.SUCCEEDED,
+                "method": "cash",
+            },
+        )
+        self.assertEqual(rejected_response.status_code, 200)
+        self.assertFalse(Payment.objects.filter(reservation_id=reservation).exists())
+
+        response = self.client.post(
+            payment_url,
+            {
+                "amount": "35.00",
+                "name": "Down payment",
+                "status": Payment.Status.PENDING,
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+        )
+        payment = Payment.objects.get(reservation_id=reservation)
+        self.assertEqual(payment.status, Payment.Status.PENDING)
+        self.assertEqual(payment.method, "")
+        self.assertIsNone(payment.paid_at)
 
     def test_edit_pending_reservation_updates_requests_discount_and_status(self):
         self.facility.rate_24hours = 100
@@ -1067,7 +1189,8 @@ class CalendarEntryViewTests(TestCase):
             ),
             {
                 "amount": "35.00",
-                "type": Payment.Type.DOWNPAYMENT,
+                "name": "Down payment",
+                "status": Payment.Status.SUCCEEDED,
                 "method": "cash",
                 "transaction_reference": "cashier-receipt-35",
             },
@@ -1085,7 +1208,7 @@ class CalendarEntryViewTests(TestCase):
         )
         payment = Payment.objects.get(reservation_id=reservation)
         self.assertEqual(payment.amount, Decimal("35.00"))
-        self.assertEqual(payment.currency, "PHP")
+        self.assertEqual(payment.name, "Down payment")
         self.assertEqual(payment.status, Payment.Status.SUCCEEDED)
         self.assertEqual(payment.cashier, self.user)
         self.assertIsNotNone(payment.paid_at)
@@ -1106,9 +1229,8 @@ class CalendarEntryViewTests(TestCase):
 
         Payment.objects.create(
             reservation_id=reservation,
-            type=Payment.Type.BALANCE,
+            name="Balance payment",
             amount=Decimal("65.00"),
-            currency="PHP",
             method="cash",
             status=Payment.Status.SUCCEEDED,
         )
@@ -1124,9 +1246,9 @@ class CalendarEntryViewTests(TestCase):
         self.assertContains(fully_paid_response, "Total paid: PHP 100.00")
         self.assertContains(fully_paid_response, "Balance: PHP 0.00")
         self.assertContains(fully_paid_response, "Paid in full")
-        self.assertNotContains(fully_paid_response, "Add payment")
+        self.assertContains(fully_paid_response, "Add payment")
 
-    def test_add_payment_rejects_amount_above_remaining_balance(self):
+    def test_add_payment_accepts_amount_above_remaining_balance(self):
         starts_at = timezone.make_aware(
             datetime.combine(
                 timezone.localdate() + timedelta(days=1),
@@ -1151,14 +1273,131 @@ class CalendarEntryViewTests(TestCase):
             url,
             {
                 "amount": "100.01",
-                "type": Payment.Type.FULL_PAYMENT,
-                "method": "cash",
+                "name": "Full payment",
+                "status": Payment.Status.PENDING,
             },
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Amount cannot exceed the remaining balance")
-        self.assertFalse(Payment.objects.filter(reservation_id=reservation).exists())
+        self.assertEqual(response.status_code, 302)
+        payment = Payment.objects.get(reservation_id=reservation)
+        self.assertEqual(payment.amount, Decimal("100.01"))
+        self.assertEqual(payment.status, Payment.Status.PENDING)
+        self.assertEqual(payment.method, "")
+        self.assertIsNone(payment.transaction_reference)
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Booking deposit",
+            amount=Decimal("12.34"),
+            method="",
+            status=Payment.Status.PENDING,
+        )
+
+        detail_response = self.client.get(
+            reverse(
+                "reservation-detail",
+                kwargs={"branch": self.branch.slug, "reservation_id": reservation.pk},
+            )
+        )
+        self.assertNotContains(detail_response, "Pending payments")
+        self.assertContains(detail_response, "PHP 212.35")
+        self.assertContains(detail_response, "PHP 100.01")
+        self.assertContains(detail_response, "Full payment")
+        self.assertContains(detail_response, "Booking deposit")
+        self.assertContains(detail_response, "PHP 12.34")
+
+    def test_pending_payment_status_changes_and_other_statuses_are_read_only(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        pending = Payment.objects.create(
+            reservation_id=reservation,
+            name="Deposit",
+            amount=Decimal("20.00"),
+            method="cash",
+            status=Payment.Status.PENDING,
+        )
+        succeeded = Payment.objects.create(
+            reservation_id=reservation,
+            name="Full payment",
+            amount=Decimal("30.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+        )
+        detail_url = reverse(
+            "reservation-detail",
+            kwargs={"branch": self.branch.slug, "reservation_id": reservation.pk},
+        )
+        response = self.client.get(detail_url)
+        self.assertContains(response, "Update payment status")
+        self.assertContains(response, "Succeeded")
+        self.assertContains(response, "Cancelled")
+
+        status_url = reverse(
+            "update-payment-status",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+                "payment_id": pending.pk,
+            },
+        )
+        missing_method_response = self.client.post(
+            status_url,
+            {"status": Payment.Status.SUCCEEDED},
+        )
+        self.assertEqual(missing_method_response.status_code, 302)
+        pending.refresh_from_db()
+        self.assertEqual(pending.status, Payment.Status.PENDING)
+
+        response = self.client.post(
+            status_url,
+            {
+                "status": Payment.Status.SUCCEEDED,
+                "method": "bank transfer",
+            },
+        )
+        pending.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(pending.status, Payment.Status.SUCCEEDED)
+        self.assertEqual(pending.method, "bank transfer")
+        self.assertIsNone(pending.transaction_reference)
+        self.assertIsNotNone(pending.paid_at)
+
+        succeeded_status_url = reverse(
+            "update-payment-status",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+                "payment_id": succeeded.pk,
+            },
+        )
+        self.client.post(
+            succeeded_status_url,
+            {"status": Payment.Status.CANCELLED},
+        )
+        succeeded.refresh_from_db()
+        self.assertEqual(succeeded.status, Payment.Status.SUCCEEDED)
+
+        response = self.client.post(
+            reverse(
+                "update-payment-status",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                    "payment_id": succeeded.pk,
+                },
+            ),
+            {"status": Payment.Status.CANCELLED},
+        )
+        succeeded.refresh_from_db()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(succeeded.status, Payment.Status.SUCCEEDED)
 
     def test_reservation_detail_page_does_not_expose_other_branch_reservations(self):
         other_branch = Branch.objects.create(
@@ -1776,6 +2015,20 @@ class CalendarEntryViewTests(TestCase):
             starts_at,
             starts_at + timedelta(hours=1),
         )
+        pending_payment = Payment.objects.create(
+            reservation_id=reservation,
+            name="Deposit",
+            amount=Decimal("20.00"),
+            method="cash",
+            status=Payment.Status.PENDING,
+        )
+        succeeded_payment = Payment.objects.create(
+            reservation_id=reservation,
+            name="Down payment",
+            amount=Decimal("30.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+        )
 
         response = self.client.post(
             reverse(
@@ -1792,6 +2045,10 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
         self.assertEqual(entry.status, Calendar.Status.CANCELLED)
+        pending_payment.refresh_from_db()
+        succeeded_payment.refresh_from_db()
+        self.assertEqual(pending_payment.status, Payment.Status.CANCELLED)
+        self.assertEqual(succeeded_payment.status, Payment.Status.SUCCEEDED)
 
         day_response = self.client.get(
             reverse(

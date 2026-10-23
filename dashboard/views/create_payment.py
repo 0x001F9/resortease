@@ -28,9 +28,15 @@ class CreatePaymentView(View):
             reservations,
             pk=reservation_id,
             facility__branch=request.branch,
-            status=Reservation.Status.CONFIRMED,
+            status__in=(
+                Reservation.Status.PENDING,
+                Reservation.Status.CONFIRMED,
+            ),
         )
-        if reservation.current_status != Calendar.Status.CONFIRMED:
+        if reservation.current_status not in {
+            Reservation.Status.PENDING,
+            Calendar.Status.CONFIRMED,
+        }:
             raise Http404
         return reservation
 
@@ -38,18 +44,29 @@ class CreatePaymentView(View):
         paid_total = (
             reservation.payments.filter(
                 status=Payment.Status.SUCCEEDED,
-                currency="PHP",
             ).aggregate(total=Sum("amount"))["total"]
             or Decimal("0.00")
+        )
+        pending_total = (
+            reservation.payments.filter(
+                status=Payment.Status.PENDING,
+            ).aggregate(total=Sum("amount"))["total"]
+            or Decimal("0.00")
+        )
+        remaining_balance = (
+            max(
+                reservation.total_amount - paid_total + pending_total,
+                Decimal("0.00"),
+            )
+            if reservation.total_amount is not None
+            else None
         )
         return {
             "reservation": reservation,
             "form": form,
             "paid_total": paid_total,
-            "remaining_balance": max(
-                reservation.total_amount - paid_total,
-                Decimal("0.00"),
-            ),
+            "pending_total": pending_total,
+            "remaining_balance": remaining_balance,
             "hide_aside": True,
         }
 
@@ -57,21 +74,12 @@ class CreatePaymentView(View):
         reservation = self.get_reservation(request, reservation_id)
         context = self.get_payment_context(
             reservation,
-            PaymentForm(reservation=reservation),
-        )
-        if (
-            reservation.total_amount is None
-            or context["remaining_balance"] <= 0
-        ):
-            return redirect(
-                reverse(
-                    "reservation-detail",
-                    kwargs={
-                        "branch": request.branch.slug,
-                        "reservation_id": reservation.pk,
-                    },
+            PaymentForm(
+                pending_only=(
+                    reservation.current_status == Reservation.Status.PENDING
                 )
-            )
+            ),
+        )
         return render(
             request,
             self.template_name,
@@ -87,29 +95,26 @@ class CreatePaymentView(View):
             )
             context = self.get_payment_context(
                 reservation,
-                PaymentForm(reservation=reservation),
-            )
-            if (
-                reservation.total_amount is None
-                or context["remaining_balance"] <= 0
-            ):
-                return redirect(
-                    reverse(
-                        "reservation-detail",
-                        kwargs={
-                            "branch": request.branch.slug,
-                            "reservation_id": reservation.pk,
-                        },
+                PaymentForm(
+                    pending_only=(
+                        reservation.current_status == Reservation.Status.PENDING
                     )
-                )
-
-            form = PaymentForm(request.POST, reservation=reservation)
+                ),
+            )
+            form = PaymentForm(
+                request.POST,
+                pending_only=(
+                    reservation.current_status == Reservation.Status.PENDING
+                ),
+            )
             if form.is_valid():
                 payment = form.save(commit=False)
                 payment.reservation_id = reservation
-                payment.currency = "PHP"
-                payment.status = Payment.Status.SUCCEEDED
-                payment.paid_at = timezone.now()
+                payment.paid_at = (
+                    timezone.now()
+                    if payment.status == Payment.Status.SUCCEEDED
+                    else None
+                )
                 payment.cashier = request.user
                 payment.save()
                 return redirect(
@@ -126,4 +131,67 @@ class CreatePaymentView(View):
             request,
             self.template_name,
             self.get_payment_context(reservation, form),
+        )
+
+
+@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(check_branch_dashboard, name="dispatch")
+class UpdatePendingPaymentStatusView(View):
+    def post(self, request, reservation_id, payment_id, *args, **kwargs):
+        with transaction.atomic():
+            payment = get_object_or_404(
+                Payment.objects.select_for_update(),
+                pk=payment_id,
+                reservation_id_id=reservation_id,
+                reservation_id__facility__branch=request.branch,
+                reservation_id__status=Reservation.Status.CONFIRMED,
+            )
+            if (
+                payment.status == Payment.Status.PENDING
+                and payment.reservation_id.current_status
+                == Calendar.Status.CONFIRMED
+            ):
+                selected_status = request.POST.get("status", "")
+                if selected_status in {
+                    Payment.Status.SUCCEEDED,
+                    Payment.Status.CANCELLED,
+                }:
+                    if selected_status == Payment.Status.SUCCEEDED:
+                        method = request.POST.get("method", "").strip()
+                        reference = request.POST.get(
+                            "transaction_reference", ""
+                        ).strip()
+                        if (
+                            method
+                            and len(method) <= 50
+                            and len(reference) <= 255
+                        ):
+                            payment.method = method
+                            payment.transaction_reference = reference or None
+                            payment.status = selected_status
+                            payment.paid_at = timezone.now()
+                            payment.save(
+                                update_fields=[
+                                    "method",
+                                    "transaction_reference",
+                                    "status",
+                                    "paid_at",
+                                    "updated_at",
+                                ]
+                            )
+                    else:
+                        payment.status = selected_status
+                        payment.paid_at = None
+                        payment.save(
+                            update_fields=["status", "paid_at", "updated_at"]
+                        )
+
+        return redirect(
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": request.branch.slug,
+                    "reservation_id": reservation_id,
+                },
+            )
         )

@@ -24,7 +24,7 @@
                 <dl class="grid gap-3 rounded-box border border-base-300 p-4 sm:grid-cols-3">
                     <div>
                         <dt class="text-sm text-base-content/60">Reservation total</dt>
-                        <dd class="font-semibold">PHP {{ reservation.total_amount|floatformat:2 }}</dd>
+                        <dd class="font-semibold">{% if reservation.total_amount is not None %}PHP {{ reservation.total_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
                     </div>
                     <div>
                         <dt class="text-sm text-base-content/60">Paid so far</dt>
@@ -32,18 +32,31 @@
                     </div>
                     <div>
                         <dt class="text-sm text-base-content/60">Remaining balance</dt>
-                        <dd class="font-semibold">PHP {{ remaining_balance|floatformat:2 }}</dd>
+                        <dd class="font-semibold">{% if remaining_balance is not None %}PHP {{ remaining_balance|floatformat:2 }}{% else %}—{% endif %}</dd>
                     </div>
                 </dl>
 
                 <form method="post" class="space-y-4">
                     {% csrf_token %}
                     {% for field in form %}
-                        <div>
+                        <div
+                            {% if field.name == "method" or field.name == "transaction_reference" %}
+                                data-payment-detail-field hidden
+                            {% endif %}
+                        >
                             <label class="label" for="{{ field.id_for_label }}">
                                 <span class="label-text font-medium">{{ field.label }}</span>
                             </label>
                             {{ field }}
+                            {% if field.name == "name" %}
+                                <datalist id="payment-name-options">
+                                    <option value="Full payment"></option>
+                                    <option value="Down payment"></option>
+                                    <option value="Balance payment"></option>
+                                    <option value="Deposit"></option>
+                                    <option value="Refund"></option>
+                                </datalist>
+                            {% endif %}
                             {% for error in field.errors %}
                                 <p class="mt-1 text-sm text-error">{{ error }}</p>
                             {% endfor %}
@@ -55,9 +68,7 @@
                         </div>
                     {% endif %}
 
-                    <p class="text-sm text-base-content/70">
-                        Payment will be recorded as successful in PHP. Cashier: {{ request.user.first_name }} {{ request.user.last_name }}.
-                    </p>
+                    <p class="text-sm text-base-content/70">Cashier: {{ request.user.first_name }} {{ request.user.last_name }}.</p>
                     <div class="flex flex-wrap justify-end gap-2">
                         <a
                             href="{% url 'reservation-detail' request.branch.slug reservation.pk %}"
@@ -70,4 +81,18 @@
         </section>
     </div>
 </main>
+<script>
+    const paymentStatusField = document.getElementById("id_status")
+    const paymentDetailFields = document.querySelectorAll("[data-payment-detail-field]")
+    const updatePaymentDetailFields = () => {
+        const isSucceeded = paymentStatusField.value === "succeeded"
+        paymentDetailFields.forEach((container) => {
+            container.hidden = !isSucceeded
+            const input = container.querySelector("input")
+            if (input) input.required = isSucceeded && input.name === "method"
+        })
+    }
+    paymentStatusField.addEventListener("change", updatePaymentDetailFields)
+    updatePaymentDetailFields()
+</script>
 {% endblock %}

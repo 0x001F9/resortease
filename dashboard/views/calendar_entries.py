@@ -540,6 +540,11 @@ class EditCalendarEntryView(View):
             entry.save()
             if (
                 reservation is not None
+                and status == Calendar.Status.CANCELLED
+            ):
+                Reservation.objects.cancel_pending_payments(reservation)
+            if (
+                reservation is not None
                 and status == Calendar.Status.CONFIRMED
             ):
                 Reservation.objects.decline_conflicts(reservation)
@@ -566,6 +571,7 @@ class RemoveCalendarEntryView(View):
             if entry.reservation_id is not None:
                 entry.status = Calendar.Status.CANCELLED
                 entry.save(update_fields=["status", "updated_at"])
+                Reservation.objects.cancel_pending_payments(entry.reservation)
             else:
                 entry.delete()
 

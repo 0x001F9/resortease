@@ -22,7 +22,10 @@ from dashboard.views.inventory import (
 from dashboard.views.add_inventory_item import AddInventoryItemView
 from dashboard.views.reservations import ReservationsCalendarView
 from dashboard.views.reservation_detail import ReservationDetailView
-from dashboard.views.create_payment import CreatePaymentView
+from dashboard.views.create_payment import (
+    CreatePaymentView,
+    UpdatePendingPaymentStatusView,
+)
 from dashboard.views.edit_reservation import EditReservationView
 from dashboard.views.create_reservation import (
     CreateBookingView,
@@ -113,6 +116,11 @@ urlpatterns = [
         '<str:branch>/reservations/<int:reservation_id>/payments/new/',
         CreatePaymentView.as_view(),
         name='create-payment',
+    ),
+    path(
+        '<str:branch>/reservations/<int:reservation_id>/payments/<int:payment_id>/status/',
+        UpdatePendingPaymentStatusView.as_view(),
+        name='update-payment-status',
     ),
     path(
         '<str:branch>/reservations/<int:reservation_id>/edit/',

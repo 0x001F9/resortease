@@ -92,7 +92,7 @@
 
                             <label class="form-control w-full">
                                 <span class="label">
-                                    <span class="label-text font-medium">Discount (₱)</span>
+                                    <span class="label-text font-medium">Discount (PHP)</span>
                                 </span>
                                 <input type="number" name="discount" min="0" max="99999999.99" step="0.01" value="{{ form_data.discount|default:'0.00' }}" class="input input-bordered w-full {% if errors.discount %}input-error{% endif %}">
                                 {% if errors.discount %}<span class="mt-1 text-sm text-error">{{ errors.discount }}</span>{% endif %}

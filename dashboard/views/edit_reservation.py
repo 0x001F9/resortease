@@ -149,6 +149,9 @@ class EditReservationView(View):
                                 "updated_at",
                             ]
                         )
+                        Reservation.objects.cancel_pending_payments(
+                            reservation
+                        )
 
                     return redirect(
                         reverse(

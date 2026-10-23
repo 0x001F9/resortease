@@ -1,9 +1,10 @@
 from datetime import time, timedelta, timezone as datetime_timezone
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.http import HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,6 +16,7 @@ from dashboard.models import (
     Branch,
     Calendar,
     Facility,
+    Payment,
     Reservation,
 )
 from dashboard.views.calendar_entries import has_calendar_conflict
@@ -103,6 +105,14 @@ def public_reservation(request, slug):
             )
             if key in pending
         }
+    elif request.method == "GET":
+        requested_facility_id = request.GET.get("facility", "")
+        if requested_facility_id.isdecimal():
+            selected_facility_id = facilities.filter(
+                pk=requested_facility_id
+            ).values_list("pk", flat=True).first()
+            if selected_facility_id is not None:
+                initial["facility"] = selected_facility_id
 
     form = PublicReservationForm(
         request.POST or None,
@@ -226,11 +236,51 @@ def public_reservation_detail(request, reservation_id):
         guest=request.user,
     )
     calendar_entry = getattr(reservation, "calendar_entry", None)
+    show_payment_info = (
+        reservation.current_status == Calendar.Status.CONFIRMED
+    )
+    payments = reservation.payments.all() if show_payment_info else []
+    pending_payments = (
+        reservation.payments.filter(status=Payment.Status.PENDING)
+        if reservation.current_status
+        in {Reservation.Status.PENDING, Calendar.Status.CONFIRMED}
+        else []
+    )
+    paid_total = (
+        payments.filter(status=Payment.Status.SUCCEEDED).aggregate(
+            total=Sum("amount")
+        )["total"]
+        or Decimal("0.00")
+        if show_payment_info
+        else Decimal("0.00")
+    )
+    pending_total = (
+        payments.filter(status=Payment.Status.PENDING).aggregate(
+            total=Sum("amount")
+        )["total"]
+        or Decimal("0.00")
+        if show_payment_info
+        else Decimal("0.00")
+    )
+    remaining_balance = (
+        max(
+            reservation.total_amount - paid_total + pending_total,
+            Decimal("0.00"),
+        )
+        if show_payment_info and reservation.total_amount is not None
+        else None
+    )
     return render(
         request,
         "public/reservation_detail.html",
         {
             "reservation": reservation,
+            "payments": payments,
+            "pending_payments": pending_payments,
+            "show_payment_info": show_payment_info,
+            "paid_total": paid_total,
+            "pending_total": pending_total,
+            "remaining_balance": remaining_balance,
             "can_cancel": (
                 reservation.current_status == Calendar.Status.CONFIRMED
                 and reservation.ends_at > timezone.now()
@@ -439,6 +489,7 @@ def cancel_public_reservation(request, reservation_id):
             calendar_entry.save(
                 update_fields=["status", "notes", "updated_at"]
             )
+        Reservation.objects.cancel_pending_payments(reservation)
 
     messages.success(request, "Your reservation was cancelled.")
     return redirect(

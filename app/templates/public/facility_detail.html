@@ -22,12 +22,17 @@
             {% endif %}
             <dl class="mt-6 grid grid-cols-2 gap-4 border-y border-base-300 py-5">
                 {% if facility.capacity %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Capacity</dt><dd class="mt-1 font-semibold">{{ facility.capacity }} guests</dd></div>{% endif %}
-                {% if facility.rate_24hours %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">24-hour rate</dt><dd class="mt-1 font-semibold">{{ facility.rate_24hours }}</dd></div>{% endif %}
-                {% if facility.rate_22hours %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">22-hour rate</dt><dd class="mt-1 font-semibold">{{ facility.rate_22hours }}</dd></div>{% endif %}
-                {% if facility.rate_morning %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Morning rate</dt><dd class="mt-1 font-semibold">{{ facility.rate_morning }}</dd></div>{% endif %}
-                {% if facility.rate_evening %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Evening rate</dt><dd class="mt-1 font-semibold">{{ facility.rate_evening }}</dd></div>{% endif %}
+                {% if facility.rate_24hours %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">24-hour rate</dt><dd class="mt-1 font-semibold">PHP {{ facility.rate_24hours }}</dd></div>{% endif %}
+                {% if facility.rate_22hours %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">22-hour rate</dt><dd class="mt-1 font-semibold">PHP {{ facility.rate_22hours }}</dd></div>{% endif %}
+                {% if facility.rate_morning %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Morning rate</dt><dd class="mt-1 font-semibold">PHP {{ facility.rate_morning }}</dd></div>{% endif %}
+                {% if facility.rate_evening %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Evening rate</dt><dd class="mt-1 font-semibold">PHP {{ facility.rate_evening }}</dd></div>{% endif %}
             </dl>
-            <a class="btn btn-outline btn-primary mt-5" href="{% url 'branch-detail' facility.branch.slug %}">View branch details</a>
+            <div class="mt-5 flex flex-wrap gap-3">
+                {% if facility.status == "operational" %}
+                    <a class="btn btn-primary" href="{% url 'public-reservation' facility.branch.slug %}?facility={{ facility.pk }}">Reserve this facility</a>
+                {% endif %}
+                <a class="btn btn-outline btn-primary" href="{% url 'branch-detail' facility.branch.slug %}">View branch details</a>
+            </div>
         </div>
     </section>
 

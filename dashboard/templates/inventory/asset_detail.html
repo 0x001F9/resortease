@@ -104,7 +104,7 @@
             </div>
             <div>
                 <dt class="text-sm text-base-content/60">Purchase cost</dt>
-                <dd class="mt-1 font-medium">{% if asset.purchase_cost != None %}₱{{ asset.purchase_cost|floatformat:2 }}{% else %}—{% endif %}</dd>
+                <dd class="mt-1 font-medium">{% if asset.purchase_cost != None %}PHP {{ asset.purchase_cost|floatformat:2 }}{% else %}—{% endif %}</dd>
             </div>
             <div>
                 <dt class="text-sm text-base-content/60">Registered</dt>
