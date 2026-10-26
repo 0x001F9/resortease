@@ -1,84 +1,33 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {% load static %}
-    <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
-    <title>ResortEase | Login</title>
-</head>
-<body>
-    <main class="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
-      <div class="flex w-full max-w-sm flex-col gap-6">
-        <a href="/" class="font-bold flex items-center gap-2 self-center">
-          ResortEase
-        </a>
-        
-        <section class="card max-w-96 bg-base-100 bg-base-200 shadow-sm">
-          <div class="card-body">
-            <div class="w-full text-center">
-              <h1 class="text-2xl font-bold">
-                Welcome Back
-              </h1>
-              <p class="py-2">Sign in with your username and password</p>
-            </div>
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="flex min-h-[65svh] items-center justify-center bg-base-200 px-4 py-10 sm:px-6">
+    <section class="card w-full max-w-md border border-base-300 bg-base-100 shadow-sm">
+        <div class="card-body gap-5 p-5 sm:p-8">
+            <header>
+                <p class="text-sm font-semibold uppercase tracking-[0.14em] text-primary">Your ResortEase account</p>
+                <h1 class="mt-2 font-serif text-3xl font-medium">Welcome back</h1>
+                <p class="mt-2 text-sm text-base-content/70">Sign in to review reservations and manage your account.</p>
+            </header>
+            {% if error %}<div role="alert" class="alert alert-error">{{ error }}</div>{% endif %}
             <form class="flex flex-col gap-4" action="{% url 'login' %}" method="post">
-              {% csrf_token %}
-              {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
-              <fieldset class="fieldset">
-                <label class="label" for="username">Username</label>
-                <input type="text" id="username" name="username" class="input w-full" />
-              </fieldset>
-
-              <fieldset class="fieldset">
-                <label class="label flex justify-between" for="password">
-                  Password
-
-                  <a href="/account/forgot-password/" class="label-text-alt link link-hover">
-                    Forgot password?
-                  </a>
+                {% csrf_token %}
+                {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+                <label class="form-control w-full">
+                    <span class="label"><span class="label-text font-medium">Username</span></span>
+                    <input type="text" id="username" name="username" class="input input-bordered w-full" autocomplete="username" required />
                 </label>
-                <input type="password" id="password" name="password" class="input w-full"/>
-              </fieldset>
-
-              <button type="submit" class="btn btn-active btn-secondary w-full mt-5">
-                Login
-              </button>
+                <label class="form-control w-full">
+                    <span class="label flex justify-between">
+                        <span class="label-text font-medium">Password</span>
+                        <a href="{% url 'forgot-password' %}" class="link link-hover label-text-alt">Forgot password?</a>
+                    </span>
+                    <input type="password" id="password" name="password" class="input input-bordered w-full" autocomplete="current-password" required />
+                </label>
+                <button type="submit" class="btn btn-primary mt-2 w-full">Sign in</button>
             </form>
-
-            <p class="text-center text-sm text-muted-foreground">
-              Don't have an account? 
-              <a class="link" href="{% url 'sign-up' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Sign up</a>
-            </p>
-          </div>
-          
-        </section>
-
-        <div class="px-6 text-center text-sm">
-          By clicking login, you agree to our <a href="#" class="link">Terms of Service</a>
-          and <a href="#" class="link">Privacy Policy</a>.
+            <p class="text-center text-sm text-base-content/70">New to ResortEase? <a class="link link-primary font-medium" href="{% url 'sign-up' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create an account</a></p>
         </div>
-      </div>
-    </main>
-
-    {% if error %}
-      <div class="toast">
-        <div role="alert" class="alert alert-error">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>{{ error }}</span>
-        </div>
-      </div>
-
-      <script>
-        setTimeout(() => {
-          const toast = document.querySelector('.toast');
-          if (toast) {
-            toast.remove();
-          }
-        }, 5000);
-      </script>
-    {% endif %}
-</body>
-</html>
+    </section>
+</main>
+{% endblock %}

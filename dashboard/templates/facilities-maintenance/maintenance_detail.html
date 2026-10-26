@@ -1,7 +1,7 @@
 {% extends "../partials/layout.html" %}
 
 {% block content %}
-<main class="px-4 py-6 sm:px-6 lg:px-8">
+<main class="mx-auto max-w-[100rem] px-4 py-6 sm:px-6 lg:px-8">
     <div class="mx-auto w-full max-w-4xl">
         <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <a
@@ -28,7 +28,7 @@
                         <p class="text-sm font-semibold uppercase tracking-wide text-primary">
                             Maintenance request #{{ maintenance.pk }}
                         </p>
-                        <h1 class="mt-1 text-2xl font-bold sm:text-3xl">{{ maintenance.title }}</h1>
+                        <h1 class="mt-1 text-2xl font-semibold sm:text-3xl">{{ maintenance.title }}</h1>
                         <p class="mt-2 text-sm text-base-content/70">
                             {{ maintenance.facility.name }} &middot; {{ branch.name }}
                         </p>

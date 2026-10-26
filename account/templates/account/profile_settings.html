@@ -6,13 +6,13 @@
 {% endblock %}
 
 {% block content %}
-<main class="mx-auto max-w-2xl px-4 py-8 sm:px-6">
+<main class="mx-auto max-w-3xl bg-base-200 px-4 py-8 sm:px-6">
     <a href="{% url 'user-profile' profile_user.username %}" class="link link-hover text-sm">← Back to profile</a>
-    <h1 class="mt-4 text-3xl font-bold">Settings</h1>
+    <h1 class="mt-4 font-serif text-3xl font-medium">Settings</h1>
     <p class="mt-2 text-base-content/65">Manage your personal information and account.</p>
 
     <section class="profile-settings-panel mt-6 border border-base-300 bg-base-100 shadow-sm" aria-labelledby="edit-account-heading">
-        <h2 id="edit-account-heading" class="text-xl font-semibold">Edit account</h2>
+        <h2 id="edit-account-heading" class="font-serif text-xl font-medium">Edit account</h2>
         <p class="mt-1 text-sm text-base-content/65">Update your personal information.</p>
         <form method="post" class="mt-8 flex flex-col gap-5">
             {% csrf_token %}
@@ -56,7 +56,7 @@
     <section class="profile-settings-panel mt-6 border border-base-300 bg-base-100 shadow-sm" aria-labelledby="totp-settings-heading">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h2 id="totp-settings-heading" class="text-xl font-semibold">Two-factor authentication</h2>
+                <h2 id="totp-settings-heading" class="font-serif text-xl font-medium">Two-factor authentication</h2>
                 <p class="mt-1 text-sm text-base-content/65">Use an authenticator app to add a layer of security to your account.</p>
             </div>
             {% if profile_user.totp_enabled %}

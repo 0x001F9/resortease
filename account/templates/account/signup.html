@@ -1,12 +1,12 @@
 {% extends "partials/pub_layout.html" %}
 
 {% block content %}
-<main class="bg-base-200 px-4 py-10 sm:px-6 sm:py-14">
+<main class="bg-base-200 px-4 py-8 sm:px-6 sm:py-10">
     <section class="card mx-auto w-full max-w-2xl border border-base-300 bg-base-100 shadow-sm">
         <div class="card-body p-5 sm:p-8">
             <header class="mb-2">
-                <p class="text-sm font-semibold uppercase tracking-wide text-primary">Join ResortEase</p>
-                <h1 class="mt-1 text-3xl font-bold">Create your account</h1>
+                <p class="text-sm font-semibold uppercase tracking-[0.14em] text-primary">Join ResortEase</p>
+                <h1 class="mt-1 font-serif text-3xl font-medium">Create your account</h1>
                 <p class="mt-2 text-sm text-base-content/70">Verify your email to finish creating your account.</p>
             </header>
 
@@ -37,5 +37,8 @@
             </p>
         </div>
     </section>
+    <p class="w-full text-center py-3 px-5">
+        By clicking continue, you agree to our <a class="link" href="#">Terms of Service</a> and <a class="link href="#">Privacy Policy</a>.
+    </p>
 </main>
 {% endblock %}

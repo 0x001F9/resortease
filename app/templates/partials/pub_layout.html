@@ -5,49 +5,72 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title|default:"ResortEase" }}</title>
     {% load static %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet">
     <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
     {% block extra_head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-base-100 text-base-content">
-    <header class="border-b border-base-300 bg-base-100">
-        <div class="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 px-4 py-3 sm:grid-cols-[1fr_auto_1fr] sm:px-6 lg:px-8">
-            <a class="col-start-1 row-start-1 w-fit text-xl font-bold text-primary sm:text-2xl" href="{% url 'home' %}" aria-label="ResortEase home">ResortEase</a>
-            <nav class="col-span-2 col-start-1 row-start-2 flex items-center justify-center gap-6 text-sm sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:gap-8" aria-label="Main navigation">
-                <a class="link link-hover" href="{% url 'branch-list' %}">Branches</a>
-                <a class="link link-hover" href="{% url 'facility-list' %}">Facilities</a>
-            </nav>
-            <div class="col-start-2 row-start-1 flex items-center justify-end gap-2 sm:col-start-3 sm:gap-4">
-                <button class="btn btn-primary btn-sm" type="button">Inquiry</button>
-                {% if user.is_authenticated %}
-                    <div class="dropdown dropdown-end">
-                        <div class="avatar" role="button" tabindex="0">
-                            <div class="ring-primary ring-offset-base-100 w-[30px] rounded-full ring-1 ring-offset-2">
-                                <img alt="User" src="{{ request.user.avatar_url|default:'https://img.daisyui.com/images/profile/demo/spiderperson@192.webp' }}" />
+    {% url 'branch-list' as branch_list_url %}
+    {% url 'facility-list' as facility_list_url %}
+    <header class="sticky top-0 z-30 border-b border-base-300 bg-base-100/95 backdrop-blur">
+        <div class="navbar mx-auto max-w-7xl gap-2 px-4 sm:px-6 lg:px-8">
+            <div class="navbar-start min-w-0 gap-2">
+                <a class="text-lg font-black tracking-tight text-primary sm:text-xl" href="{% url 'home' %}" aria-label="ResortEase home">ResortEase</a>
+                <nav class="hidden md:block" aria-label="Main navigation">
+                    <ul class="menu menu-horizontal gap-1 px-2 text-sm">
+                        <li><a href="{{ branch_list_url }}" {% if request.path == branch_list_url %}aria-current="page" class="active"{% endif %}>Branches</a></li>
+                        <li><a href="{{ facility_list_url }}" {% if request.path == facility_list_url %}aria-current="page" class="active"{% endif %}>Facilities</a></li>
+                    </ul>
+                </nav>
+            </div>
+            <div class="navbar-end gap-2">
+                <a class="btn btn-primary btn-sm hidden sm:inline-flex" href="{{ branch_list_url }}">Find a stay</a>
+                <div class="dropdown dropdown-end md:hidden">
+                    <button type="button" class="btn btn-ghost btn-sm" aria-label="Open site navigation">Menu</button>
+                    <ul tabindex="0" class="menu dropdown-content z-40 mt-3 w-52 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl">
+                        <li><a href="{{ branch_list_url }}">Branches</a></li>
+                        <li><a href="{{ facility_list_url }}">Facilities</a></li>
+                        <li><a href="{{ branch_list_url }}">Find a stay</a></li>
+                        {% if not user.is_authenticated %}
+                            <li>
+                                <a href="{% url 'sign-up' %}">Create account</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </div>
+                {% if request.user.is_authenticated %}
+                    <details class="dropdown dropdown-end">
+                        <summary class="btn btn-ghost btn-circle avatar" aria-label="Open account menu">
+                            <div class="w-9 rounded-full bg-primary text-primary-content">
+                                {% if request.user.avatar_url %}
+                                    <img alt="" src="{{ request.user.avatar_url }}" />
+                                {% else %}
+                                    <span class="grid h-full w-full place-items-center text-sm font-bold">{{ request.user.first_name|first|default:request.user.username|first|upper }}</span>
+                                {% endif %}
                             </div>
-                        </div>
-                        <ul tabindex="-1" class="rounded-md mt-2 dropdown-content menu bg-base-200 rounded-box z-1 w-52 shadow-sm">
-                            <li><a href="{% url 'user-profile' request.user.username %}">My Account</a></li>
+                        </summary>
+                        <ul class="menu dropdown-content z-40 mt-3 w-56 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl">
+                            <li><a href="{% url 'user-profile' request.user.username %}">My reservations</a></li>
+                            {% if not request.user.is_normal_user %}
+                                <li><a href="/dashboard">Staff dashboard</a></li>
+                            {% endif %}
                             {% if request.user.is_superuser %}
                                 <li><a href="/admin">Admin</a></li>
                             {% endif %}
-                            
-                            {% if not request.user.is_normal_user %}
-                                <li><a href="/dashboard">Dashboard</a></li>
-                            {% endif %}
-
+                            <li><a href="/account/u/{{ request.user.username }}/settings/">Settings</a></li>
                             <li>
-                                <a href="/account/u/{{request.user.username}}/settings/">
-                                    Settings
-                                </a>
+                                <form action="/account/logout/" method="post">
+                                    {% csrf_token %}
+                                    <button type="submit">Sign out</button>
+                                </form>
                             </li>
-                            <form action="/account/logout/" method="post">
-                                {% csrf_token %}
-                                <li><button type="submit">Logout</button></li>
-                            </form>
                         </ul>
-                    </div>
+                    </details>
                 {% else %}
-                    <a class="link link-hover hidden text-sm sm:inline" href="{% url 'login' %}{% if request.GET.next %}?next={{ request.GET.next|urlencode }}{% endif %}">Sign in</a>
+                    <a class="btn btn-ghost btn-sm" href="{% url 'login' %}{% if request.GET.next %}?next={{ request.GET.next|urlencode }}{% endif %}">Sign in</a>
+                    <a class="btn btn-outline btn-sm hidden sm:inline-flex" href="{% url 'sign-up' %}">Create account</a>
                 {% endif %}
             </div>
         </div>
@@ -55,11 +78,11 @@
     {% block content %}{% endblock %}
     {% block scripts %}{% endblock %}
 
-    <footer class="border-t border-base-300 bg-base-100">
-        <div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-sm text-base-content/70 sm:flex-row sm:px-6 lg:px-8">
-            <a class="font-bold text-primary" href="{% url 'home' %}">ResortEase</a>
-            <span>&copy; 2026 ResortEase. All rights reserved.</span>
-            <a class="link link-hover" href="{% url 'branch-list' %}">Explore branches</a>
+    <footer class="border-t border-base-300 bg-base-200">
+        <div class="mx-auto flex max-w-7xl flex-col items-start justify-between gap-4 px-4 py-8 sm:flex-row sm:items-center sm:px-6 lg:px-8">
+            <a class="text-lg font-black tracking-tight text-primary" href="{% url 'home' %}">ResortEase</a>
+            <span class="text-sm text-base-content/65">&copy; 2026 ResortEase</span>
+            <a class="link link-hover text-sm font-medium" href="{{ branch_list_url }}">Explore branches</a>
         </div>
     </footer>
 </body>

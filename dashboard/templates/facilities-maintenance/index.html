@@ -1,42 +1,31 @@
 {% extends "../partials/layout.html" %}
-{% load static %}
-
 {% block content %}
-<main class="p-4">
-    <div class="flex gap-4 flex-auto md:flex-row flex-col">
-        <div class="card bg-success text-success-content flex-1">
-            <div class="card-body">
-                <h2 class="card-title text-sm font-light">Total Facilites</h2>
-                <p class="font-bold text-xl">
-                    {{ facilities_count }} Facilities
-                </p>
-            </div>
+<main class="mx-auto max-w-[100rem] space-y-7 p-4 sm:p-5 lg:p-7">
+    <header class="flex flex-col gap-4 border-b border-base-300 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">{{ request.branch.name }}</p>
+            <h1 class="mt-2 text-2xl font-semibold sm:text-3xl">Facilities &amp; maintenance</h1>
+            <p class="mt-1 text-sm text-base-content/65">Facility status and open maintenance work.</p>
         </div>
-
-        <div class="card bg-warning text-warning-content flex-1">
-            <div class="card-body">
-                <h2 class="card-title text-sm font-light">Maintenance Request</h2>
-                <p class="font-bold text-xl">
-                    {{ maintenance_pending_count }} Pending
-                </p>
-            </div>
+        <div class="flex flex-wrap gap-2">
+            <a href="/admin/dashboard/facility/add/" class="btn btn-outline btn-sm">Add facility</a>
+            <a href="/dashboard/{{ request.branch.slug }}/add-maintenance/" class="btn btn-primary btn-sm">Add maintenance</a>
         </div>
+    </header>
 
-        <div class="card bg-accent text-primary-content flex-1">
-            <div class="card-body">
-                <h2 class="card-title text-sm font-light">In-progress Repairs</h2>
-                <p class="font-bold text-xl">
-                    {{ maintenance_in_progress_count }} In-progress
-                </p>
-            </div>
+    <section class="stats stats-vertical w-full border border-base-300 bg-base-100 shadow-sm sm:stats-horizontal" aria-label="Facilities and maintenance summary">
+        <div class="stat px-5 py-4"><div class="stat-title">Facilities</div><div class="stat-value text-2xl">{{ facilities_count }}</div></div>
+        <div class="stat px-5 py-4"><div class="stat-title">Pending requests</div><div class="stat-value text-2xl text-warning">{{ maintenance_pending_count }}</div></div>
+        <div class="stat px-5 py-4"><div class="stat-title">In-progress repairs</div><div class="stat-value text-2xl text-info">{{ maintenance_in_progress_count }}</div></div>
+    </section>
+
+    <section aria-labelledby="facilities-heading">
+        <div class="mb-3 flex items-end justify-between gap-3">
+            <div><h2 id="facilities-heading" class="text-lg font-semibold">Facilities</h2><p class="mt-1 text-sm text-base-content/65">Browse this branch’s spaces and operating status.</p></div>
+            <span class="text-sm text-base-content/60">{{ facilities|length }} total</span>
         </div>
-    </div>
-
-    <h1 class="mt-5 text-3xl font-bold">
-        Facilities
-    </h1>
-    <div class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100 mt-3">
-        <table class="table">
+        <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+        <table class="table table-zebra">
             <thead>
                 <tr>
                     <th>Name</th>
@@ -48,7 +37,7 @@
             <tbody>
                 {% for facility in facilities %}
                 
-                <tr class="bg-base-200">
+                <tr>
                     <td>
                         <a href="/dashboard/{{ request.branch.slug }}/{{ facility.slug }}/">
                             {{ facility.name }}
@@ -56,19 +45,18 @@
                     </td>
                     <td>{{ facility.branch.name }}</td>
                     <td>{{ facility.facility_type }}</td>
-                    <td>{{ facility.get_status_display }}</td>
+                    <td><span class="badge {% if facility.status == 'operational' %}badge-success{% else %}badge-warning{% endif %} badge-soft">{{ facility.get_status_display }}</span></td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="4">No facilities found.</td></tr>
+                <tr><td colspan="4" class="py-8 text-center text-base-content/60">No facilities found.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    <div class="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 class="text-3xl font-bold">
-            Maintenance
-        </h1>
+    <section aria-labelledby="maintenance-heading">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div><h2 id="maintenance-heading" class="text-lg font-semibold">Maintenance requests</h2><p class="mt-1 text-sm text-base-content/65">Pending and cancelled requests that need review.</p></div>
         <a
             href="{% url 'maintenance-history' branch=request.branch.slug %}"
             class="btn btn-outline btn-sm"
@@ -76,8 +64,8 @@
             View maintenance history
         </a>
     </div>
-    <div class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100 mt-3">
-        <table class="table">
+    <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100 mt-3">
+        <table class="table table-zebra">
             <!-- head -->
             <thead>
                 <tr>
@@ -92,12 +80,7 @@
             </thead>
             <tbody>
                 {% for issue in maintenance %}
-                    <tr
-                        {% if issue.priority == "urgent" %}class="bg-error/20"
-                        {% elif issue.priority == "high" %}class="bg-warning/30"
-                        {% elif issue.priority == "medium" %}class="bg-info/20"
-                        {% else %}class="bg-success/20"{% endif %}
-                    >
+                    <tr>
                         <td>
                             <a
                                 href="/dashboard/{{ request.branch.slug }}/maintenance/{{ issue.pk }}/"
@@ -115,8 +98,8 @@
                                 Former user
                             {% endif %}
                         </td>
-                        <td>{{ issue.get_status_display }}</td>
-                        <td>{{ issue.get_priority_display }}</td>
+                        <td><span class="badge {% if issue.status == 'pending' %}badge-warning{% else %}badge-neutral{% endif %} badge-soft">{{ issue.get_status_display }}</span></td>
+                        <td><span class="badge {% if issue.priority == 'urgent' %}badge-error{% elif issue.priority == 'high' %}badge-warning{% elif issue.priority == 'medium' %}badge-info{% else %}badge-ghost{% endif %} badge-soft">{{ issue.get_priority_display }}</span></td>
                         <td>
                             <a
                                 href="/dashboard/{{ request.branch.slug }}/maintenance/{{ issue.pk }}/edit/"
@@ -127,36 +110,12 @@
                         </td>
                     </tr>
                 {% empty %}
-                    <tr><td colspan="7">No pending or cancelled maintenance requests found.</td></tr>
+                    <tr><td colspan="7" class="py-8 text-center text-base-content/60">No pending or cancelled maintenance requests found.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    </section>
 </main>
 
-<div class="fab">
-  <!-- a focusable div with tabindex is necessary to work on all browsers. role="button" is necessary for accessibility -->
-  <div tabindex="0" role="button" class="btn btn-lg btn-circle btn-primary">+</div>
-
-  <!-- buttons that show up when FAB is open -->
-  <div>
-        Add Facility
-        <a href="/admin/dashboard/facility/add/">
-            <button class="btn btn-lg btn-circle">
-                <img
-                    class="w-full"
-                    src="{% static 'icon/place-of-worship-solid-svgrepo-com.svg' %}"
-                />
-            </button>
-        </a>
-    </div>
-    <div>
-        Add Maintenance
-        <a href="/dashboard/{{ request.branch.slug }}/add-maintenance/">
-            <button class="btn btn-lg btn-circle">
-                <svg viewBox="0 0 512 512" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" fill="#000000"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <title>maintenance</title> <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"> <g id="Combined-Shape" fill="#000000" transform="translate(42.666667, 42.666667)"> <path d="M128,7.10542736e-15 C198.692448,7.10542736e-15 256,57.307552 256,128 C256,140.931179 254.082471,153.414494 250.516246,165.181113 L384,298.666667 C407.564149,322.230816 407.564149,360.435851 384,384 C360.435851,407.564149 322.230816,407.564149 298.666667,384 L165.181113,250.516246 C153.414494,254.082471 140.931179,256 128,256 C57.307552,256 7.10542736e-15,198.692448 7.10542736e-15,128 C7.10542736e-15,114.357909 2.13416363,101.214278 6.08683609,88.884763 L66.6347809,149.333333 L126.649,129.346 L129.329,126.666 L149.333333,66.7080586 L88.7145729,6.14152881 C101.0933,2.15385405 114.29512,7.10542736e-15 128,7.10542736e-15 Z"> </path> </g> </g> </g></svg>
-            </button>
-        </a>
-    </div>
-</div>
 {% endblock %}

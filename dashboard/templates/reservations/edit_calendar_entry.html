@@ -12,8 +12,8 @@
         <section class="card border border-base-300 bg-base-100 shadow-sm">
             <div class="card-body gap-5 p-5 sm:p-8">
                 <header>
-                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">{{ request.branch.name }}</p>
-                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">{{ request.branch.name }}</p>
+                    <h1 class="card-title mt-1 text-2xl font-semibold sm:text-3xl">
                         {% if reservation %}Edit reservation{% else %}Edit unavailable time{% endif %}
                     </h1>
                 </header>

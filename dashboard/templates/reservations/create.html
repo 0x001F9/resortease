@@ -3,7 +3,7 @@
 
 {% block content %}
 <main class="px-4 py-6 sm:px-6 lg:px-8">
-    <div class="mx-auto w-full max-w-3xl">
+    <div class="mx-auto w-full max-w-4xl">
         <a
             href="{% url 'reservations' request.branch.slug %}"
             class="btn btn-ghost btn-sm mb-4"
@@ -15,10 +15,10 @@
         <section class="card border border-base-300 bg-base-100 shadow-sm">
             <div class="card-body gap-5 p-5 sm:p-8">
                 <header>
-                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
                         {{ request.branch.name }}
                     </p>
-                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Create reservation</h1>
+                    <h1 class="card-title mt-1 text-2xl font-semibold sm:text-3xl">Create reservation</h1>
                     <p class="mt-2 text-sm text-base-content/70">
                         Confirmed reservations are added to the calendar as bookings.
                     </p>

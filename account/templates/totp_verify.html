@@ -1,67 +1,56 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  {% load static %}
-  <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
-  <title>ResortEase | Verify login</title>
-</head>
-<body class="bg-muted min-h-svh p-6 md:p-10">
-  <main class="mx-auto flex min-h-svh max-w-md items-center justify-center">
-    <section class="card w-full bg-base-100 shadow-sm">
-      <div class="card-body gap-4">
-        <div class="text-center">
-          <h1 class="text-2xl font-bold">Two-step verification</h1>
-          <p class="py-2 text-sm text-base-content/70">Complete the verification for {{ user.username }}.</p>
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="flex min-h-[65svh] items-center justify-center bg-base-200 px-4 py-10 sm:px-6">
+    <section class="card w-full max-w-md border border-base-300 bg-base-100 shadow-sm">
+        <div class="card-body gap-5 p-5 sm:p-8">
+            <header>
+                <p class="text-sm font-semibold uppercase tracking-[0.14em] text-primary">Account security</p>
+                <h1 class="mt-2 font-serif text-3xl font-medium">Two-step verification</h1>
+                <p class="mt-2 text-sm text-base-content/70">Complete verification for {{ user.username }}.</p>
+            </header>
+            {% if error %}<div role="alert" class="alert alert-error">{{ error }}</div>{% endif %}
+
+            {% if sent_email_otp %}
+                <p class="text-sm text-base-content/70">A security code was sent to {{ masked_email }}.</p>
+                <form method="post" class="flex flex-col gap-4">
+                    {% csrf_token %}
+                    <label class="form-control w-full">
+                        <span class="label"><span class="label-text font-medium">Email verification code</span></span>
+                        <input id="email_code" type="text" name="email_code" class="input input-bordered w-full" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required />
+                    </label>
+                    <button type="submit" class="btn btn-primary w-full">Verify code</button>
+                </form>
+                {% if can_use_totp %}
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="method" value="totp" />
+                        <button type="submit" class="btn btn-outline w-full">Use authenticator code instead</button>
+                    </form>
+                {% endif %}
+            {% elif can_use_totp %}
+                <form method="post" class="flex flex-col gap-4">
+                    {% csrf_token %}
+                    <label class="form-control w-full">
+                        <span class="label"><span class="label-text font-medium">Authenticator code</span></span>
+                        <input id="totp_code" type="text" name="totp_code" class="input input-bordered w-full" inputmode="numeric" autocomplete="one-time-code" maxlength="6" />
+                    </label>
+                    <button type="submit" class="btn btn-primary w-full">Verify with authenticator</button>
+                </form>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="method" value="email" />
+                    <button type="submit" class="btn btn-outline w-full">Send email code instead</button>
+                </form>
+            {% else %}
+                <p class="text-sm text-base-content/70">Verify your account with a code sent to {{ masked_email }}.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="method" value="email" />
+                    <button type="submit" class="btn btn-primary w-full">Send email code</button>
+                </form>
+            {% endif %}
         </div>
-
-        {% if error %}
-          <div class="alert alert-error">{{ error }}</div>
-        {% endif %}
-
-        {% if sent_email_otp %}
-          <p class="text-sm text-base-content/70">A security code was sent to {{ masked_email }}.</p>
-          <form method="post" class="flex flex-col gap-4">
-            {% csrf_token %}
-            <fieldset class="fieldset">
-              <label class="label" for="email_code">Email verification code</label>
-              <input id="email_code" type="text" name="email_code" class="input input-bordered w-full" inputmode="numeric" maxlength="6" required />
-            </fieldset>
-            <button type="submit" class="btn btn-secondary w-full">Verify with email code</button>
-          </form>
-          {% if can_use_totp %}
-            <form method="post">
-              {% csrf_token %}
-              <input type="hidden" name="method" value="totp" />
-              <button type="submit" class="btn btn-outline w-full">Use authenticator code instead</button>
-            </form>
-          {% endif %}
-        {% elif can_use_totp %}
-          <form method="post" class="flex flex-col gap-4">
-            {% csrf_token %}
-            <fieldset class="fieldset">
-              <label class="label" for="totp_code">Authenticator code</label>
-              <input id="totp_code" type="text" name="totp_code" class="input input-bordered w-full" inputmode="numeric" maxlength="6" />
-            </fieldset>
-            <button type="submit" class="btn btn-primary w-full">Verify with TOTP</button>
-          </form>
-
-          <form method="post" class="flex flex-col gap-4">
-            {% csrf_token %}
-            <input type="hidden" name="method" value="email" />
-            <button type="submit" class="btn btn-outline w-full">Send email OTP instead</button>
-          </form>
-        {% else %}
-          <p class="text-sm text-base-content/70">Verify your account with a code sent to {{ masked_email }}.</p>
-          <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="method" value="email" />
-            <button type="submit" class="btn btn-primary w-full">Send email OTP</button>
-          </form>
-        {% endif %}
-      </div>
     </section>
-  </main>
-</body>
-</html>
+</main>
+{% endblock %}

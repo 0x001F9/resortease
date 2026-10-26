@@ -1,11 +1,11 @@
 {% extends "../partials/layout.html" %}
 
 {% block content %}
-<main class="p-4 pb-10">
+<main class="mx-auto max-w-[100rem] p-4 pb-10 sm:p-5 lg:p-7">
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-            <p class="text-sm uppercase tracking-[0.2em] text-base-content/60">Operations</p>
-            <h1 class="mt-2 text-3xl font-bold">Inventory</h1>
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">{{ request.branch.name }} · operations</p>
+            <h1 class="mt-2 text-2xl font-semibold sm:text-3xl">Inventory</h1>
         </div>
 
         <div class="flex flex-wrap gap-3">
@@ -101,9 +101,9 @@
     </form>
 
     <div class="mt-8 grid gap-6 xl:grid-cols-[2fr_1fr]">
-        <section class="rounded-box border border-base-content/10 bg-base-100 shadow-sm">
+        <section class="rounded-box border border-base-300 bg-base-100 shadow-sm">
             <div class="flex flex-col gap-2 border-b border-base-content/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <h2 class="text-xl font-semibold">Inventory items</h2>
+                <h2 class="text-lg font-semibold">Inventory items</h2>
                 <div class="flex flex-wrap gap-2 text-xs">
                     <span class="badge badge-warning badge-soft">At/below reorder level: {{ inventory_count_by_status.low }}</span>
                     <span class="badge badge-error badge-soft">Out: {{ inventory_count_by_status.zero }}</span>

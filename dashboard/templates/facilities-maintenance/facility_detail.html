@@ -1,7 +1,7 @@
 {% extends "../partials/layout.html" %}
 
 {% block content %}
-<main class="px-4 py-6 sm:px-6 lg:px-8">
+<main class="mx-auto max-w-[100rem] px-4 py-6 sm:px-6 lg:px-8">
     <div class="mx-auto w-full max-w-5xl">
         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
             <a
@@ -26,7 +26,7 @@
                         <p class="text-sm font-semibold uppercase tracking-wide text-primary">
                             {{ branch.name }}
                         </p>
-                        <h1 class="mt-1 text-2xl font-bold sm:text-3xl">{{ facility.name }}</h1>
+                        <h1 class="mt-1 text-2xl font-semibold sm:text-3xl">{{ facility.name }}</h1>
                         {% if facility.description %}
                             <p class="mt-2 max-w-2xl text-base-content/70">{{ facility.description }}</p>
                         {% endif %}
@@ -72,7 +72,7 @@
             </div>
 
             <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
-                <table class="table">
+                <table class="table table-zebra">
                     <thead>
                         <tr>
                             <th>Request</th>
@@ -85,7 +85,7 @@
                     </thead>
                     <tbody>
                         {% for repair in repairs %}
-                            <tr class="{% cycle 'bg-base-200' '' %}">
+                            <tr>
                                 <td>
                                     <a
                                         href="/dashboard/{{ branch.slug }}/maintenance/{{ repair.pk }}/"
@@ -103,7 +103,7 @@
                                         &mdash;
                                     {% endif %}
                                 </td>
-                                <td><span class="badge badge-outline">{{ repair.get_status_display }}</span></td>
+                                <td><span class="badge {% if repair.status == 'completed' %}badge-success{% elif repair.status == 'cancelled' %}badge-neutral{% elif repair.status == 'pending' %}badge-warning{% else %}badge-info{% endif %} badge-soft">{{ repair.get_status_display }}</span></td>
                                 <td>{{ repair.get_priority_display }}</td>
                             </tr>
                         {% empty %}

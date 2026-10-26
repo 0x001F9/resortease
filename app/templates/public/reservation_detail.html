@@ -1,14 +1,14 @@
 {% extends "partials/pub_layout.html" %}
 
 {% block content %}
-<main class="bg-base-200 px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+<main class="bg-base-200 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
     <section class="card mx-auto w-full max-w-3xl border border-base-300 bg-base-100 shadow-sm">
         <div class="card-body gap-5 p-5 sm:p-8">
             <header>
                 <p class="text-sm font-semibold uppercase tracking-wide text-primary">
                     {% if reservation.facility %}{{ reservation.facility.branch.name }}{% else %}ResortEase{% endif %}
                 </p>
-                <h1 class="card-title mt-1 text-2xl sm:text-3xl">Reservation details</h1>
+                    <h1 class="card-title mt-1 font-serif text-2xl font-medium sm:text-3xl">Reservation details</h1>
                 <p class="mt-2 text-sm text-base-content/70">Request #{{ reservation.pk }}</p>
             </header>
 
