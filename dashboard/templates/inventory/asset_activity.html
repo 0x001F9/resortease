@@ -37,7 +37,7 @@
                             >{{ asset.name }}</a>
                         </td>
                         <td>{{ asset.asset_tag }}</td>
-                        <td>{{ asset.borrowed_by|default:"—" }}</td>
+                        <td>{% include "partials/account_link.html" with account_user=asset.borrowed_by account_link_class="link link-hover" %}</td>
                         <td>{{ asset.due_date|date:"M d, Y H:i" }}</td>
                         <td><span class="badge badge-error badge-soft">Past due</span></td>
                     </tr>
@@ -75,9 +75,9 @@
                         </td>
                         <td>{{ event.get_event_type_display }}</td>
                         <td>{{ event.get_status_before_display }} → {{ event.get_status_after_display }}</td>
-                        <td>{{ event.borrower|default:"—" }}</td>
+                        <td>{% include "partials/account_link.html" with account_user=event.borrower account_link_class="link link-hover" %}</td>
                         <td>{{ event.due_date|date:"M d, Y H:i"|default:"—" }}</td>
-                        <td>{{ event.performed_by|default:"—" }}</td>
+                        <td>{% include "partials/account_link.html" with account_user=event.performed_by account_link_class="link link-hover" %}</td>
                         <td>{{ event.notes|default:"—"|truncatechars:60 }}</td>
                     </tr>
                     {% empty %}

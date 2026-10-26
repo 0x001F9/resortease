@@ -146,6 +146,7 @@
                                 data-user-picker
                                 data-user-picker-required="false"
                                 data-search-url="{% url 'search-reservation-guests' request.branch.slug %}"
+                                data-profile-url-template="{% url 'user-profile' username='ACCOUNT_USERNAME' %}"
                             >
                                 {{ field }}
                                 <button
@@ -163,6 +164,13 @@
                                         {% endif %}
                                     </span>
                                 </button>
+                                <a class="btn btn-ghost btn-sm" data-user-picker-profile-link
+                                    {% if asset_form.selected_borrower %}
+                                        href="{% url 'user-profile' asset_form.selected_borrower.username %}"
+                                    {% else %}
+                                        hidden
+                                    {% endif %}
+                                >View account</a>
                                 <span class="mt-1 text-sm text-error" data-user-picker-error {% if not field.errors %}hidden{% endif %}>
                                     {% for error in field.errors %}{{ error }}{% empty %}Choose a borrower for this event.{% endfor %}
                                 </span>

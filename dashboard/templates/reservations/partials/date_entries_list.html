@@ -11,7 +11,7 @@
                             <span class="font-medium text-error">Unavailable</span>
                         {% else %}
                             <span class="font-medium">
-                                {{ entry.reservation.guest.first_name }} {{ entry.reservation.guest.last_name }}
+                                {% include "partials/account_link.html" with account_user=entry.reservation.guest account_link_class="link link-hover" %}
                             </span>
                             <a
                                 class="link link-primary"

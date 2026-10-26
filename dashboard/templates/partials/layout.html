@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-timezone="{{ TIME_ZONE }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,7 +9,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
+    {% block extra_head %}{% endblock %}
     <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
 </head>
 <body class="min-h-screen overflow-x-hidden bg-base-200 text-base-content">
     <div class="{% if not hide_aside %}drawer lg:drawer-open{% else %}flex min-h-screen flex-col{% endif %}">
@@ -87,6 +89,7 @@
                             <li><a href="/dashboard/{{ request.branch.slug }}/reservations/" data-dashboard-section="reservations">Reservations &amp; calendar</a></li>
                             <li><a href="/dashboard/{{ request.branch.slug }}/inventory/" data-dashboard-section="inventory">Inventory</a></li>
                             <li><a href="/dashboard/{{ request.branch.slug }}/facilities-and-maintenance/" data-dashboard-section="facilities-and-maintenance">Facilities &amp; maintenance</a></li>
+                            <li><a href="{% url 'financial-reports' request.branch.slug %}" data-dashboard-section="financial-reports">Financial reports</a></li>
                         </ul>
                     </nav>
                 </aside>

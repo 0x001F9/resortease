@@ -213,6 +213,16 @@ class PublicReservationFlowTests(TestCase):
         self.assertContains(edit_response, 'data-rate24-hours="1000"')
         self.assertContains(edit_response, 'data-rate22-hours="800"')
 
+    def test_public_layout_exposes_configured_philippine_timezone(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["TIME_ZONE"], "Asia/Manila")
+        self.assertContains(
+            response,
+            '<html lang="en" data-timezone="Asia/Manila">',
+        )
+
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_guest_sign_up_resumes_available_reservation_as_pending(self):
         response = self.client.post(self.url, self.payload)

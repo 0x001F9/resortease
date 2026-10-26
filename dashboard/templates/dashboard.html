@@ -1,5 +1,203 @@
 {% extends "partials/layout.html" %}
 
+{% block extra_head %}
+	{% load static %}
+	<link href="{% static 'css/dashboard.css' %}" rel="stylesheet" type="text/css" />
+{% endblock %}
+
 {% block content %}
-<p>hello</p>
+<main class="dashboard-page mx-auto w-full max-w-[100rem] space-y-8 px-4 py-6 sm:px-6 lg:px-8">
+	<header class="flex flex-col gap-4 border-b border-base-300 pb-6 sm:flex-row sm:items-end sm:justify-between">
+		<div>
+			<p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">{{ request.branch.name }} · Resort operations</p>
+			<h1 class="mt-2 text-3xl font-semibold">{{ greeting }}, {% include "partials/account_link.html" with account_user=request.user account_link_class="link link-hover" %}</h1>
+			<p class="mt-1 text-sm text-base-content/65">{{ today|date:"l, F j, Y" }}</p>
+		</div>
+	</header>
+
+	<section aria-labelledby="overview-heading">
+		<div class="mb-4">
+			<h2 id="overview-heading" class="text-lg font-semibold">This month at a glance</h2>
+			<p class="mt-1 text-sm text-base-content/65">Branch performance and items that need attention.</p>
+		</div>
+		<div class="dashboard-kpi-grid grid gap-3">
+			<a class="card border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'reservations' request.branch.slug %}">
+				<span class="text-xs font-bold uppercase tracking-wider text-base-content/60">Completed bookings</span>
+				<span class="mt-2 text-3xl font-bold">{{ month_completed_bookings }}</span>
+				<span class="mt-1 text-sm text-base-content/65">This month · View reservations</span>
+			</a>
+			<a class="card border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'financial-reports' request.branch.slug %}?branch={{ request.branch.slug }}">
+				<span class="text-xs font-bold uppercase tracking-wider text-base-content/60">Reservation revenue</span>
+				<span class="mt-2 text-3xl font-bold">PHP {{ month_revenue|floatformat:2 }}</span>
+				<span class="mt-1 text-sm text-base-content/65">Payments received this month</span>
+			</a>
+			<a class="card border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'inventory' request.branch.slug %}">
+				<span class="text-xs font-bold uppercase tracking-wider text-base-content/60">Low-stock items</span>
+				<span class="mt-2 text-3xl font-bold">{{ low_stock_count }}</span>
+				<span class="mt-1 text-sm text-base-content/65">At or below reorder level</span>
+			</a>
+			<a class="card border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'facilities-and-maintenance' request.branch.slug %}">
+				<span class="text-xs font-bold uppercase tracking-wider text-base-content/60">Open maintenance</span>
+				<span class="mt-2 text-3xl font-bold">{{ open_maintenance_count }}</span>
+				<span class="mt-1 text-sm text-base-content/65">Pending or in progress</span>
+			</a>
+		</div>
+	</section>
+
+	{% if overdue_assets_count %}
+		<section aria-labelledby="overdue-assets-heading">
+			<div class="card bg-error text-error-content">
+				<div class="card-body gap-3 p-5">
+					<div class="flex flex-wrap items-start justify-between gap-3">
+						<div>
+							<h2 id="overdue-assets-heading" class="card-title">Borrowed assets past due</h2>
+							<p class="text-sm opacity-90">{{ overdue_assets_count }} asset{{ overdue_assets_count|pluralize }} need attention</p>
+						</div>
+						<p class="text-3xl font-bold">{{ overdue_assets_count }}</p>
+					</div>
+					<ul class="divide-y divide-error-content/20">
+						{% for asset in overdue_assets|slice:":5" %}
+							<li class="flex flex-wrap justify-between gap-2 py-2 text-sm">
+								<span class="font-semibold"><a class="link link-hover" href="{% url 'inventory-asset-detail' request.branch.slug asset.pk %}">{{ asset.name }} · {{ asset.asset_tag }}</a></span>
+								<span>Due {{ asset.due_date|date:"M j, Y, g:i a" }}{% if asset.borrowed_by %} · {% include "partials/account_link.html" with account_user=asset.borrowed_by account_link_class="link link-hover" %}{% endif %}</span>
+							</li>
+						{% endfor %}
+					</ul>
+					<a class="link link-hover text-sm font-semibold" href="{% url 'inventory-asset-activity' request.branch.slug %}">Review asset activity</a>
+				</div>
+			</div>
+		</section>
+	{% endif %}
+
+	<section class="dashboard-activity-grid grid gap-6">
+		<div class="dashboard-revenue-card card border border-base-300 bg-base-100">
+			<div class="card-body">
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<h2 class="card-title">Reservation revenue</h2>
+						<p class="text-sm text-base-content/65">Monthly payments received · {{ today|date:"Y" }}</p>
+					</div>
+					<a class="btn btn-ghost btn-sm" href="{% url 'financial-reports' request.branch.slug %}?branch={{ request.branch.slug }}">Financial reports</a>
+				</div>
+				<div id="revenue-chart" class="w-full" style="height: 18rem" role="img" aria-label="Line chart of monthly reservation revenue"></div>
+				<p id="revenue-chart-error" class="hidden text-sm text-error">The revenue chart could not be loaded.</p>
+			</div>
+		</div>
+
+		<div class="dashboard-bookings-card card border border-base-300 bg-base-100 h-full">
+			<div class="card-body">
+				<div>
+					<h2 class="card-title">Bookings</h2>
+					<p class="text-sm text-base-content/65">{{ active_reservations_count }} currently active</p>
+				</div>
+				{% if bookings %}
+					<ul class="divide-y divide-base-300">
+						{% for entry in bookings %}
+							<li class="py-2 {% if entry.ends_at <= now %}rounded-box border border-success/40 bg-success/10 px-3{% endif %}">
+								<div class="py-3">
+									<span class="dashboard-booking-summary flex items-start justify-between gap-3">
+										<span class="dashboard-booking-guest font-semibold">{% include "partials/account_link.html" with account_user=entry.reservation.guest account_link_class="link link-hover" %}</span>
+										<span class="dashboard-booking-time text-right text-sm">
+											{% if entry.ends_at <= now %}
+												<span class="badge badge-success">Finished · needs completion</span>
+											{% elif entry.starts_at <= now %}
+												<span class="badge badge-primary">In progress</span>
+											{% else %}
+												<span class="badge badge-ghost">Upcoming</span>
+											{% endif %}
+											<span class="mt-1 block">{{ entry.starts_at|date:"M j, g:i a" }}</span>
+										</span>
+									</span>
+									<span class="mt-1 block text-sm text-base-content/65">{{ entry.facility.name }}</span>
+									<a class="link link-hover mt-1 inline-block text-sm" href="{% url 'reservation-detail' request.branch.slug entry.reservation_id %}">View booking</a>
+								</div>
+								{% if entry.ends_at <= now %}
+									<form method="post" action="{% url 'mark-booking-completed' request.branch.slug entry.pk %}" class="mt-2">
+										{% csrf_token %}
+										<input type="hidden" name="return_to" value="dashboard">
+										<button class="btn btn-success btn-sm w-full" type="submit">Mark completed</button>
+									</form>
+								{% endif %}
+							</li>
+						{% endfor %}
+					</ul>
+				{% else %}
+					<div class="rounded-box bg-base-200 p-4">
+						<p class="font-semibold">No upcoming bookings</p>
+						<p class="mt-1 text-sm text-base-content/65">New reservations will appear here.</p>
+						<a class="btn btn-primary btn-sm mt-3" href="{% url 'create-booking' request.branch.slug %}">Create booking</a>
+					</div>
+				{% endif %}
+				<a class="btn btn-active btn-sm mt-auto self-start" href="{% url 'reservations' request.branch.slug %}">View reservation calendar</a>
+			</div>
+		</div>
+	</section>
+
+	<section aria-labelledby="work-areas-heading">
+		<div class="mb-4">
+			<h2 id="work-areas-heading" class="text-lg font-semibold">Work areas</h2>
+			<p class="mt-1 text-sm text-base-content/65">Branch tools and guest activity.</p>
+		</div>
+		<div class="dashboard-work-grid grid gap-3">
+			<a class="group flex min-h-36 flex-col justify-between rounded-box border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'reservations' request.branch.slug %}">
+				<span class="text-xs font-bold uppercase tracking-wider text-primary">Guest stays</span>
+				<span class="flex items-end justify-between gap-3"><span><span class="block text-lg font-semibold">Reservations &amp; calendar</span><span class="mt-1 block text-sm text-base-content/65">Review requests and availability</span></span><span aria-hidden="true" class="text-xl text-primary transition-transform group-hover:translate-x-1">&#8594;</span></span>
+			</a>
+			<a class="group flex min-h-36 flex-col justify-between rounded-box border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'inventory' request.branch.slug %}">
+				<span class="text-xs font-bold uppercase tracking-wider text-primary">Stock control</span>
+				<span class="flex items-end justify-between gap-3"><span><span class="block text-lg font-semibold">Inventory</span><span class="mt-1 block text-sm text-base-content/65">Items, assets, and movements</span></span><span aria-hidden="true" class="text-xl text-primary transition-transform group-hover:translate-x-1">&#8594;</span></span>
+			</a>
+			<a class="group flex min-h-36 flex-col justify-between rounded-box border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'facilities-and-maintenance' request.branch.slug %}">
+				<span class="text-xs font-bold uppercase tracking-wider text-primary">Property care</span>
+				<span class="flex items-end justify-between gap-3"><span><span class="block text-lg font-semibold">Facilities &amp; maintenance</span><span class="mt-1 block text-sm text-base-content/65">Facility status and open work</span></span><span aria-hidden="true" class="text-xl text-primary transition-transform group-hover:translate-x-1">&#8594;</span></span>
+			</a>
+			<a class="group flex min-h-36 flex-col justify-between rounded-box border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'financial-reports' request.branch.slug %}?branch={{ request.branch.slug }}">
+				<span class="text-xs font-bold uppercase tracking-wider text-primary">Finance</span>
+				<span class="flex items-end justify-between gap-3"><span><span class="block text-lg font-semibold">Financial reports</span><span class="mt-1 block text-sm text-base-content/65">Review payments by date and branch</span></span><span aria-hidden="true" class="text-xl text-primary transition-transform group-hover:translate-x-1">&#8594;</span></span>
+			</a>
+		</div>
+	</section>
+</main>
+{{ revenue_chart_data|json_script:"revenue-chart-data" }}
+{% endblock %}
+
+{% block scripts %}
+<script>
+	const chartElement = document.getElementById("revenue-chart")
+	const chartData = JSON.parse(document.getElementById("revenue-chart-data").textContent)
+	if (window.echarts && chartElement) {
+		const revenueChart = window.echarts.init(chartElement)
+		revenueChart.setOption({
+			tooltip: { trigger: "axis", valueFormatter: (value) => `PHP ${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+			grid: { left: 16, right: 24, top: 24, bottom: 24, containLabel: true },
+			xAxis: { type: "category", data: chartData.months, boundaryGap: false },
+			yAxis: { type: "value", min: 0, axisLabel: { formatter: (value) => `PHP ${Number(value).toLocaleString()}` } },
+			series: [{
+				name: "Reservation revenue",
+				type: "line",
+				smooth: true,
+				data: chartData.values,
+				showSymbol: true,
+				areaStyle: { opacity: 0.12 },
+			}],
+		})
+		revenueChart.on("click", (event) => {
+			if (event.componentType !== "series") return
+			const month = chartData.months.indexOf(event.name) + 1
+			if (!month) return
+			const year = {{ today|date:"Y" }}
+			const startDate = `${year}-${String(month).padStart(2, "0")}-01`
+			const lastDay = new Date(year, month, 0).getDate()
+			const endDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`
+			const reportUrl = new URL("{% url 'financial-reports' request.branch.slug %}", window.location.origin)
+			reportUrl.searchParams.set("branch", "{{ request.branch.slug|escapejs }}")
+			reportUrl.searchParams.set("start_date", startDate)
+			reportUrl.searchParams.set("end_date", endDate)
+			window.location.href = reportUrl
+		})
+		window.addEventListener("resize", () => revenueChart.resize())
+	} else {
+		document.getElementById("revenue-chart-error").classList.remove("hidden")
+	}
+</script>
 {% endblock %}

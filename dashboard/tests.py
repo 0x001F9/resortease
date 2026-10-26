@@ -2497,6 +2497,10 @@ class InventoryViewTests(TestCase):
         self.assertContains(response, "Initial stock")
         self.assertContains(response, "12")
         self.assertContains(response, "Low stock")
+        self.assertContains(
+            response,
+            reverse("user-profile", kwargs={"username": self.user.username}),
+        )
 
     def test_inventory_page_shows_overdue_assets_card_linking_to_asset_activity(self):
         self.asset.due_date = timezone.now() - timedelta(minutes=1)
@@ -3340,3 +3344,503 @@ class InventoryViewTests(TestCase):
         event = asset.history.get()
         self.assertEqual(event.event_type, "acquired")
         self.assertEqual(event.performed_by, self.user)
+
+
+class DashboardAndFinancialReportTests(TestCase):
+    def setUp(self):
+        self.user = User.object.create(
+            username="dashboard_manager",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5559000001",
+            email="dashboard_manager@example.com",
+            first_name="Dashboard",
+            last_name="Manager",
+            is_superuser=True,
+            is_active=True,
+        )
+        self.client.force_login(self.user)
+        self.branch = Branch.objects.create(
+            name="Dashboard Branch",
+            slug="dashboard-branch",
+            city="Test City",
+            address="1 Dashboard Street",
+        )
+        self.facility = Facility.objects.create(
+            branch=self.branch,
+            name="Dashboard Pool",
+            slug="dashboard-pool",
+        )
+
+    def create_reservation_with_payment(
+        self,
+        branch,
+        *,
+        amount,
+        status=Payment.Status.SUCCEEDED,
+        paid_at=None,
+        username="dashboard_guest",
+    ):
+        facility = Facility.objects.filter(branch=branch).first()
+        if facility is None:
+            facility = Facility.objects.create(
+                branch=branch,
+                name=f"{branch.name} Pool",
+                slug=f"{branch.slug}-pool",
+            )
+        guest = User.object.create(
+            username=username,
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number=f"555{User.object.count():07d}",
+            email=f"{username}@example.com",
+            first_name="Dashboard",
+            last_name="Guest",
+        )
+        now = timezone.now()
+        reservation = Reservation.objects.create(
+            guest=guest,
+            facility=facility,
+            starts_at=now - timedelta(hours=2),
+            ends_at=now - timedelta(hours=1),
+            status=Reservation.Status.CONFIRMED,
+        )
+        payment = Payment.objects.create(
+            reservation_id=reservation,
+            name="Reservation payment",
+            amount=Decimal(amount),
+            method="cash",
+            status=status,
+            paid_at=paid_at or now,
+        )
+        return reservation, payment
+
+    def test_dashboard_summarizes_branch_bookings_and_received_revenue(self):
+        now = timezone.now()
+        reservation, _payment = self.create_reservation_with_payment(
+            self.branch,
+            amount="125.00",
+            paid_at=now - timedelta(minutes=1),
+        )
+        Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+            status=Calendar.Status.COMPLETED,
+        )
+        self.create_reservation_with_payment(
+            self.branch,
+            amount="900.00",
+            status=Payment.Status.PENDING,
+            username="dashboard_pending_guest",
+        )
+
+        response = self.client.get(reverse("dashboard", kwargs={"branch": self.branch.slug}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["month_completed_bookings"], 1)
+        self.assertEqual(response.context["month_revenue"], Decimal("125.00"))
+        self.assertEqual(
+            response.context["revenue_chart_data"]["values"][timezone.localtime(now).month - 1],
+            125.0,
+        )
+        self.assertContains(response, "Good ")
+        self.assertContains(response, "Financial reports")
+        self.assertContains(response, "No upcoming bookings")
+        self.assertContains(
+            response,
+            '<html lang="en" data-timezone="Asia/Manila">',
+        )
+
+    def test_dashboard_shows_current_and_upcoming_bookings_up_to_three(self):
+        active_reservation, _payment = self.create_reservation_with_payment(
+            self.branch,
+            amount="50.00",
+            username="active_dashboard_guest",
+        )
+        Calendar.objects.create(
+            reservation=active_reservation,
+            facility=self.facility,
+            starts_at=timezone.now() - timedelta(minutes=30),
+            ends_at=timezone.now() + timedelta(minutes=30),
+        )
+        upcoming_reservations = []
+        for index in range(3):
+            reservation, _payment = self.create_reservation_with_payment(
+                self.branch,
+                amount="50.00",
+                username=f"upcoming_dashboard_guest_{index}",
+            )
+            reservation.starts_at = timezone.now() + timedelta(days=index + 1)
+            reservation.ends_at = reservation.starts_at + timedelta(hours=2)
+            reservation.save(update_fields=["starts_at", "ends_at"])
+            Calendar.objects.create(
+                reservation=reservation,
+                facility=self.facility,
+                starts_at=reservation.starts_at,
+                ends_at=reservation.ends_at,
+            )
+            upcoming_reservations.append(reservation)
+
+        response = self.client.get(reverse("dashboard", kwargs={"branch": self.branch.slug}))
+
+        detail_url = reverse(
+            "reservation-detail",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": active_reservation.pk,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["bookings"]), 3)
+        self.assertContains(response, "In progress")
+        self.assertContains(response, "Upcoming")
+        self.assertContains(response, "Dashboard Guest")
+        self.assertContains(
+            response,
+            reverse(
+                "user-profile",
+                kwargs={"username": active_reservation.guest.username},
+            ),
+        )
+        self.assertContains(response, f'href="{detail_url}"')
+        self.assertNotContains(response, upcoming_reservations[-1].guest.username)
+
+    def test_dashboard_prioritizes_past_checkout_bookings_with_completion_action(self):
+        overdue_entries = []
+        for index in range(4):
+            reservation, _payment = self.create_reservation_with_payment(
+                self.branch,
+                amount="50.00",
+                username=f"overdue_dashboard_guest_{index}",
+            )
+            overdue_entries.append(
+                Calendar.objects.create(
+                    reservation=reservation,
+                    facility=self.facility,
+                    starts_at=timezone.now() - timedelta(days=index + 2),
+                    ends_at=timezone.now() - timedelta(days=index + 1),
+                )
+            )
+        upcoming_reservation, _payment = self.create_reservation_with_payment(
+            self.branch,
+            amount="50.00",
+            username="lower_priority_dashboard_guest",
+        )
+        upcoming_reservation.starts_at = timezone.now() + timedelta(days=1)
+        upcoming_reservation.ends_at = upcoming_reservation.starts_at + timedelta(hours=2)
+        upcoming_reservation.save(update_fields=["starts_at", "ends_at"])
+        Calendar.objects.create(
+            reservation=upcoming_reservation,
+            facility=self.facility,
+            starts_at=upcoming_reservation.starts_at,
+            ends_at=upcoming_reservation.ends_at,
+        )
+
+        response = self.client.get(
+            reverse("dashboard", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["bookings"]), 3)
+        self.assertTrue(
+            all(entry.ends_at < timezone.now() for entry in response.context["bookings"])
+        )
+        self.assertContains(response, "Finished · needs completion")
+        self.assertContains(response, "Mark completed")
+        self.assertContains(
+            response,
+            reverse(
+                "mark-booking-completed",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "entry_id": overdue_entries[-1].pk,
+                },
+            ),
+        )
+        self.assertNotContains(response, upcoming_reservation.guest.username)
+
+    def test_reservations_page_shows_all_past_checkout_confirmed_bookings_before_calendar(self):
+        entries = []
+        for index in range(2):
+            reservation, _payment = self.create_reservation_with_payment(
+                self.branch,
+                amount="50.00",
+                username=f"reservations_overdue_guest_{index}",
+            )
+            entries.append(
+                Calendar.objects.create(
+                    reservation=reservation,
+                    facility=self.facility,
+                    starts_at=timezone.now() - timedelta(days=index + 2),
+                    ends_at=timezone.now() - timedelta(days=index + 1),
+                )
+            )
+
+        response = self.client.get(
+            reverse("reservations", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["bookings_needing_completion"]), 2)
+        html = response.content.decode()
+        self.assertLess(
+            html.index("Finished bookings · mark as completed"),
+            html.index('aria-label="Facility calendar"'),
+        )
+        for entry in entries:
+            self.assertContains(
+                response,
+                reverse(
+                    "mark-booking-completed",
+                    kwargs={"branch": self.branch.slug, "entry_id": entry.pk},
+                ),
+            )
+            self.assertContains(
+                response,
+                reverse(
+                    "user-profile",
+                    kwargs={"username": entry.reservation.guest.username},
+                ),
+            )
+        self.assertContains(response, "Mark completed")
+
+    def test_mark_booking_completed_changes_only_past_confirmed_branch_booking(self):
+        reservation, _payment = self.create_reservation_with_payment(
+            self.branch,
+            amount="50.00",
+            username="mark_completed_guest",
+        )
+        reservation.raw_amount = Decimal("50.00")
+        reservation.save(update_fields=["raw_amount"])
+        entry = Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=timezone.now() - timedelta(hours=3),
+            ends_at=timezone.now() - timedelta(hours=2),
+        )
+
+        response = self.client.post(
+            reverse(
+                "mark-booking-completed",
+                kwargs={"branch": self.branch.slug, "entry_id": entry.pk},
+            ),
+            {"return_to": "dashboard"},
+        )
+
+        entry.refresh_from_db()
+        reservation.refresh_from_db()
+        self.assertRedirects(
+            response,
+            reverse("dashboard", kwargs={"branch": self.branch.slug}),
+        )
+        self.assertEqual(entry.status, Calendar.Status.COMPLETED)
+        self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
+
+    def test_mark_booking_completed_redirects_to_detail_when_balance_remains(self):
+        reservation, payment = self.create_reservation_with_payment(
+            self.branch,
+            amount="25.00",
+            username="unpaid_mark_completed_guest",
+        )
+        reservation.raw_amount = Decimal("50.00")
+        reservation.save(update_fields=["raw_amount"])
+        entry = Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=timezone.now() - timedelta(hours=3),
+            ends_at=timezone.now() - timedelta(hours=2),
+        )
+
+        response = self.client.post(
+            reverse(
+                "mark-booking-completed",
+                kwargs={"branch": self.branch.slug, "entry_id": entry.pk},
+            )
+        )
+
+        entry.refresh_from_db()
+        detail_url = reverse(
+            "reservation-detail",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+        self.assertRedirects(
+            response,
+            f"{detail_url}?completion=payment-required",
+        )
+        self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
+        detail_response = self.client.get(response.url)
+        self.assertContains(
+            detail_response,
+            "This booking cannot be completed until its balance is zero.",
+        )
+        self.assertEqual(payment.status, Payment.Status.SUCCEEDED)
+
+    def test_mark_booking_completed_blocks_pending_payment_from_zero_balance(self):
+        reservation, payment = self.create_reservation_with_payment(
+            self.branch,
+            amount="50.00",
+            username="pending_mark_completed_guest",
+        )
+        reservation.raw_amount = Decimal("50.00")
+        reservation.save(update_fields=["raw_amount"])
+        payment.status = Payment.Status.PENDING
+        payment.paid_at = None
+        payment.save(update_fields=["status", "paid_at", "updated_at"])
+        entry = Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=timezone.now() - timedelta(hours=3),
+            ends_at=timezone.now() - timedelta(hours=2),
+        )
+
+        response = self.client.post(
+            reverse(
+                "mark-booking-completed",
+                kwargs={"branch": self.branch.slug, "entry_id": entry.pk},
+            )
+        )
+
+        entry.refresh_from_db()
+        self.assertRedirects(
+            response,
+            f"{reverse('reservation-detail', kwargs={'branch': self.branch.slug, 'reservation_id': reservation.pk})}?completion=payment-required",
+        )
+        self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
+
+    def test_mark_booking_completed_rejects_future_booking(self):
+        reservation, _payment = self.create_reservation_with_payment(
+            self.branch,
+            amount="50.00",
+            username="future_mark_completed_guest",
+        )
+        entry = Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=timezone.now() + timedelta(hours=1),
+            ends_at=timezone.now() + timedelta(hours=2),
+        )
+
+        response = self.client.post(
+            reverse(
+                "mark-booking-completed",
+                kwargs={"branch": self.branch.slug, "entry_id": entry.pk},
+            )
+        )
+
+        entry.refresh_from_db()
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
+
+    def test_financial_report_combines_branch_revenue_and_filters_dates(self):
+        self.create_reservation_with_payment(
+            self.branch,
+            amount="25.00",
+            username="dashboard_report_guest",
+        )
+        other_branch = Branch.objects.create(
+            name="Other Dashboard Branch",
+            slug="other-dashboard-branch",
+            city="Test City",
+            address="2 Dashboard Street",
+        )
+        self.create_reservation_with_payment(
+            other_branch,
+            amount="75.00",
+            username="other_dashboard_report_guest",
+        )
+        today = timezone.localdate()
+
+        response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
+            {
+                "branch": "all",
+                "start_date": today.replace(day=1).isoformat(),
+                "end_date": today.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_revenue"], Decimal("100.00"))
+        self.assertTrue(response.context["show_all_branches"])
+        self.assertEqual(len(response.context["branch_revenue"]), 2)
+        self.assertContains(response, "Other Dashboard Branch")
+        self.assertContains(response, "Combined revenue by month")
+
+    def test_operation_manager_is_limited_to_assigned_branch(self):
+        manager = User.object.create(
+            username="branch_dashboard_manager",
+            role=User.Role.OperationManager,
+            phone_number_code="+1",
+            phone_number="5559000002",
+            email="branch_dashboard_manager@example.com",
+            first_name="Branch",
+            last_name="Manager",
+            is_superuser=False,
+            is_active=True,
+        )
+        self.branch.manager_id = manager
+        self.branch.save(update_fields=["manager_id"])
+        other_branch = Branch.objects.create(
+            name="Unassigned Branch",
+            slug="unassigned-branch",
+            city="Test City",
+            address="3 Dashboard Street",
+        )
+        self.client.force_login(manager)
+
+        own_dashboard = self.client.get(
+            reverse("dashboard", kwargs={"branch": self.branch.slug})
+        )
+        other_dashboard = self.client.get(
+            reverse("dashboard", kwargs={"branch": other_branch.slug})
+        )
+        all_branches_report = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
+            {"branch": "all"},
+        )
+        other_branch_report = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
+            {"branch": other_branch.slug},
+        )
+
+        self.assertEqual(own_dashboard.status_code, 200)
+        self.assertEqual(other_dashboard.status_code, 404)
+        self.assertEqual(all_branches_report.status_code, 404)
+        self.assertEqual(other_branch_report.status_code, 404)
+
+    def test_general_manager_can_view_all_branch_reports(self):
+        other_branch = Branch.objects.create(
+            name="General Manager Branch",
+            slug="general-manager-branch",
+            city="Test City",
+            address="4 Dashboard Street",
+        )
+        general_manager = User.object.create(
+            username="general_dashboard_manager",
+            role=User.Role.GeneralManager,
+            phone_number_code="+1",
+            phone_number="5559000003",
+            email="general_dashboard_manager@example.com",
+            first_name="General",
+            last_name="Manager",
+            is_superuser=False,
+            is_active=True,
+        )
+        self.client.force_login(general_manager)
+
+        dashboard_response = self.client.get(
+            reverse("dashboard", kwargs={"branch": other_branch.slug})
+        )
+        report_response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
+            {"branch": "all"},
+        )
+
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertEqual(report_response.status_code, 200)
+        self.assertTrue(report_response.context["show_all_branches"])

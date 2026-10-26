@@ -1,5 +1,9 @@
 from django.urls import path
-from dashboard.views.dashboard import DashboardView, DashboardRedirectView
+from dashboard.views.dashboard import (
+    DashboardView,
+    DashboardRedirectView,
+    FinancialReportView,
+)
 from dashboard.views.facilities_maintenance import (
     FacilitiesMaintenanceView,
     MaintenanceHistoryView,
@@ -20,7 +24,10 @@ from dashboard.views.inventory import (
     RecordInventoryMovementView,
 )
 from dashboard.views.add_inventory_item import AddInventoryItemView
-from dashboard.views.reservations import ReservationsCalendarView
+from dashboard.views.reservations import (
+    MarkBookingCompletedView,
+    ReservationsCalendarView,
+)
 from dashboard.views.reservation_detail import ReservationDetailView
 from dashboard.views.create_payment import (
     CreatePaymentView,
@@ -41,7 +48,12 @@ from dashboard.views.calendar_entries import (
 
 urlpatterns = [
     path('', DashboardRedirectView.as_view()),
-    path('<str:branch>/', DashboardView.as_view()),
+    path('<str:branch>/', DashboardView.as_view(), name='dashboard'),
+    path(
+        '<str:branch>/financial-reports/',
+        FinancialReportView.as_view(),
+        name='financial-reports',
+    ),
     path(
         '<str:branch>/inventory/',
         InventoryView.as_view(),
@@ -91,6 +103,11 @@ urlpatterns = [
         '<str:branch>/reservations/',
         ReservationsCalendarView.as_view(),
         name='reservations',
+    ),
+    path(
+        '<str:branch>/reservations/bookings/<int:entry_id>/complete/',
+        MarkBookingCompletedView.as_view(),
+        name='mark-booking-completed',
     ),
     path(
         '<str:branch>/reservations/new/',

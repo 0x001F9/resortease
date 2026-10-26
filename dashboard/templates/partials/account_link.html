@@ -1,0 +1,11 @@
+{% if account_user %}
+	<a class="{{ account_link_class|default:'link link-hover' }}" href="{% url 'user-profile' account_user.username %}">
+		{% if account_user.first_name or account_user.last_name %}
+			{{ account_user.first_name }} {{ account_user.last_name }}
+		{% else %}
+			{{ account_user.username }}
+		{% endif %}
+	</a>
+{% else %}
+	—
+{% endif %}

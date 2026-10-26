@@ -30,7 +30,7 @@
                         <div class="rounded-box border border-base-300 p-4">
                             <p class="text-sm text-base-content/60">Guest</p>
                             <p class="font-medium">
-                                {{ reservation.guest.first_name }} {{ reservation.guest.last_name }}
+                                {% include "partials/account_link.html" with account_user=reservation.guest account_link_class="link link-hover" %}
                             </p>
                             <p class="text-sm text-base-content/70">{{ reservation.guest.email }}</p>
                         </div>

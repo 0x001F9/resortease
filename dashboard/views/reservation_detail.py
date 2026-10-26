@@ -82,6 +82,9 @@ class ReservationDetailView(View):
                 "is_fully_paid": (
                     total_amount is not None and remaining_balance == 0
                 ),
+                "completion_payment_required": (
+                    request.GET.get("completion") == "payment-required"
+                ),
                 "hide_aside": True,
             },
         )

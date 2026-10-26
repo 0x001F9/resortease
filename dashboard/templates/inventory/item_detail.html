@@ -111,7 +111,7 @@
                         <td>{{ transaction.balance_after }}</td>
                         <td>{% if transaction.unit_cost != None %}PHP {{ transaction.unit_cost|floatformat:2 }}{% else %}—{% endif %}</td>
                         <td>{{ transaction.reference|default:"—" }}</td>
-                        <td>{{ transaction.performed_by|default:"—" }}</td>
+                        <td>{% include "partials/account_link.html" with account_user=transaction.performed_by account_link_class="link link-hover" %}</td>
                         <td>{{ transaction.notes|default:"—" }}</td>
                     </tr>
                     {% empty %}

@@ -1,0 +1,103 @@
+{% extends "partials/layout.html" %}
+
+{% block content %}
+<main class="mx-auto w-full max-w-[100rem] space-y-8 px-4 py-6 sm:px-6 lg:px-8">
+	<header class="flex flex-col gap-4 border-b border-base-300 pb-6 sm:flex-row sm:items-end sm:justify-between">
+		<div>
+			<p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">Resort operations</p>
+			<h1 class="mt-2 text-3xl font-semibold">Financial reports</h1>
+			<p class="mt-1 text-sm text-base-content/65">
+				{% if show_all_branches %}All branches{% else %}{{ selected_branch.name }}{% endif %}
+				· Succeeded reservation payments
+			</p>
+		</div>
+		{% if selected_branch %}
+			<a class="btn btn-ghost" href="{% url 'dashboard' selected_branch.slug %}">Back to dashboard</a>
+		{% else %}
+			<a class="btn btn-ghost" href="{% url 'dashboard' request.branch.slug %}">Back to dashboard</a>
+		{% endif %}
+	</header>
+
+	<form class="card border border-base-300 bg-base-100" method="get">
+		<div class="card-body">
+			<h2 class="card-title">Report filters</h2>
+			<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+				<label class="form-control">
+					<span class="label"><span class="label-text">Start date</span></span>
+					<input class="input input-bordered" type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" required />
+				</label>
+				<label class="form-control">
+					<span class="label"><span class="label-text">End date</span></span>
+					<input class="input input-bordered" type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" required />
+				</label>
+				{% if can_view_all_branches %}
+					<label class="form-control">
+						<span class="label"><span class="label-text">Branch</span></span>
+						<select class="select select-bordered" name="branch">
+							<option value="all" {% if show_all_branches %}selected{% endif %}>All branches</option>
+							{% for branch in branches %}
+								<option value="{{ branch.slug }}" {% if selected_branch.pk == branch.pk %}selected{% endif %}>{{ branch.name }}</option>
+							{% endfor %}
+						</select>
+					</label>
+				{% else %}
+					<input type="hidden" name="branch" value="{{ request.branch.slug }}" />
+					<div class="form-control">
+						<span class="label"><span class="label-text">Branch</span></span>
+						<p class="input flex items-center">{{ request.branch.name }}</p>
+					</div>
+				{% endif %}
+				<div class="form-control justify-end">
+					<button class="btn btn-primary" type="submit">Apply filters</button>
+				</div>
+			</div>
+		</div>
+	</form>
+
+	<section class="card border border-base-300 bg-base-100">
+		<div class="card-body">
+			<p class="text-sm font-semibold uppercase tracking-wide text-base-content/60">Total received</p>
+			<p class="text-3xl font-bold">PHP {{ total_revenue|floatformat:2 }}</p>
+			<p class="text-sm text-base-content/65">{{ start_date|date:"M j, Y" }} – {{ end_date|date:"M j, Y" }}</p>
+		</div>
+	</section>
+
+	<section class="card border border-base-300 bg-base-100">
+		<div class="card-body">
+			<h2 class="card-title">{% if show_all_branches %}Combined revenue by month{% else %}Revenue by month{% endif %}</h2>
+			<div class="overflow-x-auto">
+				<table class="table">
+					<thead><tr><th>Month</th><th class="text-right">Reservation payments received</th></tr></thead>
+					<tbody>
+						{% for row in monthly_revenue %}
+							<tr><td>{{ row.month|date:"F Y" }}</td><td class="text-right">PHP {{ row.total|floatformat:2 }}</td></tr>
+						{% empty %}
+							<tr><td colspan="2" class="py-8 text-center text-base-content/65">No succeeded payments in this date range.</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</section>
+
+	{% if show_all_branches %}
+		<section class="card border border-base-300 bg-base-100">
+			<div class="card-body">
+				<h2 class="card-title">Revenue by branch</h2>
+				<div class="overflow-x-auto">
+					<table class="table">
+						<thead><tr><th>Branch</th><th class="text-right">Reservation payments received</th></tr></thead>
+						<tbody>
+							{% for row in branch_revenue %}
+								<tr><td>{{ row.branch_name }}</td><td class="text-right">PHP {{ row.total|floatformat:2 }}</td></tr>
+							{% empty %}
+								<tr><td colspan="2" class="py-8 text-center text-base-content/65">No branch payments in this date range.</td></tr>
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</section>
+	{% endif %}
+</main>
+{% endblock %}

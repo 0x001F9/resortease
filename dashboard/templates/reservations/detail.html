@@ -27,6 +27,12 @@
                     </span>
                 </header>
 
+                {% if completion_payment_required %}
+                    <div role="alert" class="alert alert-warning">
+                        <span>This booking cannot be completed until its balance is zero. Review the price summary and payment activity below.</span>
+                    </div>
+                {% endif %}
+
                 <section aria-labelledby="stay-heading">
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <h2 id="stay-heading" class="text-lg font-semibold">Reservation</h2>
@@ -40,7 +46,7 @@
                     <dl class="grid gap-4 rounded-box border border-base-300 p-4 sm:grid-cols-2">
                         <div>
                             <dt class="text-sm text-base-content/60">Guest</dt>
-                            <dd class="font-medium">{{ reservation.guest.first_name }} {{ reservation.guest.last_name }}</dd>
+                            <dd class="font-medium">{% include "partials/account_link.html" with account_user=reservation.guest account_link_class="link link-hover" %}</dd>
                             <dd class="text-sm text-base-content/70">{{ reservation.guest.email }}</dd>
                             {% if reservation.guest.phone_number %}
                                 <dd class="text-sm text-base-content/70">
@@ -239,7 +245,7 @@
                                                     </td>
                                                     <td>
                                                         {% if payment.cashier %}
-                                                            {{ payment.cashier.first_name }} {{ payment.cashier.last_name }}
+                                                            {% include "partials/account_link.html" with account_user=payment.cashier account_link_class="link link-hover" %}
                                                         {% else %}
                                                             —
                                                         {% endif %}

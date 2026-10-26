@@ -16,7 +16,7 @@
                             <p class="font-semibold text-error">Unavailable</p>
                         {% else %}
                             <p class="font-semibold">
-                                {{ entry.reservation.guest.first_name }} {{ entry.reservation.guest.last_name }}
+                                {% include "partials/account_link.html" with account_user=entry.reservation.guest account_link_class="link link-hover" %}
                             </p>
                             <p class="text-sm text-base-content/70">
                                 {{ entry.get_status_display }} booking

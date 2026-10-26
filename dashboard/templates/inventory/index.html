@@ -318,7 +318,7 @@
                     </div>
                     <div class="min-w-0">
                         <dt class="text-xs text-base-content/60">Borrowed by</dt>
-                        <dd class="break-words font-medium">{{ asset.borrowed_by|default:"—" }}</dd>
+                        <dd class="break-words font-medium">{% include "partials/account_link.html" with account_user=asset.borrowed_by account_link_class="link link-hover" %}</dd>
                     </div>
                     <div>
                         <dt class="text-xs text-base-content/60">Due date</dt>
@@ -375,7 +375,7 @@
                                 <span class="badge badge-ghost">{{ asset.get_status_display }}</span>
                             {% endif %}
                         </td>
-                        <td>{{ asset.borrowed_by|default:"—" }}</td>
+                        <td>{% include "partials/account_link.html" with account_user=asset.borrowed_by account_link_class="link link-hover" %}</td>
                         <td>{{ asset.due_date|date:"M d, Y H:i"|default:"—" }}</td>
                         <td>{% if asset.purchase_cost != None %}PHP {{ asset.purchase_cost|floatformat:2 }}{% else %}—{% endif %}</td>
                     </tr>

@@ -47,7 +47,7 @@
                         <td>{{ issue.issue_type }}</td>
                         <td>
                             {% if issue.issued_by %}
-                                {{ issue.issued_by.username }}
+                                {% include "partials/account_link.html" with account_user=issue.issued_by account_link_class="link link-hover" %}
                             {% else %}
                                 Former user
                             {% endif %}

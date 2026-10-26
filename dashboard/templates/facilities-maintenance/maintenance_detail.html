@@ -69,11 +69,7 @@
                             <dt class="text-sm text-base-content/65">Issued by</dt>
                             <dd class="mt-1 font-medium">
                                 {% if maintenance.issued_by %}
-                                    {% if maintenance.issued_by.first_name or maintenance.issued_by.last_name %}
-                                        {{ maintenance.issued_by.first_name }} {{ maintenance.issued_by.last_name }}
-                                    {% else %}
-                                        {{ maintenance.issued_by.username }}
-                                    {% endif %}
+                                    {% include "partials/account_link.html" with account_user=maintenance.issued_by account_link_class="link link-hover" %}
                                 {% else %}
                                     Former user
                                 {% endif %}

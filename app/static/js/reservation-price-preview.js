@@ -1,4 +1,9 @@
 (() => {
+    const appTimeZone = document.documentElement.dataset.timezone;
+    if (!appTimeZone) {
+        throw new Error("The application timezone is missing from the page.");
+    }
+
     const money = new Intl.NumberFormat("en-PH", {
         style: "currency",
         currency: "PHP",
@@ -10,8 +15,35 @@
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
-        timeZone: "UTC",
+        timeZone: appTimeZone,
     });
+    const dateTimePartsFormat = new Intl.DateTimeFormat("en-US", {
+        timeZone: appTimeZone,
+        calendar: "gregory",
+        numberingSystem: "latn",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+    });
+
+    function getDateTimeParts(date) {
+        return Object.fromEntries(
+            dateTimePartsFormat.formatToParts(date)
+                .filter(({ type }) => type !== "literal")
+                .map(({ type, value }) => [type, Number(value)]),
+        );
+    }
+
+    function getWallTimeTimestamp({ year, month, day, hour, minute }) {
+        const date = new Date(0);
+        date.setUTCFullYear(year, month - 1, day);
+        date.setUTCHours(hour, minute, 0, 0);
+        return date.getTime();
+    }
+
     function parseLocalDateTime(value) {
         const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
         if (!match) {
@@ -19,11 +51,34 @@
         }
 
         const [, year, month, day, hour, minute] = match.map(Number);
+        const requestedParts = { year, month, day, hour, minute };
+        const wallTimeTimestamp = getWallTimeTimestamp(requestedParts);
+        let timestamp = wallTimeTimestamp;
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+            const actualWallTime = getWallTimeTimestamp(
+                getDateTimeParts(new Date(timestamp)),
+            );
+            const adjustment = wallTimeTimestamp - actualWallTime;
+            timestamp += adjustment;
+            if (adjustment === 0) {
+                break;
+            }
+        }
+
+        const resolvedParts = getDateTimeParts(new Date(timestamp));
+        if (
+            Object.keys(requestedParts).some(
+                (part) => requestedParts[part] !== resolvedParts[part],
+            )
+        ) {
+            return null;
+        }
+
         return {
-            timestamp: Date.UTC(year, month - 1, day, hour, minute),
+            timestamp,
             date: `${match[1]}-${match[2]}-${match[3]}`,
             time: `${match[4]}:${match[5]}`,
-        };
+        }
     }
 
     function updateReservationEnd(form) {
@@ -114,11 +169,8 @@
 
         const endTimestamp = startsAt.timestamp + duration;
         const endDate = new Date(endTimestamp);
-        endInput.value = [
-            endDate.getUTCFullYear(),
-            String(endDate.getUTCMonth() + 1).padStart(2, "0"),
-            String(endDate.getUTCDate()).padStart(2, "0"),
-        ].join("-") + `T${String(endDate.getUTCHours()).padStart(2, "0")}:${String(endDate.getUTCMinutes()).padStart(2, "0")}`;
+        const endParts = getDateTimeParts(endDate);
+        endInput.value = `${endParts.year}-${String(endParts.month).padStart(2, "0")}-${String(endParts.day).padStart(2, "0")}T${String(endParts.hour).padStart(2, "0")}:${String(endParts.minute).padStart(2, "0")}`;
 
         if (
             (selectedPackage === "morning" && startsAt.time !== "08:00")

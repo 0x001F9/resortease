@@ -17,7 +17,7 @@
                     <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">{{ request.branch.name }}</p>
                     <h1 class="card-title mt-1 text-2xl font-semibold">Record payment</h1>
                     <p class="mt-2 text-sm text-base-content/70">
-                        Reservation #{{ reservation.pk }} for {{ reservation.guest.first_name }} {{ reservation.guest.last_name }}
+                        Reservation #{{ reservation.pk }} for {% include "partials/account_link.html" with account_user=reservation.guest account_link_class="link link-hover" %}
                     </p>
                 </header>
 
@@ -68,7 +68,7 @@
                         </div>
                     {% endif %}
 
-                    <p class="text-sm text-base-content/70">Cashier: {{ request.user.first_name }} {{ request.user.last_name }}.</p>
+                    <p class="text-sm text-base-content/70">Cashier: {% include "partials/account_link.html" with account_user=request.user account_link_class="link link-hover" %}.</p>
                     <div class="flex flex-wrap justify-end gap-2">
                         <a
                             href="{% url 'reservation-detail' request.branch.slug reservation.pk %}"
