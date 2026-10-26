@@ -7,7 +7,7 @@ from django.views import View
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.forms import ReservationEditForm
-from dashboard.models import Calendar, Reservation
+from dashboard.models import Calendar, Maintenance, Reservation
 from dashboard.views.calendar_entries import has_calendar_conflict
 
 
@@ -40,6 +40,13 @@ class EditReservationView(View):
                 reservation,
                 starts_at,
                 ends_at,
+            ),
+            "facility_has_in_progress_maintenance": (
+                reservation.facility is not None
+                and Maintenance.objects.filter(
+                    facility=reservation.facility,
+                    status=Maintenance.Status.IN_PROGRESS,
+                ).exists()
             ),
             "hide_aside": True,
         }

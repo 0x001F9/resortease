@@ -21,7 +21,10 @@
 	<form class="card border border-base-300 bg-base-100" method="get">
 		<div class="card-body">
 			<h2 class="card-title">Report filters</h2>
-			<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+			<input type="hidden" name="chart_period" value="{{ chart_period }}" />
+			<input type="hidden" name="chart_year" value="{{ chart_year }}" />
+			<input type="hidden" name="chart_month" value="{{ chart_month }}" />
+			<div class="flex flex-wrap gap-4 items-end">
 				<label class="form-control">
 					<span class="label"><span class="label-text">Start date</span></span>
 					<input class="input input-bordered" type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" required />
@@ -64,6 +67,53 @@
 
 	<section class="card border border-base-300 bg-base-100">
 		<div class="card-body">
+			<div>
+				<h2 class="card-title">Reservation revenue</h2>
+				<p class="text-sm text-base-content/65">
+					Succeeded reservation payments received
+					{% if show_all_branches %}across all branches{% else %}for {{ selected_branch.name }}{% endif %}.
+					{% if chart_period == "year" %}Monthly totals for {{ chart_year }}.{% else %}Daily totals for {{ chart_month_label }} {{ chart_year }}.{% endif %}
+				</p>
+			</div>
+			<form method="get" class="flex gap-4 items-end flex-wrap rounded-box bg-base-200/50 p-4">
+				<input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}" />
+				<input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}" />
+				<input type="hidden" name="branch" value="{{ selected_branch_slug }}" />
+				<label class="form-control">
+					<span class="label"><span class="label-text">Chart period</span></span>
+					<select class="select select-bordered" name="chart_period">
+						<option value="year" {% if chart_period == "year" %}selected{% endif %}>Months in a year</option>
+						<option value="month" {% if chart_period == "month" %}selected{% endif %}>Days in a month</option>
+					</select>
+				</label>
+				<label class="form-control">
+					<span class="label"><span class="label-text">Year</span></span>
+					<input class="input input-bordered" type="number" name="chart_year" min="1" max="9998" value="{{ chart_year }}" required />
+				</label>
+				{% if chart_period == "month" %}
+					<label class="form-control">
+						<span class="label"><span class="label-text">Month</span></span>
+						<select class="select select-bordered" name="chart_month">
+							{% for month in chart_month_choices %}
+								<option value="{{ month.value }}" {% if chart_month == month.value %}selected{% endif %}>{{ month.label }}</option>
+							{% endfor %}
+						</select>
+					</label>
+				{% else %}
+					<input type="hidden" name="chart_month" value="{{ chart_month }}" />
+				{% endif %}
+				<div class="form-control justify-end">
+					<button class="btn btn-primary" type="submit">Update chart</button>
+				</div>
+			</form>
+			<div id="reservation-revenue-chart" class="w-full" style="height: 20rem" role="img" aria-label="Line chart of reservation revenue"></div>
+			<p id="reservation-revenue-chart-error" class="hidden text-sm text-error">The reservation revenue chart could not be loaded.</p>
+			{{ revenue_chart_data|json_script:"reservation-revenue-chart-data" }}
+		</div>
+	</section>
+
+	<section class="card border border-base-300 bg-base-100">
+		<div class="card-body">
 			<h2 class="card-title">{% if show_all_branches %}Combined revenue by month{% else %}Revenue by month{% endif %}</h2>
 			<div class="overflow-x-auto">
 				<table class="table">
@@ -100,4 +150,53 @@
 		</section>
 	{% endif %}
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+	const chartElement = document.getElementById("reservation-revenue-chart")
+	const chartError = document.getElementById("reservation-revenue-chart-error")
+	if (window.echarts && chartElement) {
+		const chartData = JSON.parse(
+			document.getElementById("reservation-revenue-chart-data").textContent,
+		)
+		const revenueChart = window.echarts.init(chartElement)
+		revenueChart.setOption({
+			tooltip: {
+				trigger: "axis",
+				formatter: (params) => {
+					const index = params[0].dataIndex
+					const revenue = Number(params[0].value).toLocaleString(
+						undefined,
+						{ minimumFractionDigits: 2, maximumFractionDigits: 2 },
+					)
+					return [
+						params[0].axisValue,
+						`Revenue: PHP ${revenue}`,
+						`Bookings: ${chartData.bookings[index]}`,
+						`Reservations: ${chartData.reservations[index]}`,
+					].join("<br/>")
+				},
+			},
+			grid: { left: 64, right: 24, top: 24, bottom: 36 },
+			xAxis: { type: "category", boundaryGap: false, data: chartData.labels },
+			yAxis: {
+				type: "value",
+				name: "PHP",
+				axisLabel: { formatter: (value) => Number(value).toLocaleString() },
+			},
+			series: [{
+				name: "Reservation revenue",
+				type: "line",
+				smooth: true,
+				showSymbol: false,
+				data: chartData.values,
+				areaStyle: { opacity: 0.12 },
+			}],
+		})
+		window.addEventListener("resize", () => revenueChart.resize())
+	} else if (chartError) {
+		chartError.classList.remove("hidden")
+	}
+</script>
 {% endblock %}

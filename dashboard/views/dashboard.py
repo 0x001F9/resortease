@@ -1,8 +1,8 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from django.db.models import Case, F, IntegerField, Sum, Value, When
-from django.db.models.functions import TruncMonth
+from django.db.models import Case, Count, F, IntegerField, Q, Sum, Value, When
+from django.db.models.functions import TruncDay, TruncMonth
 from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -157,6 +157,19 @@ class DashboardView(View):
 class FinancialReportView(View):
     def get(self, request):
         today = timezone.localdate()
+        chart_period = request.GET.get("chart_period", "year")
+        if chart_period not in {"year", "month"}:
+            return HttpResponseBadRequest("Chart period must be year or month.")
+        try:
+            chart_year = int(request.GET.get("chart_year", today.year))
+            chart_month = int(request.GET.get("chart_month", today.month))
+        except (TypeError, ValueError):
+            return HttpResponseBadRequest("Chart year and month must be numeric.")
+        if not 1 <= chart_year < 9999:
+            return HttpResponseBadRequest("Chart year must be between 1 and 9998.")
+        if not 1 <= chart_month <= 12:
+            return HttpResponseBadRequest("Chart month must be between 1 and 12.")
+
         default_start = today.replace(day=1)
         raw_start_date = request.GET.get("start_date")
         raw_end_date = request.GET.get("end_date")
@@ -186,14 +199,19 @@ class FinancialReportView(View):
 
         start_at = _local_day_start(start_date)
         end_at = _local_day_start(end_date + timedelta(days=1))
-        payments = Payment.objects.filter(
+        branch_payments = Payment.objects.filter(
             reservation_id__facility__branch__in=request.branches,
             status=Payment.Status.SUCCEEDED,
+        )
+        if selected_branch is not None:
+            branch_payments = branch_payments.filter(
+                reservation_id__facility__branch=selected_branch
+            )
+
+        payments = branch_payments.filter(
             paid_at__gte=start_at,
             paid_at__lt=end_at,
         )
-        if selected_branch is not None:
-            payments = payments.filter(reservation_id__facility__branch=selected_branch)
 
         total_revenue = payments.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
         monthly_revenue = (
@@ -204,6 +222,86 @@ class FinancialReportView(View):
             .annotate(total=Sum("amount"))
             .order_by("month")
         )
+        chart_start_date = (
+            date(chart_year, 1, 1)
+            if chart_period == "year"
+            else date(chart_year, chart_month, 1)
+        )
+        chart_end_date = (
+            date(chart_year + 1, 1, 1)
+            if chart_period == "year"
+            else _next_month_start(chart_start_date)
+        )
+        chart_payments = branch_payments.filter(
+            paid_at__gte=_local_day_start(chart_start_date),
+            paid_at__lt=_local_day_start(chart_end_date),
+        )
+        truncation = TruncMonth if chart_period == "year" else TruncDay
+        chart_rows = (
+            chart_payments.annotate(
+                bucket=truncation(
+                    "paid_at",
+                    tzinfo=timezone.get_current_timezone(),
+                )
+            )
+            .values("bucket")
+            .annotate(
+                total=Sum("amount"),
+                reservations=Count("reservation_id", distinct=True),
+                bookings=Count(
+                    "reservation_id",
+                    filter=Q(
+                        reservation_id__calendar_entry__status__in=(
+                            Calendar.Status.CONFIRMED,
+                            Calendar.Status.COMPLETED,
+                        )
+                    ),
+                    distinct=True,
+                ),
+            )
+            .order_by("bucket")
+        )
+        chart_totals = {}
+        chart_reservations = {}
+        chart_bookings = {}
+        for row in chart_rows:
+            bucket = (
+                row["bucket"].month
+                if chart_period == "year"
+                else row["bucket"].day
+            )
+            chart_totals[bucket] = float(row["total"])
+            chart_reservations[bucket] = row["reservations"]
+            chart_bookings[bucket] = row["bookings"]
+        bucket_count = 12 if chart_period == "year" else (
+            chart_end_date - chart_start_date
+        ).days
+        chart_labels = (
+            [
+                date(chart_year, month, 1).strftime("%b")
+                for month in range(1, 13)
+            ]
+            if chart_period == "year"
+            else [
+                str(day)
+                for day in range(1, bucket_count + 1)
+            ]
+        )
+        revenue_chart_data = {
+            "labels": chart_labels,
+            "values": [
+                chart_totals.get(bucket, 0)
+                for bucket in range(1, bucket_count + 1)
+            ],
+            "reservations": [
+                chart_reservations.get(bucket, 0)
+                for bucket in range(1, bucket_count + 1)
+            ],
+            "bookings": [
+                chart_bookings.get(bucket, 0)
+                for bucket in range(1, bucket_count + 1)
+            ],
+        }
         branch_revenue = (
             payments.values(
                 branch_name=F("reservation_id__facility__branch__name"),
@@ -218,10 +316,27 @@ class FinancialReportView(View):
             {
                 "branches": request.branches,
                 "selected_branch": selected_branch,
+                "selected_branch_slug": selected_branch_slug,
                 "show_all_branches": selected_branch_slug == "all",
                 "can_view_all_branches": can_view_all_branches,
                 "start_date": start_date,
                 "end_date": end_date,
+                "chart_period": chart_period,
+                "chart_year": chart_year,
+                "chart_month": chart_month,
+                "chart_month_label": date(
+                    2000,
+                    chart_month,
+                    1,
+                ).strftime("%B"),
+                "chart_month_choices": [
+                    {
+                        "value": month,
+                        "label": date(2000, month, 1).strftime("%B"),
+                    }
+                    for month in range(1, 13)
+                ],
+                "revenue_chart_data": revenue_chart_data,
                 "total_revenue": total_revenue,
                 "monthly_revenue": monthly_revenue,
                 "branch_revenue": branch_revenue,

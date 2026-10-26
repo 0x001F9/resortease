@@ -1,6 +1,7 @@
 from datetime import date, datetime, time, timedelta
 
 from django.db import transaction
+from django.db.models import Exists, OuterRef
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -13,7 +14,18 @@ from account.decoration.role_required import normal_user_not_allowed
 from account.models import User
 from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
 from dashboard.decorations.branch_check import check_branch_dashboard
-from dashboard.models import Calendar, Facility, Reservation
+from dashboard.models import Calendar, Facility, Maintenance, Reservation
+
+
+def with_in_progress_maintenance(facilities):
+    return facilities.annotate(
+        has_in_progress_maintenance=Exists(
+            Maintenance.objects.filter(
+                facility_id=OuterRef("pk"),
+                status=Maintenance.Status.IN_PROGRESS,
+            )
+        )
+    )
 
 
 def get_entries_for_day(branch, selected_day, facility=None):
@@ -342,9 +354,9 @@ class EditCalendarEntryView(View):
         return {
             "entry": entry,
             "reservation": reservation,
-            "facilities": Facility.objects.filter(
-                branch=request.branch
-            ).order_by("name"),
+            "facilities": with_in_progress_maintenance(
+                Facility.objects.filter(branch=request.branch).order_by("name")
+            ),
             "status_choices": [
                 choice
                 for choice in Calendar.Status.choices

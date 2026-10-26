@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
@@ -566,6 +567,102 @@ class CalendarEntryViewTests(TestCase):
                 self.assertNotContains(response, '<select name="guest"')
                 if route_name == "create-reservation":
                     self.assertNotContains(response, 'name="status"')
+
+    def test_in_progress_maintenance_is_flagged_on_reservation_creation_and_confirmation_forms(
+        self,
+    ):
+        self.facility.rate_24hours = 120
+        self.facility.save(update_fields=["rate_24hours", "updated_at"])
+        Maintenance.objects.create(
+            facility=self.facility,
+            title="Repair pool equipment",
+            description="Maintenance is underway.",
+            issue_type="Pool / Spa",
+            status=Maintenance.Status.IN_PROGRESS,
+            issued_by=self.user,
+        )
+
+        for route_name in ("create-reservation", "create-booking"):
+            with self.subTest(route_name=route_name):
+                response = self.client.get(
+                    reverse(route_name, kwargs={"branch": self.branch.slug})
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(
+                    response,
+                    'data-maintenance-in-progress="true"',
+                )
+                self.assertContains(
+                    response,
+                    "facility-maintenance-confirmation.js",
+                )
+
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(9),
+            )
+        )
+        guest = User.object.create(
+            username="maintenance_booking_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234789",
+            email="maintenance_booking_guest@example.com",
+            first_name="Maintenance",
+            last_name="Guest",
+        )
+        reservation = Reservation.objects.create(
+            guest=guest,
+            facility=self.facility,
+            starts_at=starts_at,
+            ends_at=starts_at + timedelta(days=1),
+        )
+
+        edit_reservation_response = self.client.get(
+            reverse(
+                "edit-reservation",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+        self.assertEqual(edit_reservation_response.status_code, 200)
+        self.assertContains(
+            edit_reservation_response,
+            'data-maintenance-in-progress="true"',
+        )
+        self.assertContains(
+            edit_reservation_response,
+            "facility-maintenance-confirmation.js",
+        )
+
+        entry = Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+        )
+        edit_calendar_response = self.client.get(
+            reverse(
+                "edit-calendar-entry",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "entry_id": entry.pk,
+                },
+            )
+        )
+        self.assertEqual(edit_calendar_response.status_code, 200)
+        self.assertContains(
+            edit_calendar_response,
+            'data-maintenance-in-progress="true"',
+        )
+        self.assertContains(
+            edit_calendar_response,
+            "facility-maintenance-confirmation.js",
+        )
 
     def test_reservation_and_booking_forms_expose_numeric_rates_to_preview(self):
         self.facility.rate_24hours = 120
@@ -3770,6 +3867,120 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertEqual(len(response.context["branch_revenue"]), 2)
         self.assertContains(response, "Other Dashboard Branch")
         self.assertContains(response, "Combined revenue by month")
+        self.assertEqual(response.context["chart_period"], "year")
+        self.assertEqual(
+            response.context["revenue_chart_data"]["labels"],
+            [
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+            ],
+        )
+        self.assertEqual(
+            response.context["revenue_chart_data"]["values"][today.month - 1],
+            100.0,
+        )
+        self.assertEqual(
+            response.context["revenue_chart_data"]["reservations"][
+                today.month - 1
+            ],
+            2,
+        )
+        self.assertEqual(
+            response.context["revenue_chart_data"]["bookings"][
+                today.month - 1
+            ],
+            0,
+        )
+        self.assertContains(response, "Months in a year")
+        self.assertContains(response, "Days in a month")
+
+    def test_financial_report_chart_groups_reservation_payments_by_day(self):
+        today = timezone.localdate()
+        reservation_one, _payment_one = self.create_reservation_with_payment(
+            self.branch,
+            amount="25.00",
+            paid_at=timezone.make_aware(
+                datetime.combine(today.replace(day=1), time(9))
+            ),
+            username="daily_report_guest_one",
+        )
+        reservation_two, _payment_two = self.create_reservation_with_payment(
+            self.branch,
+            amount="40.00",
+            paid_at=timezone.make_aware(
+                datetime.combine(today.replace(day=1), time(12))
+            ),
+            username="daily_report_guest_two",
+        )
+        reservation_three, _payment_three = self.create_reservation_with_payment(
+            self.branch,
+            amount="30.00",
+            paid_at=timezone.make_aware(
+                datetime.combine(today.replace(day=3), time(12))
+            ),
+            username="daily_report_guest_three",
+        )
+        Calendar.objects.create(
+            reservation=reservation_one,
+            facility=self.facility,
+            starts_at=reservation_one.starts_at,
+            ends_at=reservation_one.ends_at,
+        )
+        Calendar.objects.create(
+            reservation=reservation_three,
+            facility=self.facility,
+            starts_at=reservation_three.starts_at,
+            ends_at=reservation_three.ends_at,
+        )
+        Payment.objects.create(
+            reservation_id=reservation_one,
+            name="Second installment",
+            amount=Decimal("15.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+            paid_at=timezone.make_aware(
+                datetime.combine(today.replace(day=1), time(15))
+            ),
+        )
+        other_branch = Branch.objects.create(
+            name="Daily Chart Other Branch",
+            slug="daily-chart-other-branch",
+            city="Test City",
+            address="5 Dashboard Street",
+        )
+        self.create_reservation_with_payment(
+            other_branch,
+            amount="75.00",
+            paid_at=timezone.make_aware(
+                datetime.combine(today.replace(day=1), time(10))
+            ),
+            username="daily_report_other_branch_guest",
+        )
+
+        response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
+            {
+                "chart_period": "month",
+                "chart_year": str(today.year),
+                "chart_month": str(today.month),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["chart_period"], "month")
+        chart_data = response.context["revenue_chart_data"]
+        self.assertEqual(
+            len(chart_data["labels"]),
+            monthrange(today.year, today.month)[1],
+        )
+        self.assertEqual(chart_data["values"][0], 80.0)
+        self.assertEqual(chart_data["values"][2], 30.0)
+        self.assertEqual(chart_data["reservations"][0], 2)
+        self.assertEqual(chart_data["bookings"][0], 1)
+        self.assertEqual(chart_data["reservations"][2], 1)
+        self.assertEqual(chart_data["bookings"][2], 1)
+        self.assertEqual(sum(chart_data["values"]), 110.0)
+        self.assertNotContains(response, "Daily Chart Other Branch")
 
     def test_operation_manager_is_limited_to_assigned_branch(self):
         manager = User.object.create(

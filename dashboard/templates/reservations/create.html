@@ -47,7 +47,7 @@
                         <span>Past dates are read-only. Select today or a future date to add a reservation.</span>
                     </div>
                 {% else %}
-                <form method="post" class="space-y-5">
+                <form method="post" class="space-y-5" data-maintenance-confirmation="create">
                     {% csrf_token %}
 
                     {% if errors %}
@@ -81,6 +81,7 @@
                                     <option
                                         value="{{ facility.pk }}"
                                         data-capacity="{{ facility.capacity }}"
+                                        data-maintenance-in-progress="{{ facility.has_in_progress_maintenance|yesno:'true,false' }}"
                                         data-rate24-hours="{{ facility.rate_24hours|default_if_none:'' }}"
                                         data-rate22-hours="{{ facility.rate_22hours|default_if_none:'' }}"
                                         data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}"
@@ -195,4 +196,5 @@
 <script src="{% static 'js/reservation-price-preview.js' %}" defer></script>
 <script src="{% static 'js/reservation-user-picker.js' %}" defer></script>
 <script src="{% static 'js/facility-capacity.js' %}" defer></script>
+<script src="{% static 'js/facility-maintenance-confirmation.js' %}" defer></script>
 {% endblock %}

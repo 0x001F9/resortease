@@ -24,7 +24,7 @@
                     </div>
                 {% endif %}
 
-                <form method="post" class="space-y-5">
+                <form method="post" class="space-y-5" data-maintenance-confirmation="confirm">
                     {% csrf_token %}
                     {% if reservation %}
                         <div class="rounded-box border border-base-300 p-4">
@@ -42,7 +42,7 @@
                         </span>
                         <select name="facility" data-capacity-select data-capacity-advisory class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}" required>
                             {% for facility in facilities %}
-                                <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>
+                                <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" data-maintenance-in-progress="{{ facility.has_in_progress_maintenance|yesno:'true,false' }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>
                                     {{ facility.name }}
                                 </option>
                             {% endfor %}
@@ -135,4 +135,5 @@
 
 {% block scripts %}
 <script src="{% static 'js/facility-capacity.js' %}" defer></script>
+<script src="{% static 'js/facility-maintenance-confirmation.js' %}" defer></script>
 {% endblock %}

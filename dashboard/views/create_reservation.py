@@ -20,6 +20,7 @@ from dashboard.views.calendar_entries import (
     get_entries_for_day,
     has_calendar_conflict,
     is_past_date,
+    with_in_progress_maintenance,
 )
 
 RATE_PACKAGE_DURATIONS = {
@@ -60,8 +61,8 @@ class CreateReservationView(View):
 
     def get_form_context(self, request, form_data=None, errors=None):
         form_data = form_data or {}
-        facilities = Facility.objects.filter(branch=request.branch).order_by(
-            "name"
+        facilities = with_in_progress_maintenance(
+            Facility.objects.filter(branch=request.branch).order_by("name")
         )
         selected_facility_id = request.GET.get("facility") or form_data.get(
             "facility", ""
