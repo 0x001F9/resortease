@@ -3129,6 +3129,63 @@ class InventoryViewTests(TestCase):
         self.assertContains(response, "Inventory history")
         self.assertContains(response, "Initial stock")
         self.assertContains(response, "12")
+        self.assertContains(response, "Edit item details")
+        self.assertContains(response, 'id="edit-inventory-details"')
+
+    def test_inventory_item_details_can_be_updated_from_modal(self):
+        response = self.client.post(
+            reverse(
+                "inventory-item-detail",
+                kwargs={"branch": self.branch.slug, "item_id": self.inventory_item.pk},
+            ),
+            {
+                "sku": "TOWELS-UPDATED",
+                "reorder_level": "8",
+                "unit_cost": "7.25",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "inventory-item-detail",
+                kwargs={"branch": self.branch.slug, "item_id": self.inventory_item.pk},
+            ),
+        )
+        self.inventory_item.refresh_from_db()
+        self.assertEqual(self.inventory_item.sku, "TOWELS-UPDATED")
+        self.assertEqual(self.inventory_item.reorder_level, 8)
+        self.assertEqual(self.inventory_item.unit_cost, Decimal("7.25"))
+        self.assertEqual(self.inventory_item.quantity_on_hand, 12)
+        self.assertEqual(self.inventory_item.transactions.count(), 1)
+
+    def test_inventory_item_details_reject_duplicate_sku_and_reopen_modal(self):
+        Inventory.objects.create(
+            branch=self.branch,
+            name="Pool Towels Backup",
+            sku="BACKUP-TOWELS",
+            unit=Inventory.Unit.PACK,
+        )
+
+        response = self.client.post(
+            reverse(
+                "inventory-item-detail",
+                kwargs={"branch": self.branch.slug, "item_id": self.inventory_item.pk},
+            ),
+            {
+                "sku": "BACKUP-TOWELS",
+                "reorder_level": "8",
+                "unit_cost": "7.25",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["open_edit_modal"])
+        self.assertContains(response, "already exists")
+        self.inventory_item.refresh_from_db()
+        self.assertEqual(self.inventory_item.sku, "POOL-TOWELS")
+        self.assertEqual(self.inventory_item.reorder_level, 5)
+        self.assertEqual(self.inventory_item.unit_cost, Decimal("6.50"))
 
     def test_inventory_transaction_detail_shows_transaction_details(self):
         response = self.client.get(

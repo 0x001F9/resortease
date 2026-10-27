@@ -11,6 +11,9 @@
             <h1 class="mt-2 text-2xl font-semibold sm:text-3xl">{{ item.name }}</h1>
             <p class="mt-1 text-base-content/60">{{ item.sku|default:"No SKU" }}</p>
         </div>
+        <button class="btn btn-primary" type="button" onclick="document.getElementById('edit-inventory-details').showModal()">
+            Edit item details
+        </button>
     </div>
 
     <section class="grid gap-4 md:grid-cols-3">
@@ -36,6 +39,34 @@
             </div>
         </div>
     </section>
+
+    <dialog id="edit-inventory-details" class="modal">
+        <div class="modal-box max-h-[85svh] w-[calc(100%_-_2rem)] max-w-xl overflow-y-auto">
+            <h2 class="text-xl font-semibold">Edit item details</h2>
+            <p class="mt-1 text-sm text-base-content/65">Update the SKU, reorder threshold, or unit cost. Stock quantity and movement history are unchanged.</p>
+            <form method="post" class="mt-5 space-y-4">
+                {% csrf_token %}
+                {% for field in edit_form %}
+                    <label class="form-control">
+                        <span class="label"><span class="label-text">{{ field.label }}</span></span>
+                        {{ field }}
+                        {% if field.help_text %}<span class="label-text-alt text-base-content/60">{{ field.help_text }}</span>{% endif %}
+                        {% for error in field.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
+                    </label>
+                {% endfor %}
+                {% if edit_form.non_field_errors %}
+                    <div class="alert alert-error">{{ edit_form.non_field_errors }}</div>
+                {% endif %}
+                <div class="modal-action">
+                    <button class="btn btn-ghost" type="button" onclick="document.getElementById('edit-inventory-details').close()">Cancel</button>
+                    <button class="btn btn-primary" type="submit">Save changes</button>
+                </div>
+            </form>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+            <button aria-label="Close edit item details">close</button>
+        </form>
+    </dialog>
 
     <section class="mt-6 rounded-box border border-base-content/10 bg-base-100 shadow-sm">
         <div class="border-b border-base-content/10 px-4 py-3">
@@ -124,4 +155,12 @@
         </div>
     </section>
 </main>
+{% endblock %}
+
+{% block scripts %}
+    {% if open_edit_modal %}
+        <script>
+            document.getElementById("edit-inventory-details").showModal()
+        </script>
+    {% endif %}
 {% endblock %}

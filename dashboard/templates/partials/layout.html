@@ -20,7 +20,14 @@
             <header class="navbar sticky top-0 z-30 border-b border-base-300 bg-base-100/95 px-3 backdrop-blur sm:px-5">
                 <div class="navbar-start min-w-0 gap-2">
                     {% if not hide_aside %}
-                        <label for="dashboard-drawer" class="btn btn-ghost btn-sm lg:hidden" aria-label="Open dashboard navigation">Menu</label>
+                        <label for="dashboard-drawer" class="btn btn-ghost btn-sm lg:hidden" aria-label="Open dashboard navigation">
+                            <img 
+                                src="{% static 'icon/hamburger-md-svgrepo-com.svg' %}"
+                                alt="Open dashboard navigation" 
+                                class="h-5 w-5"
+                                style="filter: invert()" 
+                            />
+                        </label>
                     {% endif %}
                     <a href="/" class="text-lg font-black tracking-tight text-primary sm:text-xl">ResortEase</a>
                     <label class="form-control hidden sm:block">

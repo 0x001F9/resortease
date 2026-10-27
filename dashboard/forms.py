@@ -327,6 +327,49 @@ class InventoryItemCreateForm(forms.ModelForm):
         return unit_cost
 
 
+class InventoryItemDetailsForm(forms.ModelForm):
+    class Meta:
+        model = Inventory
+        fields = ("sku", "reorder_level", "unit_cost")
+        widgets = {
+            "sku": forms.TextInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "autocomplete": "off",
+                }
+            ),
+            "reorder_level": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "min": "0",
+                    "step": "1",
+                }
+            ),
+            "unit_cost": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "min": "0",
+                    "step": "0.01",
+                    "placeholder": "0.00",
+                }
+            ),
+        }
+        labels = {
+            "sku": "SKU",
+            "reorder_level": "Reorder level",
+            "unit_cost": "Unit cost (₱)",
+        }
+
+    def clean_sku(self):
+        return self.cleaned_data["sku"] or None
+
+    def clean_unit_cost(self):
+        unit_cost = self.cleaned_data.get("unit_cost")
+        if unit_cost is not None and unit_cost < 0:
+            raise forms.ValidationError("Unit cost cannot be negative.")
+        return unit_cost
+
+
 class InventoryAssetCreateForm(forms.ModelForm):
     class Meta:
         model = InventoryAsset
