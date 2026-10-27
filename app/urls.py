@@ -53,5 +53,6 @@ urlpatterns = [
     ),
     path("login/", LoginView.as_view(), name="login"),
     path("account/", include("account.urls")),
-    path("dashboard/", include("dashboard.urls"))
+    path("dashboard/", include("dashboard.urls")),
+    path("chat/", include("agent_chat.urls")),
 ]
