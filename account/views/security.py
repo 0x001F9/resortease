@@ -10,9 +10,9 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from account.redirects import get_safe_next_url
 from django.views import View
-from django.views.decorators.http import require_POST
 
 from account.models import OTP_EXPIRY_DURATION, User
 
@@ -163,149 +163,157 @@ def totp_change_context(request, user):
     return context
 
 
-@login_required(login_url="login")
-def change_totp_authenticator(request, username):
-    if request.user.username != username:
-        return HttpResponseForbidden("You are not allowed to change these settings.")
-    if not request.user.totp_enabled:
-        messages.error(request, "Enable TOTP before changing your authenticator.")
-        return redirect("user-settings", username=request.user.username)
+@method_decorator(login_required(login_url="login"), name="dispatch")
+class ChangeTOTPAuthenticatorView(View):
+    def get(self, request, username):
+        return self._handle(request, username)
 
-    user = request.user
-    email_user_id = request.session.get("totp_change_email_user_id")
-    setup_user_id = request.session.get("totp_change_setup_user_id")
-    if email_user_id not in (None, user.pk):
-        clear_totp_change_session(request)
-        email_user_id = None
-    if setup_user_id not in (None, user.pk):
-        clear_totp_change_session(request)
-        setup_user_id = None
+    def post(self, request, username):
+        return self._handle(request, username)
 
-    if request.method == "GET":
-        if setup_user_id != user.pk:
-            code_is_valid = (
-                user.otp_expires_at is not None
-                and user.otp_expires_at > timezone.now()
-                and bool(user.otp_code)
-                and email_user_id == user.pk
-            )
-            if not code_is_valid:
+    def _handle(self, request, username):
+        if request.user.username != username:
+            return HttpResponseForbidden("You are not allowed to change these settings.")
+        if not request.user.totp_enabled:
+            messages.error(request, "Enable TOTP before changing your authenticator.")
+            return redirect("user-settings", username=request.user.username)
+
+        user = request.user
+        email_user_id = request.session.get("totp_change_email_user_id")
+        setup_user_id = request.session.get("totp_change_setup_user_id")
+        if email_user_id not in (None, user.pk):
+            clear_totp_change_session(request)
+            email_user_id = None
+        if setup_user_id not in (None, user.pk):
+            clear_totp_change_session(request)
+            setup_user_id = None
+
+        if request.method == "GET":
+            if setup_user_id != user.pk:
+                code_is_valid = (
+                    user.otp_expires_at is not None
+                    and user.otp_expires_at > timezone.now()
+                    and bool(user.otp_code)
+                    and email_user_id == user.pk
+                )
+                if not code_is_valid:
+                    user.send_otp_email(request, "authenticator change confirmation")
+                    request.session["totp_change_email_user_id"] = user.pk
+                    request.session["totp_change_otp_sent_at"] = timezone.now().timestamp()
+            context = totp_change_context(request, user)
+            context["error"] = request.session.pop("totp_change_error", None)
+            context["success"] = request.session.pop("totp_change_success", None)
+            return render(request, "account/totp_change.html", context)
+
+        if request.method != "POST":
+            return HttpResponseForbidden("Unsupported request method.")
+
+        action = request.POST.get("action")
+        if action == "cancel":
+            if email_user_id == user.pk:
+                user.otp_code = ""
+                user.otp_expires_at = None
+                user.save(
+                    update_fields=["otp_code", "otp_expires_at", "updated_at"]
+                )
+            clear_totp_change_session(request)
+            messages.info(request, "Authenticator change cancelled.")
+            return redirect("user-settings", username=user.username)
+
+        if action == "resend_email":
+            if setup_user_id == user.pk or email_user_id != user.pk:
+                return HttpResponseForbidden("No authenticator change was requested.")
+            context = totp_change_context(request, user)
+            if context["seconds_until_resend"] > 0:
+                request.session["totp_change_error"] = (
+                    "Please wait before requesting another email code."
+                )
+            else:
                 user.send_otp_email(request, "authenticator change confirmation")
-                request.session["totp_change_email_user_id"] = user.pk
                 request.session["totp_change_otp_sent_at"] = timezone.now().timestamp()
-        context = totp_change_context(request, user)
-        context["error"] = request.session.pop("totp_change_error", None)
-        context["success"] = request.session.pop("totp_change_success", None)
-        return render(request, "account/totp_change.html", context)
+                request.session["totp_change_success"] = (
+                    f"A new code was sent to {user.email}."
+                )
+            return redirect("change-totp-authenticator", username=user.username)
 
-    if request.method != "POST":
-        return HttpResponseForbidden("Unsupported request method.")
+        if action == "confirm_email":
+            if setup_user_id == user.pk or email_user_id != user.pk:
+                return HttpResponseForbidden("No authenticator change was requested.")
+            email_code = (request.POST.get("email_code") or "").strip()
+            if not user.verify_otp(email_code):
+                request.session["totp_change_error"] = (
+                    "The email code was invalid or has expired."
+                )
+                return redirect("change-totp-authenticator", username=user.username)
 
-    action = request.POST.get("action")
-    if action == "cancel":
-        if email_user_id == user.pk:
             user.otp_code = ""
             user.otp_expires_at = None
-            user.save(
-                update_fields=["otp_code", "otp_expires_at", "updated_at"]
-            )
-        clear_totp_change_session(request)
-        messages.info(request, "Authenticator change cancelled.")
-        return redirect("user-settings", username=user.username)
-
-    if action == "resend_email":
-        if setup_user_id == user.pk or email_user_id != user.pk:
-            return HttpResponseForbidden("No authenticator change was requested.")
-        context = totp_change_context(request, user)
-        if context["seconds_until_resend"] > 0:
-            request.session["totp_change_error"] = (
-                "Please wait before requesting another email code."
-            )
-        else:
-            user.send_otp_email(request, "authenticator change confirmation")
-            request.session["totp_change_otp_sent_at"] = timezone.now().timestamp()
+            user.save(update_fields=["otp_code", "otp_expires_at", "updated_at"])
+            request.session.pop("totp_change_email_user_id", None)
+            request.session.pop("totp_change_otp_sent_at", None)
+            request.session["totp_change_setup_user_id"] = user.pk
+            request.session["totp_change_setup_secret"] = pyotp.random_base32()
             request.session["totp_change_success"] = (
-                f"A new code was sent to {user.email}."
-            )
-        return redirect("change-totp-authenticator", username=user.username)
-
-    if action == "confirm_email":
-        if setup_user_id == user.pk or email_user_id != user.pk:
-            return HttpResponseForbidden("No authenticator change was requested.")
-        email_code = (request.POST.get("email_code") or "").strip()
-        if not user.verify_otp(email_code):
-            request.session["totp_change_error"] = (
-                "The email code was invalid or has expired."
+                "Email confirmed. Set up your new authenticator."
             )
             return redirect("change-totp-authenticator", username=user.username)
 
-        user.otp_code = ""
-        user.otp_expires_at = None
-        user.save(update_fields=["otp_code", "otp_expires_at", "updated_at"])
-        request.session.pop("totp_change_email_user_id", None)
-        request.session.pop("totp_change_otp_sent_at", None)
-        request.session["totp_change_setup_user_id"] = user.pk
-        request.session["totp_change_setup_secret"] = pyotp.random_base32()
-        request.session["totp_change_success"] = (
-            "Email confirmed. Set up your new authenticator."
-        )
-        return redirect("change-totp-authenticator", username=user.username)
+        if action == "verify_totp":
+            if setup_user_id != user.pk:
+                return HttpResponseForbidden("Confirm your email before setting up TOTP.")
+            secret = request.session.get("totp_change_setup_secret")
+            code = (request.POST.get("totp_code") or "").strip()
+            if not secret or not pyotp.TOTP(secret).verify(code, valid_window=1):
+                request.session["totp_change_error"] = (
+                    "The authenticator code was invalid or expired."
+                )
+                return redirect("change-totp-authenticator", username=user.username)
 
-    if action == "verify_totp":
-        if setup_user_id != user.pk:
-            return HttpResponseForbidden("Confirm your email before setting up TOTP.")
-        secret = request.session.get("totp_change_setup_secret")
+            user.totp_secret = secret
+            user.totp_enabled = True
+            user.save(update_fields=["totp_secret", "totp_enabled", "updated_at"])
+            clear_totp_change_session(request)
+            messages.success(request, "Your authenticator app has been changed.")
+            return redirect("user-settings", username=user.username)
+
+        return HttpResponseForbidden("Invalid authenticator change action.")
+
+
+@method_decorator(login_required(login_url="login"), name="dispatch")
+class UpdateTOTPSettingsView(View):
+    def post(self, request, username):
+        if request.user.username != username:
+            return HttpResponseForbidden("You are not allowed to change these settings.")
+
+        action = request.POST.get("action")
+        if action != "disable":
+            return HttpResponseForbidden("Invalid TOTP settings action.")
+
+        if not request.user.totp_enabled:
+            messages.error(request, "TOTP is not enabled for your account.")
+            return redirect("user-settings", username=request.user.username)
+
         code = (request.POST.get("totp_code") or "").strip()
-        if not secret or not pyotp.TOTP(secret).verify(code, valid_window=1):
-            request.session["totp_change_error"] = (
-                "The authenticator code was invalid or expired."
-            )
-            return redirect("change-totp-authenticator", username=user.username)
+        if not request.user.verify_totp(code):
+            messages.error(request, "The authenticator code was invalid or has expired.")
+            return redirect("user-settings", username=request.user.username)
 
-        user.totp_secret = secret
-        user.totp_enabled = True
-        user.save(update_fields=["totp_secret", "totp_enabled", "updated_at"])
-        clear_totp_change_session(request)
-        messages.success(request, "Your authenticator app has been changed.")
-        return redirect("user-settings", username=user.username)
-
-    return HttpResponseForbidden("Invalid authenticator change action.")
-
-
-@login_required(login_url="login")
-@require_POST
-def update_totp_settings(request, username):
-    if request.user.username != username:
-        return HttpResponseForbidden("You are not allowed to change these settings.")
-
-    action = request.POST.get("action")
-    if action != "disable":
-        return HttpResponseForbidden("Invalid TOTP settings action.")
-
-    if not request.user.totp_enabled:
-        messages.error(request, "TOTP is not enabled for your account.")
-        return redirect("user-settings", username=request.user.username)
-
-    code = (request.POST.get("totp_code") or "").strip()
-    if not request.user.verify_totp(code):
-        messages.error(request, "The authenticator code was invalid or has expired.")
-        return redirect("user-settings", username=request.user.username)
-
-    if action == "disable":
-        if request.session.get("totp_change_email_user_id") == request.user.pk:
-            request.user.otp_code = ""
-            request.user.otp_expires_at = None
+        if action == "disable":
+            if request.session.get("totp_change_email_user_id") == request.user.pk:
+                request.user.otp_code = ""
+                request.user.otp_expires_at = None
+                request.user.save(
+                    update_fields=["otp_code", "otp_expires_at", "updated_at"]
+                )
+            clear_totp_change_session(request)
+            request.user.totp_enabled = False
+            request.user.totp_secret = ""
             request.user.save(
-                update_fields=["otp_code", "otp_expires_at", "updated_at"]
+                update_fields=["totp_enabled", "totp_secret", "updated_at"]
             )
-        clear_totp_change_session(request)
-        request.user.totp_enabled = False
-        request.user.totp_secret = ""
-        request.user.save(
-            update_fields=["totp_enabled", "totp_secret", "updated_at"]
-        )
-        messages.success(request, "TOTP has been turned off for your account.")
-        return redirect("user-settings", username=request.user.username)
+            messages.success(request, "TOTP has been turned off for your account.")
+            return redirect("user-settings", username=request.user.username)
+
 
 
 class TOTPVerificationView(View):

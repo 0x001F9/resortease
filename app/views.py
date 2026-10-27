@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404, render
+from django.views import View
 
 from dashboard.models import Branch, Facility
 
@@ -35,73 +36,78 @@ def _add_facility_images(facilities):
         )
     return facilities
 
-def home(request):
-    branches = Branch.objects.order_by("name")
-    facilities = Facility.objects.filter(
-        status=Facility.FacilityStatus.OPERATIONAL
-    ).select_related("branch").order_by("branch__name", "name")
-    return render(
-        request,
-        "root.html",
-        {
-            "branches": branches,
-            "facilities": _add_facility_images(facilities),
-            "branch_image_fallback": BRANCH_IMAGE_FALLBACK,
-        },
-    )
+class HomeView(View):
+    def get(self, request):
+        branches = Branch.objects.order_by("name")
+        facilities = Facility.objects.filter(
+            status=Facility.FacilityStatus.OPERATIONAL
+        ).select_related("branch").order_by("branch__name", "name")
+        return render(
+            request,
+            "root.html",
+            {
+                "branches": branches,
+                "facilities": _add_facility_images(facilities),
+                "branch_image_fallback": BRANCH_IMAGE_FALLBACK,
+            },
+        )
 
 
-def branch_list(request):
-    return render(
-        request,
-        "public/branches.html",
-        {
-            "branches": Branch.objects.order_by("name"),
-            "branch_image_fallback": BRANCH_IMAGE_FALLBACK,
-        },
-    )
+class BranchListView(View):
+    def get(self, request):
+        return render(
+            request,
+            "public/branches.html",
+            {
+                "branches": Branch.objects.order_by("name"),
+                "branch_image_fallback": BRANCH_IMAGE_FALLBACK,
+            },
+        )
 
 
-def branch_detail(request, slug):
-    branch = get_object_or_404(Branch, slug=slug)
-    facilities = _add_facility_images(
-        branch.facilities.order_by("name")
-    )
-    return render(
-        request,
-        "public/branch_detail.html",
-        {
-            "branch": branch,
-            "facilities": facilities,
-            "branch_image_fallback": BRANCH_IMAGE_FALLBACK,
-        },
-    )
+class BranchDetailView(View):
+    def get(self, request, slug):
+        branch = get_object_or_404(Branch, slug=slug)
+        facilities = _add_facility_images(
+            branch.facilities.order_by("name")
+        )
+        return render(
+            request,
+            "public/branch_detail.html",
+            {
+                "branch": branch,
+                "facilities": facilities,
+                "branch_image_fallback": BRANCH_IMAGE_FALLBACK,
+            },
+        )
 
 
-def facility_list(request):
-    facilities = Facility.objects.select_related("branch").order_by(
-        "branch__name", "name"
-    )
-    return render(
-        request,
-        "public/facilities.html",
-        {"facilities": _add_facility_images(facilities)},
-    )
+class FacilityListView(View):
+    def get(self, request):
+        facilities = Facility.objects.select_related("branch").order_by(
+            "branch__name", "name"
+        )
+        return render(
+            request,
+            "public/facilities.html",
+            {"facilities": _add_facility_images(facilities)},
+        )
 
 
-def facility_detail(request, slug):
-    facility = get_object_or_404(
-        Facility.objects.select_related("branch"),
-        slug=slug,
-    )
-    other_facilities = Facility.objects.filter(
-        branch=facility.branch
-    ).exclude(pk=facility.pk).order_by("name")
-    return render(
-        request,
-        "public/facility_detail.html",
-        {
-            "facility": _add_facility_images([facility])[0],
-            "other_facilities": _add_facility_images(other_facilities),
-        },
-    )
+class FacilityDetailView(View):
+    def get(self, request, slug):
+        facility = get_object_or_404(
+            Facility.objects.select_related("branch"),
+            slug=slug,
+        )
+        other_facilities = Facility.objects.filter(
+            branch=facility.branch
+        ).exclude(pk=facility.pk).order_by("name")
+        return render(
+            request,
+            "public/facility_detail.html",
+            {
+                "facility": _add_facility_images([facility])[0],
+                "other_facilities": _add_facility_images(other_facilities),
+            },
+        )
