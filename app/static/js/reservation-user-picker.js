@@ -8,6 +8,7 @@ document.querySelectorAll("[data-user-picker]").forEach((picker) => {
     const status = picker.querySelector("[data-user-picker-status]")
     const selectedId = picker.querySelector("[data-user-picker-id]")
     const selection = picker.querySelector("[data-user-picker-selection]")
+    const profileLink = picker.querySelector("[data-user-picker-profile-link]")
     const error = picker.querySelector("[data-user-picker-error]")
     const form = picker.closest("form")
     let debounceTimer
@@ -58,6 +59,13 @@ document.querySelectorAll("[data-user-picker]").forEach((picker) => {
                 button.addEventListener("click", () => {
                     selectedId.value = user.id
                     selection.textContent = `${user.name} (${user.email})`
+                    if (profileLink) {
+                        profileLink.href = picker.dataset.profileUrlTemplate.replace(
+                            "ACCOUNT_USERNAME",
+                            encodeURIComponent(user.username),
+                        )
+                        profileLink.hidden = false
+                    }
                     error?.setAttribute("hidden", "")
                     dialog.close()
                     openButton.focus()
@@ -74,6 +82,14 @@ document.querySelectorAll("[data-user-picker]").forEach((picker) => {
                 details.append(name, account)
                 button.append(details)
                 item.append(button)
+                const accountLink = document.createElement("a")
+                accountLink.className = "link link-hover ml-3 text-sm"
+                accountLink.href = picker.dataset.profileUrlTemplate.replace(
+                    "ACCOUNT_USERNAME",
+                    encodeURIComponent(user.username),
+                )
+                accountLink.textContent = "View account"
+                item.append(accountLink)
                 resultsList.append(item)
             })
         } catch (searchError) {

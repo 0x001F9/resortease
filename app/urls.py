@@ -3,55 +3,56 @@ from django.urls import path, include
 from . import views
 from account.views.login import LoginView
 from app.public_reservations import (
-    cancel_public_reservation,
-    edit_public_reservation,
-    public_reservation,
-    public_reservation_detail,
-    resume_public_reservation,
+    CancelPublicReservationView,
+    EditPublicReservationView,
+    PublicReservationDetailView,
+    PublicReservationView,
+    ResumePublicReservationView,
 )
 from app.admin_site import admin_site
 
 urlpatterns = [
     path("admin/", admin_site.urls, name="admin"),
-    path("", views.home, name="home"),
-    path("branches/", views.branch_list, name="branch-list"),
+    path("", views.HomeView.as_view(), name="home"),
+    path("branches/", views.BranchListView.as_view(), name="branch-list"),
     path(
         "branches/<slug:slug>/",
-        views.branch_detail,
+        views.BranchDetailView.as_view(),
         name="branch-detail",
     ),
     path(
         "branches/<slug:slug>/reservations/new/",
-        public_reservation,
+        PublicReservationView.as_view(),
         name="public-reservation",
     ),
     path(
         "reservation/continue/",
-        resume_public_reservation,
+        ResumePublicReservationView.as_view(),
         name="resume-public-reservation",
     ),
     path(
         "reservations/<int:reservation_id>/",
-        public_reservation_detail,
+        PublicReservationDetailView.as_view(),
         name="public-reservation-detail",
     ),
     path(
         "reservations/<int:reservation_id>/edit/",
-        edit_public_reservation,
+        EditPublicReservationView.as_view(),
         name="edit-public-reservation",
     ),
     path(
         "reservations/<int:reservation_id>/cancel/",
-        cancel_public_reservation,
+        CancelPublicReservationView.as_view(),
         name="cancel-public-reservation",
     ),
-    path("facilities/", views.facility_list, name="facility-list"),
+    path("facilities/", views.FacilityListView.as_view(), name="facility-list"),
     path(
         "facilities/<slug:slug>/",
-        views.facility_detail,
+        views.FacilityDetailView.as_view(),
         name="public-facility-detail",
     ),
     path("login/", LoginView.as_view(), name="login"),
     path("account/", include("account.urls")),
-    path("dashboard/", include("dashboard.urls"))
+    path("dashboard/", include("dashboard.urls")),
+    path("chat/", include("agent_chat.urls")),
 ]

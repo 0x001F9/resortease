@@ -1,16 +1,16 @@
 {% extends "../partials/layout.html" %}
 
 {% block content %}
-<main class="p-4 pb-10">
+<main class="mx-auto max-w-[100rem] p-4 pb-10 sm:p-5 lg:p-7">
     <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
             <p class="text-sm uppercase tracking-[0.2em] text-base-content/60">Inventory</p>
-            <h1 class="mt-2 text-3xl font-bold">Inventory transactions</h1>
+            <h1 class="mt-2 text-2xl font-semibold sm:text-3xl">Inventory transactions</h1>
         </div>
         <a href="{% url 'inventory' branch=request.branch.slug %}" class="btn btn-outline btn-sm">Back to inventory</a>
     </div>
 
-    <section class="rounded-box border border-base-content/10 bg-base-100 shadow-sm">
+    <section class="rounded-box border border-base-300 bg-base-100 shadow-sm">
         <div class="overflow-x-auto">
             <table class="table table-zebra">
                 <thead>
@@ -36,7 +36,7 @@
                         <td>{{ transaction.quantity_change|floatformat:"0" }}</td>
                         <td>{{ transaction.balance_after }}</td>
                         <td>{{ transaction.reference|default:"—" }}</td>
-                        <td>{{ transaction.performed_by|default:"—" }}</td>
+                        <td>{% include "partials/account_link.html" with account_user=transaction.performed_by account_link_class="link link-hover" %}</td>
                         <td>{{ transaction.notes|default:"—"|truncatechars:60 }}</td>
                     </tr>
                     {% empty %}

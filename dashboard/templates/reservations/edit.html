@@ -1,4 +1,5 @@
 {% extends "../partials/layout.html" %}
+{% load static %}
 
 {% block content %}
 <main class="px-4 py-6 sm:px-6 lg:px-8">
@@ -14,8 +15,8 @@
         <section class="card border border-base-300 bg-base-100 shadow-sm">
             <div class="card-body gap-6 p-5 sm:p-8">
                 <header>
-                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">{{ request.branch.name }}</p>
-                    <h1 class="card-title mt-1 text-2xl">Edit reservation</h1>
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">{{ request.branch.name }}</p>
+                    <h1 class="card-title mt-1 text-2xl font-semibold">Edit reservation</h1>
                     <p class="mt-2 text-sm text-base-content/70">
                         Update the schedule, special requests, discount, or reservation status.
                     </p>
@@ -31,12 +32,12 @@
                     </div>
                 {% endif %}
 
-                <form method="post" class="space-y-4">
+                <form method="post" class="space-y-4" data-maintenance-confirmation="confirm" data-maintenance-in-progress="{{ facility_has_in_progress_maintenance|yesno:'true,false' }}" data-facility-name="{{ reservation.facility.name }}">
                     {% csrf_token %}
                     <div class="rounded-box border border-base-300 p-4">
                         <p class="text-sm text-base-content/60">Guest</p>
                         <p class="font-medium">
-                            {{ reservation.guest.first_name }} {{ reservation.guest.last_name }}
+                            {% include "partials/account_link.html" with account_user=reservation.guest account_link_class="link link-hover" %}
                         </p>
                         <p class="text-sm text-base-content/70">{{ reservation.guest.email }}</p>
                     </div>
@@ -71,4 +72,8 @@
         </section>
     </div>
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/facility-maintenance-confirmation.js' %}" defer></script>
 {% endblock %}

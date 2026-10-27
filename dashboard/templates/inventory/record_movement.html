@@ -12,8 +12,8 @@
         <section class="card border border-base-300 bg-base-100 shadow-sm">
             <div class="card-body gap-5 p-5 sm:p-8">
                 <header>
-                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">Inventory</p>
-                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Record movement</h1>
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">Inventory · {{ request.branch.name }}</p>
+                    <h1 class="card-title mt-1 text-2xl font-semibold sm:text-3xl">Record movement</h1>
                     <p class="mt-2 text-sm text-base-content/70">
                         Record a stock transaction or add an event to an asset's history. Changes are applied to the selected record.
                     </p>
@@ -146,6 +146,7 @@
                                 data-user-picker
                                 data-user-picker-required="false"
                                 data-search-url="{% url 'search-reservation-guests' request.branch.slug %}"
+                                data-profile-url-template="{% url 'user-profile' username='ACCOUNT_USERNAME' %}"
                             >
                                 {{ field }}
                                 <button
@@ -163,6 +164,13 @@
                                         {% endif %}
                                     </span>
                                 </button>
+                                <a class="btn btn-ghost btn-sm" data-user-picker-profile-link
+                                    {% if asset_form.selected_borrower %}
+                                        href="{% url 'user-profile' asset_form.selected_borrower.username %}"
+                                    {% else %}
+                                        hidden
+                                    {% endif %}
+                                >View account</a>
                                 <span class="mt-1 text-sm text-error" data-user-picker-error {% if not field.errors %}hidden{% endif %}>
                                     {% for error in field.errors %}{{ error }}{% empty %}Choose a borrower for this event.{% endfor %}
                                 </span>

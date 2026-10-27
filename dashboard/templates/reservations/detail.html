@@ -22,10 +22,16 @@
                             </p>
                         {% endif %}
                     </div>
-                    <span class="badge badge-lg {% if reservation.status == 'confirmed' %}badge-success{% elif reservation.status == 'cancelled' %}badge-error{% elif reservation.status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">
-                        {{ reservation.get_status_display }}
+                    <span class="badge badge-lg {% if reservation.current_status == 'confirmed' %}badge-success{% elif reservation.current_status == 'declined' or reservation.current_status == 'cancelled' %}badge-error{% elif reservation.current_status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">
+                        {{ reservation.current_status_display }}
                     </span>
                 </header>
+
+                {% if completion_payment_required %}
+                    <div role="alert" class="alert alert-warning">
+                        <span>This booking cannot be completed until its balance is zero. Review the price summary and payment activity below.</span>
+                    </div>
+                {% endif %}
 
                 <section aria-labelledby="stay-heading">
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -40,7 +46,7 @@
                     <dl class="grid gap-4 rounded-box border border-base-300 p-4 sm:grid-cols-2">
                         <div>
                             <dt class="text-sm text-base-content/60">Guest</dt>
-                            <dd class="font-medium">{{ reservation.guest.first_name }} {{ reservation.guest.last_name }}</dd>
+                            <dd class="font-medium">{% include "partials/account_link.html" with account_user=reservation.guest account_link_class="link link-hover" %}</dd>
                             <dd class="text-sm text-base-content/70">{{ reservation.guest.email }}</dd>
                             {% if reservation.guest.phone_number %}
                                 <dd class="text-sm text-base-content/70">
@@ -129,47 +135,70 @@
                         </div>
                         <dl class="space-y-2">
                             <div class="flex justify-between gap-4">
-                                <dt class="text-base-content/70">Raw amount</dt>
-                                <dd class="font-medium">{% if reservation.raw_amount is not None %}₱{{ reservation.raw_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
+                                <dt class="text-base-content/70">Facility reserve fees</dt>
+                                <dd class="font-medium">{% if reservation.raw_amount is not None %}₱ {{ reservation.raw_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
                             </div>
                             <div class="flex justify-between gap-4">
                                 <dt class="text-base-content/70">Discount</dt>
-                                <dd class="font-medium text-success">−₱{{ reservation.discount|floatformat:2 }}</dd>
+                                <dd class="font-medium text-success">−₱ {{ reservation.discount|floatformat:2 }}</dd>
                             </div>
-                            <div class="flex justify-between gap-4 border-t border-base-300 pt-3">
-                                <dt class="font-semibold">Total amount</dt>
-                                <dd class="text-xl font-bold text-primary">{% if reservation.total_amount is not None %}₱{{ reservation.total_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
-                            </div>
-                        </dl>
-                    </section>
 
-                    {% if reservation.status == 'confirmed' %}
-                        <div class="mt-4">
+                            {% if reservation.current_status == 'confirmed' or reservation.current_status == 'pending' %}
+                                {% for payment in pending_payments %}
+                                    <div class="flex justify-between gap-4">
+                                        <dt class="text-base-content/70">{{ payment.name }}</dt>
+                                        <dd class="font-medium">₱ {{ payment.amount|floatformat:2 }}</dd>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+
+                            {% if reservation.current_status == 'confirmed' %}
+                                <div class="flex justify-between gap-4 border-t border-base-300 pt-3">
+                                    <dt class="font-semibold">Total paid</dt>
+                                    <dd class="font-medium">₱ {{ paid_total|floatformat:2 }}</dd>
+                                </div>
+                                <div class="flex justify-between gap-4">
+                                    <dt class="font-semibold">{% if reservation.current_status == 'confirmed' %}Balance{% else %}Total amount{% endif %}</dt>
+                                    <dd class="text-lg font-bold text-primary">{% if remaining_balance is not None %}₱ {{ remaining_balance|floatformat:2 }}{% else %}—{% endif %}</dd>
+                                </div>
+                            {% else %}
+                                <div class="flex justify-between gap-4 border-t border-base-300 pt-3">
+                                    <dt class="font-semibold">Total amount</dt>
+                                    <dd class="text-lg font-bold text-primary">{% if reservation.raw_amount is not None %}₱ {{ reservation.raw_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
+                                </div>
+                            {% endif %}
+                        </dl>
+
+                    {% if reservation.current_status == 'confirmed' or reservation.current_status == 'pending' or reservation.current_status == 'cancelled' %}
+                        <div class="mt-5 border-t border-base-300 pt-4">
                             <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                                 <div>
-                                    <h3 class="font-semibold">Payments</h3>
-                                    <p class="text-sm text-base-content/70">
-                                        Total paid: PHP {{ paid_total|floatformat:2 }}
-                                        {% if remaining_balance is not None %}
-                                            · Balance: PHP {{ remaining_balance|floatformat:2 }}
-                                        {% endif %}
-                                    </p>
+                                    <h3 class="font-semibold">{% if reservation.current_status == 'confirmed' %}Payment activity{% elif reservation.current_status == 'cancelled' %}Payment history{% else %}Payments{% endif %}</h3>
                                 </div>
-                                {% if not is_fully_paid and reservation.total_amount is not None %}
+                                {% if reservation.current_status == 'confirmed' and is_fully_paid %}
+                                    <span class="badge badge-success">Paid in full</span>
+                                {% endif %}
+                                {% if reservation.current_status == 'confirmed' or reservation.current_status == 'pending' %}
                                     <a
                                         class="btn btn-primary btn-sm"
                                         href="{% url 'create-payment' request.branch.slug reservation.pk %}"
                                     >Add payment</a>
-                                {% elif is_fully_paid %}
-                                    <span class="badge badge-success">Paid in full</span>
+                                {% elif can_record_refund %}
+                                    <a
+                                        class="btn btn-primary btn-sm"
+                                        href="{% url 'create-payment' request.branch.slug reservation.pk %}"
+                                    >Record 50% refund</a>
+                                {% elif reservation.current_status == 'cancelled' and paid_total > 0 %}
+                                    <span class="badge badge-success">Refund recorded</span>
                                 {% endif %}
                             </div>
-                            {% if payments %}
+                            {% if reservation.current_status == 'confirmed' or reservation.current_status == 'cancelled' %}
+                                {% if payments %}
                                 <div class="overflow-x-auto rounded-box border border-base-300">
                                     <table class="table">
                                         <thead>
                                             <tr>
-                                                <th>Type</th>
+                                                <th>Name</th>
                                                 <th>Amount</th>
                                                 <th>Method</th>
                                                 <th>Status</th>
@@ -181,13 +210,52 @@
                                         <tbody>
                                             {% for payment in payments %}
                                                 <tr>
-                                                    <td>{{ payment.get_type_display }}</td>
-                                                    <td>{{ payment.currency }} {{ payment.amount|floatformat:2 }}</td>
+                                                    <td>{{ payment.name }}</td>
+                                                    <td>₱ {{ payment.amount|floatformat:2 }}</td>
                                                     <td>{{ payment.method }}</td>
-                                                    <td>{{ payment.get_status_display }}</td>
+                                                    <td>
+                                                        {% if payment.status == "pending" and reservation.current_status == 'confirmed' %}
+                                                            <button
+                                                                type="button"
+                                                                class="btn btn-ghost btn-xs"
+                                                                data-payment-status-dialog="payment-status-{{ payment.pk }}"
+                                                            >{{ payment.get_status_display }}</button>
+                                                            <dialog id="payment-status-{{ payment.pk }}" class="modal">
+                                                                <div class="modal-box max-w-md">
+                                                                    <form method="dialog" class="text-right">
+                                                                        <button class="btn btn-ghost btn-sm" aria-label="Close">Close</button>
+                                                                    </form>
+                                                                    <h3 class="text-lg font-semibold">Update payment status</h3>
+                                                                    <p class="mt-1 text-sm text-base-content/70">{{ payment.name }} · ₱ {{ payment.amount|floatformat:2 }}</p>
+                                                                    <form method="post" action="{% url 'update-payment-status' request.branch.slug reservation.pk payment.pk %}" class="mt-4 space-y-4">
+                                                                        {% csrf_token %}
+                                                                        <label class="form-control w-full">
+                                                                            <span class="label"><span class="label-text font-medium">Status</span></span>
+                                                                            <select name="status" class="select select-bordered w-full" data-pending-payment-status required>
+                                                                                <option value="succeeded">Succeeded</option>
+                                                                                <option value="cancelled">Cancelled</option>
+                                                                            </select>
+                                                                        </label>
+                                                                        <label class="form-control w-full" data-success-payment-field>
+                                                                            <span class="label"><span class="label-text font-medium">Payment method</span></span>
+                                                                            <input type="text" name="method" maxlength="50" class="input input-bordered w-full" required>
+                                                                        </label>
+                                                                        <label class="form-control w-full" data-success-payment-field>
+                                                                            <span class="label"><span class="label-text font-medium">Transaction reference (optional)</span></span>
+                                                                            <input type="text" name="transaction_reference" maxlength="255" class="input input-bordered w-full">
+                                                                        </label>
+                                                                        <button type="submit" class="btn btn-primary w-full">Save status</button>
+                                                                    </form>
+                                                                </div>
+                                                                <form method="dialog" class="modal-backdrop"><button aria-label="Close">close</button></form>
+                                                            </dialog>
+                                                        {% else %}
+                                                            {{ payment.get_status_display }}
+                                                        {% endif %}
+                                                    </td>
                                                     <td>
                                                         {% if payment.cashier %}
-                                                            {{ payment.cashier.first_name }} {{ payment.cashier.last_name }}
+                                                            {% include "partials/account_link.html" with account_user=payment.cashier account_link_class="link link-hover" %}
                                                         {% else %}
                                                             —
                                                         {% endif %}
@@ -199,13 +267,15 @@
                                         </tbody>
                                     </table>
                                 </div>
-                            {% else %}
-                                <p class="rounded-box border border-base-300 p-4 text-sm text-base-content/70">
-                                    No payments have been recorded for this reservation.
-                                </p>
+                                {% else %}
+                                    <p class="rounded-box border border-base-300 p-4 text-sm text-base-content/70">
+                                        No payments have been recorded for this reservation.
+                                    </p>
+                                {% endif %}
                             {% endif %}
                         </div>
                     {% endif %}
+                    </section>
 
                     {% if calendar_entry %}
                         <div class="mt-5 flex justify-end">
@@ -224,4 +294,25 @@
         </section>
     </div>
 </main>
+<script>
+    document.querySelectorAll("[data-pending-payment-status]").forEach((select) => {
+        const form = select.form
+        const successFields = form.querySelectorAll("[data-success-payment-field]")
+        const updateSuccessFields = () => {
+            const isSucceeded = select.value === "succeeded"
+            successFields.forEach((field) => {
+                field.hidden = !isSucceeded
+                const input = field.querySelector("input")
+                if (input?.name === "method") input.required = isSucceeded
+            })
+        }
+        select.addEventListener("change", updateSuccessFields)
+        updateSuccessFields()
+    })
+    document.querySelectorAll("[data-payment-status-dialog]").forEach((button) => {
+        button.addEventListener("click", () => {
+            document.getElementById(button.dataset.paymentStatusDialog).showModal()
+        })
+    })
+</script>
 {% endblock %}

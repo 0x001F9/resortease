@@ -2,11 +2,11 @@ from decimal import Decimal
 
 from django import forms
 from django.contrib.auth import get_user_model
-from django.db.models import Sum
 from django.utils import timezone
 
 from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
 from dashboard.models import (
+    Expense,
     Inventory,
     InventoryAsset,
     InventoryAssetHistory,
@@ -16,14 +16,129 @@ from dashboard.models import (
 from dashboard.models.inventory import InventoryTransaction
 
 
-class PaymentForm(forms.ModelForm):
-    def __init__(self, *args, reservation, **kwargs):
-        self.reservation = reservation
+class ExpenseForm(forms.ModelForm):
+    class Meta:
+        model = Expense
+        fields = ("category", "description", "amount", "expense_date", "reference")
+        widgets = {
+            "category": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "description": forms.TextInput(
+                attrs={"class": "input input-bordered w-full"}
+            ),
+            "amount": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "min": "0.01",
+                    "step": "0.01",
+                }
+            ),
+            "expense_date": forms.DateInput(
+                attrs={"class": "input input-bordered w-full", "type": "date"}
+            ),
+            "reference": forms.TextInput(
+                attrs={"class": "input input-bordered w-full"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            self.initial.setdefault("expense_date", timezone.localdate())
+
+    def clean_amount(self):
+        amount = self.cleaned_data["amount"]
+        if amount <= 0:
+            raise forms.ValidationError("Enter an amount greater than zero.")
+        return amount
+
+
+class PaymentForm(forms.ModelForm):
+    name = forms.CharField(
+        max_length=100,
+        widget=forms.TextInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "list": "payment-name-options",
+            }
+        ),
+    )
+    status = forms.ChoiceField(
+        choices=(
+            (Payment.Status.PENDING, Payment.Status.PENDING.label),
+            (Payment.Status.SUCCEEDED, Payment.Status.SUCCEEDED.label),
+        ),
+        initial=Payment.Status.PENDING,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+
+    def __init__(
+        self,
+        *args,
+        pending_only=False,
+        refund_only=False,
+        refund_amount=None,
+        refund_limit=None,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.refund_amount = refund_amount
+        self.refund_limit = refund_limit
+        if refund_only:
+            self.fields["status"].choices = (
+                (Payment.Status.REFUNDED, Payment.Status.REFUNDED.label),
+            )
+            self.initial["status"] = Payment.Status.REFUNDED
+            self.initial["name"] = "Refund"
+            self.initial["amount"] = refund_amount
+            self.fields["amount"].widget.attrs["readonly"] = True
+        elif pending_only:
+            self.fields["status"].choices = (
+                (Payment.Status.PENDING, Payment.Status.PENDING.label),
+            )
+            self.initial["status"] = Payment.Status.PENDING
+        elif refund_limit is not None and refund_limit > 0:
+            self.fields["status"].choices = (
+                *self.fields["status"].choices,
+                (Payment.Status.REFUNDED, Payment.Status.REFUNDED.label),
+            )
+            self.fields["amount"].widget.attrs["max"] = f"{refund_limit:.2f}"
+            self.fields["amount"].help_text = (
+                f"Refunds cannot exceed the remaining amount paid: "
+                f"₱ {refund_limit:.2f}."
+            )
+        selected_status = (
+            self.data.get(self.add_prefix("status"))
+            if self.is_bound
+            else self.initial.get("status", Payment.Status.PENDING)
+        )
+        self.fields["method"].required = selected_status in {
+            Payment.Status.SUCCEEDED,
+            Payment.Status.REFUNDED,
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("status") not in {
+            Payment.Status.SUCCEEDED,
+            Payment.Status.REFUNDED,
+        }:
+            cleaned_data["method"] = ""
+            cleaned_data["transaction_reference"] = None
+        if (
+            cleaned_data.get("status") == Payment.Status.REFUNDED
+            and self.refund_limit is not None
+            and cleaned_data.get("amount") is not None
+            and cleaned_data["amount"] > self.refund_limit
+        ):
+            self.add_error(
+                "amount",
+                "The refund cannot exceed the remaining amount already paid.",
+            )
+        return cleaned_data
 
     class Meta:
         model = Payment
-        fields = ("amount", "type", "method", "transaction_reference")
+        fields = ("name", "amount", "status", "method", "transaction_reference")
         widgets = {
             "amount": forms.NumberInput(
                 attrs={
@@ -32,7 +147,6 @@ class PaymentForm(forms.ModelForm):
                     "step": "0.01",
                 }
             ),
-            "type": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "method": forms.TextInput(
                 attrs={"class": "input input-bordered w-full"}
             ),
@@ -41,6 +155,8 @@ class PaymentForm(forms.ModelForm):
             ),
         }
         labels = {
+            "name": "Payment name",
+            "amount": "Amount (₱)",
             "method": "Payment method",
             "transaction_reference": "Transaction reference (optional)",
         }
@@ -49,21 +165,9 @@ class PaymentForm(forms.ModelForm):
         amount = self.cleaned_data["amount"]
         if amount <= 0:
             raise forms.ValidationError("Enter an amount greater than zero.")
-
-        paid_total = (
-            self.reservation.payments.filter(
-                status=Payment.Status.SUCCEEDED,
-                currency="PHP",
-            ).aggregate(total=Sum("amount"))["total"]
-            or Decimal("0.00")
-        )
-        remaining = max(
-            self.reservation.total_amount - paid_total,
-            Decimal("0.00"),
-        )
-        if amount > remaining:
+        if self.refund_amount is not None and amount != self.refund_amount:
             raise forms.ValidationError(
-                f"Amount cannot exceed the remaining balance of PHP {remaining:.2f}."
+                "The refund amount must be exactly 50% of the total paid."
             )
         return amount
 
@@ -259,7 +363,50 @@ class InventoryItemCreateForm(forms.ModelForm):
                 }
             ),
         }
-        labels = {"unit_cost": "Unit cost (PHP)"}
+        labels = {"unit_cost": "Unit cost (₱)"}
+
+    def clean_unit_cost(self):
+        unit_cost = self.cleaned_data.get("unit_cost")
+        if unit_cost is not None and unit_cost < 0:
+            raise forms.ValidationError("Unit cost cannot be negative.")
+        return unit_cost
+
+
+class InventoryItemDetailsForm(forms.ModelForm):
+    class Meta:
+        model = Inventory
+        fields = ("sku", "reorder_level", "unit_cost")
+        widgets = {
+            "sku": forms.TextInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "autocomplete": "off",
+                }
+            ),
+            "reorder_level": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "min": "0",
+                    "step": "1",
+                }
+            ),
+            "unit_cost": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "min": "0",
+                    "step": "0.01",
+                    "placeholder": "0.00",
+                }
+            ),
+        }
+        labels = {
+            "sku": "SKU",
+            "reorder_level": "Reorder level",
+            "unit_cost": "Unit cost (₱)",
+        }
+
+    def clean_sku(self):
+        return self.cleaned_data["sku"] or None
 
     def clean_unit_cost(self):
         unit_cost = self.cleaned_data.get("unit_cost")
@@ -323,7 +470,7 @@ class InventoryAssetCreateForm(forms.ModelForm):
                 }
             ),
         }
-        labels = {"purchase_cost": "Purchase cost (PHP)"}
+        labels = {"purchase_cost": "Purchase cost (₱)"}
 
     def clean_purchase_cost(self):
         purchase_cost = self.cleaned_data.get("purchase_cost")
@@ -418,7 +565,7 @@ class InventoryMovementForm(forms.Form):
         min_value=0,
         max_digits=10,
         decimal_places=2,
-        label="Unit cost (PHP)",
+        label="Unit cost (₱)",
         widget=forms.NumberInput(
             attrs={
                 "class": "input input-bordered w-full",

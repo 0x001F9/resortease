@@ -3,18 +3,18 @@ from account.views.logout import LogoutView
 from account.views.login import EmailVerificationView
 from account.views.signup import SignUpView
 from account.views.security import (
+    ChangeTOTPAuthenticatorView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
     TOTPSetupView,
     TOTPVerificationView,
-    change_totp_authenticator,
-    update_totp_settings,
+    UpdateTOTPSettingsView,
 )
-from account.views import user_profile, user_settings
+from account.views import UserProfileView, UserSettingsView
 
 urlpatterns = [
-    path('u/<str:username>/settings/', user_settings, name='user-settings'),
-    path('u/<str:username>/', user_profile, name='user-profile'),
+    path('u/<str:username>/settings/', UserSettingsView.as_view(), name='user-settings'),
+    path('u/<str:username>/', UserProfileView.as_view(), name='user-profile'),
     path('sign-up/', SignUpView.as_view(), name='sign-up'),
     path('verify-email/<str:token>/', EmailVerificationView.as_view(), name='verify-email'),
     path('logout/', LogoutView.as_view(), name='logout'),
@@ -24,12 +24,12 @@ urlpatterns = [
     path('security/totp/verify/', TOTPVerificationView.as_view(), name='totp-verify'),
     path(
         'u/<str:username>/settings/totp/change/',
-        change_totp_authenticator,
+        ChangeTOTPAuthenticatorView.as_view(),
         name='change-totp-authenticator',
     ),
     path(
         'u/<str:username>/settings/totp/',
-        update_totp_settings,
+        UpdateTOTPSettingsView.as_view(),
         name='update-totp-settings',
     ),
 ]

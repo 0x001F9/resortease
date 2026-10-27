@@ -14,6 +14,7 @@ from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.forms import (
     InventoryAssetMovementForm,
     InventoryAssetStatusForm,
+    InventoryItemDetailsForm,
     InventoryMovementForm,
 )
 from dashboard.models.inventory import Inventory, InventoryTransaction
@@ -375,7 +376,7 @@ class InventoryItemDetailView(View):
             branch=request.branch,
         )
 
-    def get_context(self, item):
+    def get_context(self, item, edit_form=None, open_edit_modal=False):
         transactions = item.transactions.select_related("performed_by").order_by(
             "-created_at"
         )
@@ -383,6 +384,8 @@ class InventoryItemDetailView(View):
             "title": item.name,
             "item": item,
             "transactions": transactions,
+            "edit_form": edit_form or InventoryItemDetailsForm(instance=item),
+            "open_edit_modal": open_edit_modal,
             "hide_aside": True,
         }
 
@@ -392,6 +395,22 @@ class InventoryItemDetailView(View):
             request,
             self.template_name,
             self.get_context(item),
+        )
+
+    def post(self, request, item_id):
+        item = self.get_item(request, item_id)
+        form = InventoryItemDetailsForm(request.POST, instance=item)
+        if form.is_valid():
+            form.save()
+            return redirect(
+                "inventory-item-detail",
+                branch=request.branch.slug,
+                item_id=item.pk,
+            )
+        return render(
+            request,
+            self.template_name,
+            self.get_context(item, edit_form=form, open_edit_modal=True),
         )
 
 

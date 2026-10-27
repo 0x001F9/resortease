@@ -7,7 +7,7 @@ from django.views import View
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.forms import ReservationEditForm
-from dashboard.models import Calendar, Reservation
+from dashboard.models import Calendar, Maintenance, Reservation
 from dashboard.views.calendar_entries import has_calendar_conflict
 
 
@@ -40,6 +40,13 @@ class EditReservationView(View):
                 reservation,
                 starts_at,
                 ends_at,
+            ),
+            "facility_has_in_progress_maintenance": (
+                reservation.facility is not None
+                and Maintenance.objects.filter(
+                    facility=reservation.facility,
+                    status=Maintenance.Status.IN_PROGRESS,
+                ).exists()
             ),
             "hide_aside": True,
         }
@@ -111,28 +118,20 @@ class EditReservationView(View):
                     reservation.save(
                         update_fields=["raw_amount", "updated_at"]
                     )
-                    if status in {
-                        Reservation.Status.CONFIRMED,
-                        Reservation.Status.COMPLETED,
-                    }:
-                        calendar_status = (
-                            Calendar.Status.COMPLETED
-                            if status == Reservation.Status.COMPLETED
-                            else Calendar.Status.CONFIRMED
-                        )
+                    if status == Reservation.Status.CONFIRMED:
                         if calendar_entry is None:
                             Calendar.objects.create(
                                 reservation=reservation,
                                 facility=reservation.facility,
                                 starts_at=reservation.starts_at,
                                 ends_at=reservation.ends_at,
-                                status=calendar_status,
+                                status=Calendar.Status.CONFIRMED,
                             )
                         else:
                             calendar_entry.facility = reservation.facility
                             calendar_entry.starts_at = reservation.starts_at
                             calendar_entry.ends_at = reservation.ends_at
-                            calendar_entry.status = calendar_status
+                            calendar_entry.status = Calendar.Status.CONFIRMED
                             calendar_entry.save(
                                 update_fields=[
                                     "facility",
@@ -142,6 +141,7 @@ class EditReservationView(View):
                                     "updated_at",
                                 ]
                             )
+                        Reservation.objects.decline_conflicts(reservation)
                     elif calendar_entry:
                         calendar_entry.facility = reservation.facility
                         calendar_entry.starts_at = reservation.starts_at
@@ -155,6 +155,9 @@ class EditReservationView(View):
                                 "status",
                                 "updated_at",
                             ]
+                        )
+                        Reservation.objects.cancel_pending_payments(
+                            reservation
                         )
 
                     return redirect(

@@ -1,0 +1,55 @@
+{% extends "partials/pub_layout.html" %}
+
+{% block content %}
+<main class="flex min-h-[100svh] flex-col bg-base-100 px-4 sm:px-6">
+    <section class="mx-auto flex w-full max-w-5xl flex-1 flex-col" aria-labelledby="chat-page-title">
+        <header class="flex items-center gap-3 border-b border-base-300/70 py-4">
+            <div class="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary" aria-hidden="true">R</div>
+            <div class="min-w-0">
+                <h1 id="chat-page-title" class="truncate text-sm font-semibold">ResortEase assistant</h1>
+                <p class="text-xs text-base-content/60">Guest services</p>
+            </div>
+            <span class="ml-auto hidden text-xs text-base-content/55 sm:inline">Here to help with your stay</span>
+        </header>
+
+        <!-- message part -->
+        <section class="mx-auto w-full max-w-3xl flex-1 py-8 sm:py-10" aria-label="Conversation with ResortEase assistant" aria-live="polite">
+
+            <div class="chat chat-start">
+                <div class="chat-image avatar placeholder">
+                    <div class="w-9 rounded-full bg-primary/10 text-primary flex justify-center items-center">
+                        <span class="text-xs font-bold" aria-hidden="true">R</span>
+                    </div>
+                </div>
+                <div class="chat-header mb-1 text-sm font-semibold">ResortEase assistant</div>
+                <div class="chat-bubble chat-bubble-primary max-w-[min(90%,40rem)] text-sm leading-6 sm:text-base">
+                    <p>Hello! I’m the ResortEase assistant. How can I help make your stay easier?</p>
+                    <p class="mt-3">You can ask me about finding a place to stay, exploring our facilities, or getting help with a reservation.</p>
+                </div>
+            </div>
+            
+        </section>
+
+
+        <div class="sticky bottom-0 z-10 mx-auto w-full max-w-3xl bg-gradient-to-t from-base-100 via-base-100 to-transparent pb-5 pt-4 sm:pb-6">
+            <div class="rounded-3xl border border-base-300 bg-base-100 p-3 shadow-lg transition focus-within:border-base-content/25 focus-within:shadow-xl sm:p-4">
+                <label class="sr-only" for="chat-message">Your message</label>
+                <textarea
+                    id="chat-message"
+                    class="textarea min-h-12 w-full resize-none border-0 bg-transparent px-2 py-1 text-base shadow-none outline-none focus:outline-none"
+                    rows="2"
+                    placeholder="Message ResortEase..."
+                ></textarea>
+                <div class="flex items-center justify-between gap-3 px-1 pt-2">
+                    <button class="btn btn-primary btn-circle btn-sm shrink-0" type="button" aria-label="Send message">
+                        <span aria-hidden="true">&uarr;</span>
+                    </button>
+                </div>
+            </div>
+            <p class="mt-3 text-center text-xs text-base-content/50">
+                Don’t share sensitive personal or payment information.
+            </p>
+        </div>
+    </section>
+</main>
+{% endblock %}

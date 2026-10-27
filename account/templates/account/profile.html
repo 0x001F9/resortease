@@ -6,10 +6,10 @@
 {% endblock %}
 
 {% block content %}
-<main class="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+<main class="mx-auto max-w-5xl bg-base-200 px-4 py-8 sm:px-6">
     <section class="profile-panel border border-base-300 bg-base-100 shadow-sm">
         <div class="profile-cover"></div>
-        <div class="px-6 pb-8 sm:px-10">
+        <div class="px-5 pb-7 sm:px-8">
             <div class="-mt-14 flex flex-col gap-5 sm:-mt-16 sm:flex-row sm:items-end sm:justify-between">
                 <div class="flex items-end gap-4">
                     <div class="avatar">
@@ -24,7 +24,7 @@
                         </div>
                     </div>
                     <div class="pb-1">
-                        <h1 class="flex flex-wrap items-center gap-2 text-2xl font-bold sm:text-3xl">
+                        <h1 class="flex flex-wrap items-center gap-2 font-serif text-2xl font-medium sm:text-3xl">
                             <span>{{ full_name }}</span>
                             {% if profile_user.is_superuser %}
                                 <span class="profile-superuser-badge">Superuser</span>
@@ -65,7 +65,7 @@
             <section class="mt-10" aria-labelledby="reservation-history-heading">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <h2 id="reservation-history-heading" class="text-xl font-bold">Reservation &amp; booking history</h2>
+                        <h2 id="reservation-history-heading" class="font-serif text-xl font-medium">Reservation &amp; booking history</h2>
                         <p class="mt-1 text-sm text-base-content/60">A record of this guest's reservations and bookings.</p>
                     </div>
                     <span class="badge badge-ghost">{{ reservations|length }} total</span>
@@ -74,7 +74,7 @@
                 {% if reservations %}
                     <ul class="mt-4 flex flex-col gap-3">
                         {% for reservation in reservations %}
-                            <li class="profile-reservation-card border border-base-300 bg-base-100">
+                            <li class="profile-reservation-card border border-base-300 bg-base-100 transition hover:border-primary/50">
                                 <div class="flex flex-wrap items-start justify-between gap-3">
                                     <div>
                                         <div class="flex flex-wrap items-center gap-2">
@@ -106,15 +106,15 @@
                                             </p>
                                         {% endif %}
                                     </div>
-                                    <span class="badge {% if reservation.status == 'confirmed' %}badge-success{% elif reservation.status == 'cancelled' %}badge-error{% elif reservation.status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">
-                                        {{ reservation.get_status_display }}
+                                    <span class="badge {% if reservation.current_status == 'confirmed' %}badge-success{% elif reservation.current_status == 'declined' or reservation.current_status == 'cancelled' %}badge-error{% elif reservation.current_status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">
+                                        {{ reservation.current_status_display }}
                                     </span>
                                 </div>
                             </li>
                         {% endfor %}
                     </ul>
                 {% else %}
-                    <p class="mt-4 rounded-2xl bg-base-200 p-5 text-sm text-base-content/65">
+                    <p class="mt-4 rounded-box border border-dashed border-base-300 bg-base-100 p-5 text-sm text-base-content/65">
                         No reservations or bookings yet.
                     </p>
                 {% endif %}

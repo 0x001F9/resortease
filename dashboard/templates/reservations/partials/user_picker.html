@@ -2,6 +2,7 @@
     class="form-control w-full"
     data-user-picker
     data-search-url="{% url 'search-reservation-guests' request.branch.slug %}"
+    data-profile-url-template="{% url 'user-profile' username='ACCOUNT_USERNAME' %}"
 >
     <span class="label">
         <span class="label-text font-medium">Guest <span class="text-error">*</span></span>
@@ -23,6 +24,13 @@
             {% endif %}
         </span>
     </button>
+    <a class="btn btn-ghost btn-sm" data-user-picker-profile-link
+        {% if selected_guest %}
+            href="{% url 'user-profile' selected_guest.username %}"
+        {% else %}
+            hidden
+        {% endif %}
+    >View account</a>
     <span class="mt-1 text-sm text-error" data-user-picker-error {% if not errors.guest %}hidden{% endif %}>
         {{ errors.guest|default:"Select an active user." }}
     </span>

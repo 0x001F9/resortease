@@ -14,36 +14,56 @@
         <section class="card border border-base-300 bg-base-100 shadow-sm">
             <div class="card-body gap-6 p-5 sm:p-8">
                 <header>
-                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">{{ request.branch.name }}</p>
-                    <h1 class="card-title mt-1 text-2xl">Record payment</h1>
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">{{ request.branch.name }}</p>
+                    <h1 class="card-title mt-1 text-2xl font-semibold">{% if is_refund %}Record refund{% else %}Record payment{% endif %}</h1>
                     <p class="mt-2 text-sm text-base-content/70">
-                        Reservation #{{ reservation.pk }} for {{ reservation.guest.first_name }} {{ reservation.guest.last_name }}
+                        Reservation #{{ reservation.pk }} for {% include "partials/account_link.html" with account_user=reservation.guest account_link_class="link link-hover" %}
                     </p>
                 </header>
 
                 <dl class="grid gap-3 rounded-box border border-base-300 p-4 sm:grid-cols-3">
                     <div>
                         <dt class="text-sm text-base-content/60">Reservation total</dt>
-                        <dd class="font-semibold">PHP {{ reservation.total_amount|floatformat:2 }}</dd>
+                        <dd class="font-semibold">{% if reservation.total_amount is not None %}₱ {{ reservation.total_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
                     </div>
                     <div>
                         <dt class="text-sm text-base-content/60">Paid so far</dt>
-                        <dd class="font-semibold">PHP {{ paid_total|floatformat:2 }}</dd>
+                        <dd class="font-semibold">₱ {{ paid_total|floatformat:2 }}</dd>
                     </div>
-                    <div>
-                        <dt class="text-sm text-base-content/60">Remaining balance</dt>
-                        <dd class="font-semibold">PHP {{ remaining_balance|floatformat:2 }}</dd>
-                    </div>
+                    {% if is_refund %}
+                        <div>
+                            <dt class="text-sm text-base-content/60">Refund (50% of amount paid)</dt>
+                            <dd class="font-semibold">₱ {{ refund_amount|floatformat:2 }}</dd>
+                        </div>
+                    {% else %}
+                        <div>
+                            <dt class="text-sm text-base-content/60">Remaining balance</dt>
+                            <dd class="font-semibold">{% if remaining_balance is not None %}₱ {{ remaining_balance|floatformat:2 }}{% else %}—{% endif %}</dd>
+                        </div>
+                    {% endif %}
                 </dl>
 
                 <form method="post" class="space-y-4">
                     {% csrf_token %}
                     {% for field in form %}
-                        <div>
+                        <div
+                            {% if field.name == "method" or field.name == "transaction_reference" %}
+                                data-payment-detail-field{% if not is_refund %} hidden{% endif %}
+                            {% endif %}
+                        >
                             <label class="label" for="{{ field.id_for_label }}">
                                 <span class="label-text font-medium">{{ field.label }}</span>
                             </label>
                             {{ field }}
+                            {% if field.name == "name" %}
+                                <datalist id="payment-name-options">
+                                    <option value="Full payment"></option>
+                                    <option value="Down payment"></option>
+                                    <option value="Balance payment"></option>
+                                    <option value="Deposit"></option>
+                                    <option value="Refund"></option>
+                                </datalist>
+                            {% endif %}
                             {% for error in field.errors %}
                                 <p class="mt-1 text-sm text-error">{{ error }}</p>
                             {% endfor %}
@@ -55,19 +75,31 @@
                         </div>
                     {% endif %}
 
-                    <p class="text-sm text-base-content/70">
-                        Payment will be recorded as successful in PHP. Cashier: {{ request.user.first_name }} {{ request.user.last_name }}.
-                    </p>
+                    <p class="text-sm text-base-content/70">Cashier: {% include "partials/account_link.html" with account_user=request.user account_link_class="link link-hover" %}.</p>
                     <div class="flex flex-wrap justify-end gap-2">
                         <a
                             href="{% url 'reservation-detail' request.branch.slug reservation.pk %}"
                             class="btn btn-ghost"
                         >Cancel</a>
-                        <button type="submit" class="btn btn-primary">Save payment</button>
+                        <button type="submit" class="btn btn-primary">{% if is_refund %}Save refund{% else %}Save payment{% endif %}</button>
                     </div>
                 </form>
             </div>
         </section>
     </div>
 </main>
+<script>
+    const paymentStatusField = document.getElementById("id_status")
+    const paymentDetailFields = document.querySelectorAll("[data-payment-detail-field]")
+    const updatePaymentDetailFields = () => {
+        const isCompleted = ["succeeded", "refunded"].includes(paymentStatusField.value)
+        paymentDetailFields.forEach((container) => {
+            container.hidden = !isCompleted
+            const input = container.querySelector("input")
+            if (input) input.required = isCompleted && input.name === "method"
+        })
+    }
+    paymentStatusField.addEventListener("change", updatePaymentDetailFields)
+    updatePaymentDetailFields()
+</script>
 {% endblock %}

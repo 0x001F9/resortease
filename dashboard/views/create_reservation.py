@@ -20,6 +20,7 @@ from dashboard.views.calendar_entries import (
     get_entries_for_day,
     has_calendar_conflict,
     is_past_date,
+    with_in_progress_maintenance,
 )
 
 RATE_PACKAGE_DURATIONS = {
@@ -60,8 +61,8 @@ class CreateReservationView(View):
 
     def get_form_context(self, request, form_data=None, errors=None):
         form_data = form_data or {}
-        facilities = Facility.objects.filter(branch=request.branch).order_by(
-            "name"
+        facilities = with_in_progress_maintenance(
+            Facility.objects.filter(branch=request.branch).order_by("name")
         )
         selected_facility_id = request.GET.get("facility") or form_data.get(
             "facility", ""
@@ -235,8 +236,7 @@ class CreateReservationView(View):
             and starts_at is not None
             and ends_at is not None
             and raw_amount is not None
-            and status
-            in {Reservation.Status.CONFIRMED, Reservation.Status.COMPLETED}
+            and status == Reservation.Status.CONFIRMED
             and has_calendar_conflict(facility, starts_at, ends_at)
         ):
             errors["starts_at"] = (
@@ -281,22 +281,15 @@ class CreateReservationView(View):
                 status=status,
                 special_requests=special_requests,
             )
-            if status in {
-                Reservation.Status.CONFIRMED,
-                Reservation.Status.COMPLETED,
-            }:
-                calendar_status = (
-                    Calendar.Status.COMPLETED
-                    if status == Reservation.Status.COMPLETED
-                    else Calendar.Status.CONFIRMED
-                )
+            if status == Reservation.Status.CONFIRMED:
                 Calendar.objects.create(
                     reservation=reservation,
                     facility=facility,
                     starts_at=starts_at,
                     ends_at=ends_at,
-                    status=calendar_status,
+                    status=Calendar.Status.CONFIRMED,
                 )
+                Reservation.objects.decline_conflicts(reservation)
         reservations_url = reverse(
             "reservations",
             kwargs={"branch": request.branch.slug},

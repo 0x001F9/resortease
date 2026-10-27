@@ -2,14 +2,14 @@
 {% load static %}
 
 {% block content %}
-<main class="bg-base-200 px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
+<main class="bg-base-200 px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
     <div class="mx-auto max-w-3xl">
         <a class="link link-hover text-sm font-semibold text-primary" href="{% url 'public-reservation-detail' reservation.pk %}"><span aria-hidden="true">&larr;</span> Reservation details</a>
         <section class="card mt-4 border border-base-300 bg-base-100 shadow-sm">
             <div class="card-body gap-5 p-5 sm:p-8">
                 <header>
-                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">{{ branch.name }}</p>
-                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Edit reservation</h1>
+                    <p class="text-sm font-semibold uppercase tracking-[0.14em] text-primary">{{ branch.name }}</p>
+                    <h1 class="card-title mt-1 font-serif text-2xl font-medium sm:text-3xl">Edit reservation</h1>
                     <p class="mt-2 text-sm text-base-content/70">Change your requested date, time, facility, or guest details. Updates are checked against current availability.</p>
                 </header>
 
@@ -42,7 +42,7 @@
                             <legend class="label-text mb-2 block font-medium">Choose a rate <span class="text-error">*</span></legend>
                             <div class="grid gap-3 sm:grid-cols-2">
                                 {% for value, label in form.RATE_CHOICES %}
-                                    <label class="flex cursor-pointer items-start gap-3 rounded-box border border-base-300 p-3">
+                                    <label class="flex cursor-pointer items-start gap-3 rounded-box border border-base-300 p-3 transition hover:border-primary/50 hover:bg-base-200/50">
                                         <input class="radio radio-primary mt-1" type="radio" name="rate_package" value="{{ value }}" required {% if form.rate_package.value == value %}checked{% endif %}>
                                         <span class="flex flex-1 flex-col gap-1">
                                             <span class="font-medium">{{ label }}</span>

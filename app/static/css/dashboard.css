@@ -1,0 +1,125 @@
+.dashboard-kpi-grid,
+.dashboard-work-grid {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+.dashboard-activity-grid {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.dashboard-page .card,
+.dashboard-page section,
+.dashboard-page a {
+	min-width: 0;
+}
+
+.dashboard-page .card-body {
+	padding: clamp(1rem, 3vw, 1.5rem);
+}
+
+.dashboard-page header h1 {
+	overflow-wrap: anywhere;
+	font-size: clamp(1.5rem, 5vw, 1.875rem);
+	line-height: 1.2;
+}
+
+.dashboard-page > header > a {
+	width: 100%;
+}
+
+.dashboard-revenue-card,
+.dashboard-revenue-card > .card-body,
+.financial-reports-page,
+.financial-reports-page > section,
+.financial-reports-page > form,
+.financial-reports-page .card-body,
+.line-chart-scroll {
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.line-chart-scroll {
+	display: block;
+	width: 100%;
+	flex: 0 1 100%;
+	overflow: hidden;
+	contain: inline-size;
+}
+
+.line-chart-canvas {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	min-width: 100%;
+}
+
+.dashboard-page #revenue-chart {
+	height: clamp(15rem, 55vw, 20rem) !important;
+}
+
+.dashboard-booking-summary {
+	flex-wrap: wrap;
+}
+
+.dashboard-booking-guest {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.dashboard-booking-time {
+	flex: 0 0 auto;
+}
+
+.dashboard-work-grid > a {
+	min-height: 8rem;
+	padding: clamp(1rem, 3vw, 1.25rem);
+}
+
+@media (min-width: 40rem) {
+	.dashboard-page > header > a {
+		width: fit-content;
+	}
+}
+
+@media (min-width: 64rem) {
+	.dashboard-activity-grid {
+		grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 1fr);
+		align-items: start;
+	}
+}
+
+@media (max-width: 39.999rem) {
+	.dashboard-page {
+		padding-inline: 1rem;
+	}
+
+	.dashboard-page .card-body {
+		padding: 1rem;
+	}
+
+	.dashboard-page .card-title {
+		font-size: 1.125rem;
+	}
+
+	.dashboard-page .dashboard-kpi-grid > a {
+		padding: 1rem;
+	}
+
+	.dashboard-page .dashboard-kpi-grid .text-3xl {
+		font-size: 1.5rem;
+		line-height: 2rem;
+	}
+
+	.dashboard-page .dashboard-booking-time {
+		text-align: left;
+	}
+
+	.dashboard-page .dashboard-work-grid > a > span:last-child {
+		align-items: flex-start;
+	}
+
+	.dashboard-page [aria-labelledby="overdue-assets-heading"] li {
+		flex-direction: column;
+	}
+}

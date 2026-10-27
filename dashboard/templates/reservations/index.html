@@ -1,44 +1,71 @@
 {% extends "../partials/layout.html" %}
 
 {% block content %}
-<main class="min-w-0 p-3 sm:p-4 md:p-6">
+<main class="mx-auto min-w-0 max-w-[100rem] p-4 sm:p-5 lg:p-7">
     <div class="mb-6">
         <p class="text-sm text-base-content/60">{{ request.branch.name }}</p>
-        <h1 class="text-2xl font-bold sm:text-3xl">Reservations &amp; Calendar</h1>
+        <h1 class="text-2xl font-semibold sm:text-3xl">Reservations &amp; Calendar</h1>
         <p class="mt-1 text-base-content/70">Review guest reservations and facility availability.</p>
         <a href="{% url 'create-reservation' request.branch.slug %}" class="btn btn-primary mt-4">
             Create reservation
         </a>
     </div>
 
-    <section class="p-3 overflow-x-auto flex gap-4" aria-label="Reservation summary">
-        <article class="card bg-base-100 shadow-sm flex-1 min-w-[200px]">
-            <div class="card-body p-5">
-                <h2 class="text-sm text-base-content/60">Total reservations</h2>
-                <p class="text-2xl font-bold">{{ total_reservations }}</p>
-            </div>
-        </article>
-        <article class="card bg-base-100 shadow-sm flex-1 min-w-[200px]">
-            <div class="card-body p-5">
-                <h2 class="text-sm text-base-content/60">Awaiting confirmation</h2>
-                <p class="text-2xl font-bold">{{ pending_reservations }}</p>
-            </div>
-        </article>
-        <article class="card bg-base-100 shadow-sm flex-1 min-w-[200px]">
-            <div class="card-body p-5">
-                <h2 class="text-sm text-base-content/60">Calendar bookings</h2>
-                <p class="text-2xl font-bold">{{ total_bookings }}</p>
-            </div>
-        </article>
+    <section class="stats stats-vertical mb-6 w-full border border-base-300 bg-base-100 shadow-sm sm:stats-horizontal" aria-label="Reservation summary">
+        <div class="stat px-5 py-4">
+            <div class="stat-title">Total reservations</div>
+            <div class="stat-value text-2xl">{{ total_reservations }}</div>
+        </div>
+        <div class="stat px-5 py-4">
+            <div class="stat-title">Awaiting confirmation</div>
+            <div class="stat-value text-2xl text-warning">{{ pending_reservations }}</div>
+        </div>
+        <div class="stat px-5 py-4">
+            <div class="stat-title">Calendar bookings</div>
+            <div class="stat-value text-2xl">{{ total_bookings }}</div>
+        </div>
     </section>
 
+    {% if bookings_needing_completion %}
+        <section class="mb-6 rounded-box border border-success/40 bg-success/10 p-4 sm:p-5" aria-labelledby="bookings-needing-completion-heading">
+            <div class="mb-3">
+                <h2 id="bookings-needing-completion-heading" class="text-lg font-semibold text-success">
+                    Finished bookings · mark as completed
+                </h2>
+                <p class="mt-1 text-sm text-base-content/70">
+                    These confirmed bookings have passed their checkout time. Mark them completed to update their status.
+                </p>
+            </div>
+            <ul class="divide-y divide-success/20">
+                {% for entry in bookings_needing_completion %}
+                    <li class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="min-w-0 flex-1 rounded-box p-2">
+                            <span class="block font-semibold">
+                                {% include "partials/account_link.html" with account_user=entry.reservation.guest account_link_class="link link-hover" %}
+                            </span>
+                            <span class="mt-1 block text-sm text-base-content/70">
+                                {{ entry.facility.name }} · Checkout {{ entry.ends_at|date:"M j, Y, g:i a" }}
+                            </span>
+                            <a class="link link-hover mt-1 inline-block text-sm" href="{% url 'reservation-detail' request.branch.slug entry.reservation_id %}">View booking</a>
+                        </div>
+                        <form method="post" action="{% url 'mark-booking-completed' request.branch.slug entry.pk %}" class="w-full sm:w-auto">
+                            {% csrf_token %}
+                            <input type="hidden" name="return_to" value="reservations">
+                            <button class="btn btn-success w-full sm:w-auto" type="submit">Mark completed</button>
+                        </form>
+                    </li>
+                {% endfor %}
+            </ul>
+        </section>
+    {% endif %}
+
     <section
-        class="mt-8 rounded-box border border-base-content/10 bg-base-100"
+        class="mt-6 rounded-box border border-base-300 bg-base-100"
         aria-label="Facility calendar"
         hx-target="#calendar-day-dialog-content"
         hx-swap="innerHTML"
     >
-        <div class="flex flex-col gap-3 border-b border-base-content/10 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+        <div class="flex flex-col gap-3 border-b border-base-300 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
             <div class="flex items-center justify-between gap-2 sm:justify-start">
                 <a
                     class="btn btn-ghost btn-sm"
@@ -92,33 +119,38 @@
                             {% for day in week %}
                                 <td class="h-20 w-[14.285%] align-top p-0 sm:h-28 {% if day.is_today %}bg-primary/5{% endif %}">
                                     {% if day %}
-                                    <button
-                                        type="button"
-                                        class="flex h-20 w-full min-w-0 flex-col p-1 text-left hover:bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:h-28 sm:p-2 {% if day.is_unavailable %}border border-error/40 bg-error/10{% endif %}"
-                                        hx-get="{% url 'calendar-day-entries' request.branch.slug %}?date={{ day.date|date:'Y-m-d' }}{% if selected_facility %}&amp;facility={{ selected_facility.pk }}{% endif %}"
-                                        aria-label="{% if day.is_unavailable %}View unavailable entries for{% else %}View calendar entries for{% endif %} {{ day.date|date:'l, F j, Y' }}"
-                                    >
-                                        <span class="mb-1 w-full text-right">
+                                    <div class="flex h-20 w-full min-w-0 flex-col p-1 sm:h-28 sm:p-2 {% if day.is_unavailable %}border border-error/40 bg-error/10{% endif %}">
+                                        <button
+                                            type="button"
+                                            class="mb-1 w-full text-right hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                                            hx-get="{% url 'calendar-day-entries' request.branch.slug %}?date={{ day.date|date:'Y-m-d' }}{% if selected_facility %}&amp;facility={{ selected_facility.pk }}{% endif %}"
+                                            aria-label="{% if day.is_unavailable %}View unavailable entries for{% else %}View calendar entries for{% endif %} {{ day.date|date:'l, F j, Y' }}"
+                                        >
                                             <span class="{% if day.is_today %}badge badge-primary badge-sm{% endif %}">{{ day.date|date:"j" }}</span>
-                                        </span>
+                                        </button>
                                         {% if day.is_unavailable %}
                                             <span class="badge badge-error badge-sm mb-1 hidden sm:inline-flex">Not available</span>
                                         {% endif %}
-                                        <span class="mt-1 flex w-full items-center justify-center gap-1 sm:hidden">
+                                        <button
+                                            type="button"
+                                            class="mt-1 flex w-full items-center justify-center gap-1 sm:hidden"
+                                            hx-get="{% url 'calendar-day-entries' request.branch.slug %}?date={{ day.date|date:'Y-m-d' }}{% if selected_facility %}&amp;facility={{ selected_facility.pk }}{% endif %}"
+                                            aria-label="View calendar entries for {{ day.date|date:'l, F j, Y' }}"
+                                        >
                                             {% if day.is_unavailable %}
                                                 <span class="badge badge-error badge-xs">Off</span>
                                             {% endif %}
                                             {% if day.entries %}
                                                 <span class="badge badge-secondary badge-xs">{{ day.entries|length }}</span>
                                             {% endif %}
-                                        </span>
+                                        </button>
                                         <div class="hidden w-full flex-col gap-1 sm:flex">
                                             {% for entry in day.entries|slice:":2" %}
                                                 <div class="truncate rounded {% if entry.is_unavailable %}bg-error/20{% else %}bg-secondary/20{% endif %} px-1 py-0.5 text-xs" title="{{ entry.facility.name }}">
                                                     {% if entry.is_unavailable %}
                                                         Unavailable: {{ entry.facility.name }}
                                                     {% else %}
-                                                        {{ entry.reservation.guest.first_name }} {{ entry.reservation.guest.last_name }}
+                                                        {% include "partials/account_link.html" with account_user=entry.reservation.guest account_link_class="link link-hover" %}
                                                     {% endif %}
                                                 </div>
                                             {% endfor %}
@@ -130,7 +162,7 @@
                                                 {% endwith %}
                                             {% endif %}
                                         </div>
-                                        </button>
+                                    </div>
                                     {% endif %}
                                 </td>
                             {% endfor %}
@@ -147,8 +179,8 @@
         </form>
     </dialog>
 
-    <section class="mt-8 rounded-box border border-base-content/10 bg-base-100">
-        <div class="flex flex-col gap-4 border-b border-base-content/10 p-4 md:flex-row md:items-center md:justify-between">
+    <section class="mt-6 rounded-box border border-base-300 bg-base-100">
+        <div class="flex flex-col gap-4 border-b border-base-300 p-4 md:flex-row md:items-center md:justify-between">
             <form method="get" class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                 <label class="input input-bordered flex w-full items-center gap-2 sm:w-auto">
                     <span class="sr-only">Search reservations</span>
@@ -173,7 +205,7 @@
         </div>
 
         <div class="overflow-x-auto">
-            <table class="table">
+            <table class="table table-zebra">
                 <thead>
                     <tr>
                         <th>Guest</th>
@@ -187,9 +219,9 @@
                 </thead>
                 <tbody>
                     {% for reservation in reservations %}
-                        <tr class="{% cycle 'bg-base-200' '' %}">
+                        <tr>
                             <td>
-                                <div class="font-medium">{{ reservation.guest.first_name }} {{ reservation.guest.last_name }}</div>
+                                <div class="font-medium">{% include "partials/account_link.html" with account_user=reservation.guest account_link_class="link link-hover" %}</div>
                                 <div class="text-sm text-base-content/60">{{ reservation.guest.email }}</div>
                                 <a
                                     class="link link-primary mt-1 inline-block text-sm"
@@ -216,11 +248,13 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <span class="badge badge-warning">{{ reservation.get_status_display }}</span>
+                                <span class="badge {% if reservation.current_status == 'confirmed' %}badge-success{% elif reservation.current_status == 'declined' or reservation.current_status == 'cancelled' %}badge-error{% elif reservation.current_status == 'completed' %}badge-neutral{% else %}badge-warning{% endif %}">
+                                    {{ reservation.current_status_display }}
+                                </span>
                             </td>
                             <td class="text-right">
                                 {% if reservation.calendar_entry.has_amount %}
-                                    ₱{{ reservation.raw_amount|floatformat:2 }}
+                                    ₱ {{ reservation.raw_amount|floatformat:2 }}
                                 {% else %}
                                     &mdash;
                                 {% endif %}

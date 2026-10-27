@@ -12,8 +12,8 @@
         <section class="card border border-base-300 bg-base-100 shadow-sm">
             <div class="card-body gap-5 p-5 sm:p-8">
                 <header>
-                    <p class="text-sm font-semibold uppercase tracking-wide text-primary">{{ request.branch.name }}</p>
-                    <h1 class="card-title mt-1 text-2xl sm:text-3xl">Create booking</h1>
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">{{ request.branch.name }}</p>
+                    <h1 class="card-title mt-1 text-2xl font-semibold sm:text-3xl">Create booking</h1>
                     <p class="mt-2 text-sm text-base-content/70">
                         Book a facility for a guest. This booking is automatically confirmed and added to the calendar.
                     </p>
@@ -41,7 +41,7 @@
                         <span>Past dates are read-only. Select today or a future date to create a booking.</span>
                     </div>
                 {% else %}
-                    <form method="post" class="space-y-5">
+                    <form method="post" class="space-y-5" data-maintenance-confirmation="create">
                         {% csrf_token %}
                         {% if errors %}
                             <div role="alert" class="alert alert-error">
@@ -62,7 +62,7 @@
                                 <select name="facility" data-capacity-select data-capacity-advisory class="select select-bordered w-full {% if errors.facility %}select-error{% endif %}" required {% if not facilities %}disabled{% endif %}>
                                     <option value="" disabled {% if not form_data.facility %}selected{% endif %}>Choose a facility</option>
                                     {% for facility in facilities %}
-                                        <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" data-rate24-hours="{{ facility.rate_24hours|default_if_none:'' }}" data-rate22-hours="{{ facility.rate_22hours|default_if_none:'' }}" data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}" data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
+                                        <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" data-maintenance-in-progress="{{ facility.has_in_progress_maintenance|yesno:'true,false' }}" data-rate24-hours="{{ facility.rate_24hours|default_if_none:'' }}" data-rate22-hours="{{ facility.rate_22hours|default_if_none:'' }}" data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}" data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}" {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
                                     {% endfor %}
                                 </select>
                                 {% if errors.facility %}<span class="mt-1 text-sm text-error">{{ errors.facility }}</span>{% endif %}
@@ -117,4 +117,5 @@
 <script src="{% static 'js/reservation-price-preview.js' %}" defer></script>
 <script src="{% static 'js/reservation-user-picker.js' %}" defer></script>
 <script src="{% static 'js/facility-capacity.js' %}" defer></script>
+<script src="{% static 'js/facility-maintenance-confirmation.js' %}" defer></script>
 {% endblock %}

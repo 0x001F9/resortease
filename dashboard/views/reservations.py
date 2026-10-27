@@ -1,16 +1,22 @@
 import calendar
 from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 
+from django.contrib import messages
 from django.db.models import CharField, Q
+from django.db import transaction
+from django.db.models import Sum
+from django.http import Http404
 from django.db.models.functions import Cast
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.decorations.branch_check import check_branch_dashboard
-from dashboard.models import Calendar, Facility, Reservation
+from dashboard.models import Calendar, Facility, Payment, Reservation
 from dashboard.views.calendar_entries import is_day_fully_unavailable
 
 
@@ -20,6 +26,16 @@ class ReservationsCalendarView(View):
     template_name = "reservations/index.html"
 
     def get(self, request, *args, **kwargs):
+        now = timezone.now()
+        Reservation.objects.filter(
+            facility__branch=request.branch,
+            status=Reservation.Status.PENDING,
+            starts_at__lte=now,
+        ).update(
+            status=Reservation.Status.DECLINED,
+            updated_at=now,
+        )
+
         month_parameter = request.GET.get("month", "")
         try:
             calendar_month = date.fromisoformat(f"{month_parameter}-01")
@@ -40,7 +56,11 @@ class ReservationsCalendarView(View):
                 output_field=CharField(),
             )
         )
-        status_choices = Reservation.Status.choices
+        status_choices = [
+            *Reservation.Status.choices,
+            (Calendar.Status.CANCELLED, Calendar.Status.CANCELLED.label),
+            (Calendar.Status.COMPLETED, Calendar.Status.COMPLETED.label),
+        ]
 
         selected_status = request.GET.get(
             "status",
@@ -49,7 +69,18 @@ class ReservationsCalendarView(View):
         valid_statuses = {value for value, _label in status_choices}
         if selected_status not in valid_statuses:
             selected_status = Reservation.Status.PENDING
-        reservations = reservations.filter(status=selected_status)
+        if selected_status in {
+            Calendar.Status.CANCELLED,
+            Calendar.Status.COMPLETED,
+        }:
+            reservations = reservations.filter(
+                calendar_entry__status=selected_status
+            )
+        else:
+            reservations = reservations.filter(
+                Q(status=selected_status, calendar_entry__isnull=True)
+                | Q(calendar_entry__status=selected_status)
+            )
 
         search_query = request.GET.get("q", "").strip()
         if search_query:
@@ -152,6 +183,16 @@ class ReservationsCalendarView(View):
             facility__branch=request.branch,
             reservation__isnull=False,
         ).exclude(status=Calendar.Status.CANCELLED).count()
+        bookings_needing_completion = (
+            Calendar.objects.filter(
+                facility__branch=request.branch,
+                reservation__isnull=False,
+                status=Calendar.Status.CONFIRMED,
+                ends_at__lte=now,
+            )
+            .select_related("reservation__guest", "facility")
+            .order_by("ends_at", "starts_at")
+        )
         return render(
             request,
             self.template_name,
@@ -171,5 +212,70 @@ class ReservationsCalendarView(View):
                     status=Reservation.Status.PENDING
                 ).count(),
                 "total_bookings": total_bookings,
+                "bookings_needing_completion": bookings_needing_completion,
             },
         )
+
+
+@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(check_branch_dashboard, name="dispatch")
+class MarkBookingCompletedView(View):
+    def post(self, request, entry_id, *args, **kwargs):
+        now = timezone.now()
+        completion_blocked = False
+        reservation_id = None
+        with transaction.atomic():
+            entry = (
+                Calendar.objects.select_for_update()
+                .filter(
+                    pk=entry_id,
+                    facility__branch=request.branch,
+                    reservation__isnull=False,
+                    status=Calendar.Status.CONFIRMED,
+                    ends_at__lte=now,
+                )
+                .first()
+            )
+            if entry is None:
+                raise Http404("This booking cannot be marked completed.")
+
+            reservation = Reservation.objects.select_for_update().get(
+                pk=entry.reservation_id
+            )
+            reservation_id = reservation.pk
+            total_amount = reservation.total_amount
+            if total_amount is None:
+                completion_blocked = True
+            else:
+                paid_total = (
+                    reservation.payments.filter(
+                        status=Payment.Status.SUCCEEDED,
+                    ).aggregate(total=Sum("amount"))["total"]
+                    or Decimal("0.00")
+                )
+                pending_total = (
+                    reservation.payments.filter(
+                        status=Payment.Status.PENDING,
+                    ).aggregate(total=Sum("amount"))["total"]
+                    or Decimal("0.00")
+                )
+                remaining_balance = max(
+                    total_amount - paid_total + pending_total,
+                    Decimal("0.00"),
+                )
+                if remaining_balance != 0:
+                    completion_blocked = True
+
+            if not completion_blocked:
+                entry.status = Calendar.Status.COMPLETED
+                entry.save(update_fields=["status", "updated_at"])
+
+        if completion_blocked:
+            return redirect(
+                f"{reverse('reservation-detail', kwargs={'branch': request.branch.slug, 'reservation_id': reservation_id})}?completion=payment-required"
+            )
+
+        messages.success(request, "Booking marked as completed.")
+        if request.POST.get("return_to") == "dashboard":
+            return redirect("dashboard", branch=request.branch.slug)
+        return redirect("reservations", branch=request.branch.slug)
