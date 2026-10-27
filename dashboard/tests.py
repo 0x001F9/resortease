@@ -776,7 +776,7 @@ class CalendarEntryViewTests(TestCase):
         self.assertContains(response, "receipt-123")
         self.assertContains(response, "Edit booking")
 
-    def test_reservation_detail_hides_payments_when_reservation_not_confirmed(self):
+    def test_cancelled_reservation_detail_shows_read_only_payment_history(self):
         starts_at = timezone.make_aware(
             datetime.combine(
                 timezone.localdate() + timedelta(days=1),
@@ -811,11 +811,257 @@ class CalendarEntryViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "Payments")
+        self.assertContains(response, "Payment history")
+        self.assertContains(response, "Deposit")
+        self.assertContains(response, "pending-reservation-receipt")
         self.assertNotContains(response, "Total paid")
-        self.assertNotContains(response, "pending-reservation-receipt")
         self.assertNotContains(response, "Add payment")
+        self.assertNotContains(response, "Update payment status")
         self.assertNotContains(response, "Edit reservation")
+
+    def test_cancelled_reservation_can_record_only_fixed_half_refund(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        entry.status = Calendar.Status.CANCELLED
+        entry.save(update_fields=["status", "updated_at"])
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Down payment",
+            amount=Decimal("100.01"),
+            method="card",
+            status=Payment.Status.SUCCEEDED,
+        )
+        payment_url = reverse(
+            "create-payment",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+        detail_url = reverse(
+            "reservation-detail",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        detail_response = self.client.get(detail_url)
+        self.assertContains(detail_response, "Record 50% refund")
+
+        form_response = self.client.get(payment_url)
+        self.assertEqual(form_response.status_code, 200)
+        self.assertEqual(
+            list(form_response.context["form"].fields["status"].choices),
+            [(Payment.Status.REFUNDED, Payment.Status.REFUNDED.label)],
+        )
+        self.assertEqual(
+            form_response.context["form"]["amount"].value(),
+            Decimal("50.01"),
+        )
+        self.assertTrue(
+            form_response.context["form"].fields["amount"].widget.attrs.get(
+                "readonly"
+            )
+        )
+
+        wrong_status_response = self.client.post(
+            payment_url,
+            {
+                "name": "Full payment",
+                "amount": "50.01",
+                "status": Payment.Status.SUCCEEDED,
+                "method": "card",
+            },
+        )
+        self.assertEqual(wrong_status_response.status_code, 200)
+        self.assertFalse(
+            Payment.objects.filter(
+                reservation_id=reservation,
+                status=Payment.Status.REFUNDED,
+            ).exists()
+        )
+
+        rejected_response = self.client.post(
+            payment_url,
+            {
+                "name": "Refund",
+                "amount": "40.00",
+                "status": Payment.Status.REFUNDED,
+                "method": "card",
+                "transaction_reference": "refund-too-small",
+            },
+        )
+        self.assertEqual(rejected_response.status_code, 200)
+        self.assertFalse(
+            Payment.objects.filter(
+                reservation_id=reservation,
+                status=Payment.Status.REFUNDED,
+            ).exists()
+        )
+
+        response = self.client.post(
+            payment_url,
+            {
+                "name": "Refund",
+                "amount": "50.01",
+                "status": Payment.Status.REFUNDED,
+                "method": "card",
+                "transaction_reference": "branch-refund-reference",
+            },
+        )
+        self.assertRedirects(response, detail_url)
+        refund = Payment.objects.get(
+            reservation_id=reservation,
+            status=Payment.Status.REFUNDED,
+        )
+        self.assertEqual(refund.amount, Decimal("50.01"))
+        self.assertEqual(refund.method, "card")
+        self.assertEqual(
+            refund.transaction_reference,
+            "branch-refund-reference",
+        )
+        self.assertEqual(refund.cashier, self.user)
+
+        detail_response = self.client.get(detail_url)
+        self.assertContains(detail_response, "branch-refund-reference")
+        self.assertContains(detail_response, "card")
+        self.assertContains(detail_response, "Refund recorded")
+        self.assertNotContains(detail_response, "Record 50% refund")
+        self.assertEqual(self.client.get(payment_url).status_code, 404)
+
+    def test_confirmed_reservation_can_record_partial_refunds_up_to_paid_total(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=8),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Down payment",
+            amount=Decimal("100.00"),
+            method="card",
+            status=Payment.Status.SUCCEEDED,
+        )
+        payment_url = reverse(
+            "create-payment",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+        detail_url = reverse(
+            "reservation-detail",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        form_response = self.client.get(payment_url)
+        self.assertEqual(form_response.status_code, 200)
+        self.assertIn(
+            (Payment.Status.REFUNDED, Payment.Status.REFUNDED.label),
+            form_response.context["form"].fields["status"].choices,
+        )
+        self.assertFalse(
+            form_response.context["form"].fields["amount"].widget.attrs.get(
+                "readonly"
+            )
+        )
+        self.assertEqual(
+            form_response.context["form"].fields["amount"].widget.attrs["max"],
+            "100.00",
+        )
+
+        too_large_response = self.client.post(
+            payment_url,
+            {
+                "name": "Refund",
+                "amount": "100.01",
+                "status": Payment.Status.REFUNDED,
+                "method": "card",
+            },
+        )
+        self.assertEqual(too_large_response.status_code, 200)
+        self.assertFalse(
+            Payment.objects.filter(
+                reservation_id=reservation,
+                status=Payment.Status.REFUNDED,
+            ).exists()
+        )
+
+        missing_method_response = self.client.post(
+            payment_url,
+            {
+                "name": "Refund",
+                "amount": "60.00",
+                "status": Payment.Status.REFUNDED,
+            },
+        )
+        self.assertEqual(missing_method_response.status_code, 200)
+        self.assertFalse(
+            Payment.objects.filter(
+                reservation_id=reservation,
+                status=Payment.Status.REFUNDED,
+            ).exists()
+        )
+
+        response = self.client.post(
+            payment_url,
+            {
+                "name": "Refund",
+                "amount": "60.00",
+                "status": Payment.Status.REFUNDED,
+                "method": "card",
+            },
+        )
+        self.assertRedirects(response, detail_url)
+        refund = Payment.objects.get(
+            reservation_id=reservation,
+            status=Payment.Status.REFUNDED,
+        )
+        self.assertEqual(refund.amount, Decimal("60.00"))
+        self.assertEqual(refund.method, "card")
+        self.assertIsNone(refund.transaction_reference)
+
+        second_refund_form = self.client.get(payment_url)
+        self.assertEqual(
+            second_refund_form.context["form"].fields["amount"].widget.attrs[
+                "max"
+            ],
+            "40.00",
+        )
+        over_remaining_response = self.client.post(
+            payment_url,
+            {
+                "name": "Refund",
+                "amount": "40.01",
+                "status": Payment.Status.REFUNDED,
+                "method": "card",
+            },
+        )
+        self.assertEqual(over_remaining_response.status_code, 200)
+        self.assertEqual(
+            Payment.objects.filter(
+                reservation_id=reservation,
+                status=Payment.Status.REFUNDED,
+            ).count(),
+            1,
+        )
 
     def test_pending_reservation_detail_shows_pending_payment_items(self):
         starts_at = timezone.make_aware(

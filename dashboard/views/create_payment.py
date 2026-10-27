@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -10,6 +10,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
+from dashboard.billing import calculate_cancellation_refund
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.forms import PaymentForm
 from dashboard.models import Calendar, Payment, Reservation
@@ -19,6 +20,23 @@ from dashboard.models import Calendar, Payment, Reservation
 @method_decorator(check_branch_dashboard, name="dispatch")
 class CreatePaymentView(View):
     template_name = "reservations/create_payment.html"
+
+    def get_refund_limit(self, reservation):
+        totals = reservation.payments.aggregate(
+            paid=Sum(
+                "amount",
+                filter=Q(status=Payment.Status.SUCCEEDED),
+            ),
+            refunded=Sum(
+                "amount",
+                filter=Q(status=Payment.Status.REFUNDED),
+            ),
+        )
+        return max(
+            (totals["paid"] or Decimal("0.00"))
+            - (totals["refunded"] or Decimal("0.00")),
+            Decimal("0.00"),
+        )
 
     def get_reservation(self, request, reservation_id, *, lock=False):
         reservations = Reservation.objects.prefetch_related("payments")
@@ -33,7 +51,21 @@ class CreatePaymentView(View):
                 Reservation.Status.CONFIRMED,
             ),
         )
-        if reservation.current_status not in {
+        if reservation.current_status == Calendar.Status.CANCELLED:
+            paid_total = (
+                reservation.payments.filter(
+                    status=Payment.Status.SUCCEEDED,
+                ).aggregate(total=Sum("amount"))["total"]
+                or Decimal("0.00")
+            )
+            if (
+                calculate_cancellation_refund(paid_total) <= 0
+                or reservation.payments.filter(
+                    status=Payment.Status.REFUNDED,
+                ).exists()
+            ):
+                raise Http404
+        elif reservation.current_status not in {
             Reservation.Status.PENDING,
             Calendar.Status.CONFIRMED,
         }:
@@ -59,25 +91,44 @@ class CreatePaymentView(View):
                 Decimal("0.00"),
             )
             if reservation.total_amount is not None
+            and reservation.current_status != Calendar.Status.CANCELLED
             else None
         )
+        refund_amount = calculate_cancellation_refund(paid_total)
         return {
             "reservation": reservation,
             "form": form,
             "paid_total": paid_total,
             "pending_total": pending_total,
             "remaining_balance": remaining_balance,
+            "refund_amount": refund_amount,
+            "is_refund": reservation.current_status == Calendar.Status.CANCELLED,
             "hide_aside": True,
         }
 
     def get(self, request, reservation_id, *args, **kwargs):
         reservation = self.get_reservation(request, reservation_id)
+        is_refund = reservation.current_status == Calendar.Status.CANCELLED
+        paid_total = (
+            reservation.payments.filter(
+                status=Payment.Status.SUCCEEDED,
+            ).aggregate(total=Sum("amount"))["total"]
+            or Decimal("0.00")
+        )
+        refund_limit = self.get_refund_limit(reservation)
         context = self.get_payment_context(
             reservation,
             PaymentForm(
                 pending_only=(
                     reservation.current_status == Reservation.Status.PENDING
-                )
+                ),
+                refund_only=is_refund,
+                refund_amount=calculate_cancellation_refund(paid_total),
+                refund_limit=(
+                    refund_limit
+                    if reservation.current_status == Calendar.Status.CONFIRMED
+                    else None
+                ),
             ),
         )
         return render(
@@ -93,18 +144,31 @@ class CreatePaymentView(View):
                 reservation_id,
                 lock=True,
             )
-            context = self.get_payment_context(
-                reservation,
-                PaymentForm(
-                    pending_only=(
-                        reservation.current_status == Reservation.Status.PENDING
-                    )
-                ),
+            is_refund = (
+                reservation.current_status == Calendar.Status.CANCELLED
             )
+            paid_total = (
+                reservation.payments.filter(
+                    status=Payment.Status.SUCCEEDED,
+                ).aggregate(total=Sum("amount"))["total"]
+                or Decimal("0.00")
+            )
+            refund_limit = self.get_refund_limit(reservation)
             form = PaymentForm(
                 request.POST,
                 pending_only=(
                     reservation.current_status == Reservation.Status.PENDING
+                ),
+                refund_only=is_refund,
+                refund_amount=(
+                    calculate_cancellation_refund(paid_total)
+                    if is_refund
+                    else None
+                ),
+                refund_limit=(
+                    refund_limit
+                    if reservation.current_status == Calendar.Status.CONFIRMED
+                    else None
                 ),
             )
             if form.is_valid():

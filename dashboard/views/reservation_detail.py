@@ -6,6 +6,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
+from dashboard.billing import calculate_cancellation_refund
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.models import Calendar, Payment, Reservation
 from dashboard.views.calendar_entries import has_calendar_conflict
@@ -37,6 +38,11 @@ class ReservationDetailView(View):
                 status=Payment.Status.SUCCEEDED,
             ).aggregate(total=Sum("amount"))["total"]
             or Decimal("0.00")
+        )
+        can_record_refund = (
+            reservation.current_status == Calendar.Status.CANCELLED
+            and paid_total > 0
+            and not payments.filter(status=Payment.Status.REFUNDED).exists()
         )
         pending_total = (
             payments.filter(
@@ -77,6 +83,8 @@ class ReservationDetailView(View):
                 "show_payment_info": show_payment_info,
                 "total_amount": total_amount,
                 "paid_total": paid_total,
+                "refund_amount": calculate_cancellation_refund(paid_total),
+                "can_record_refund": can_record_refund,
                 "pending_total": pending_total,
                 "remaining_balance": remaining_balance,
                 "is_fully_paid": (

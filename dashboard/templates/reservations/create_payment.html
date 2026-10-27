@@ -15,7 +15,7 @@
             <div class="card-body gap-6 p-5 sm:p-8">
                 <header>
                     <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">{{ request.branch.name }}</p>
-                    <h1 class="card-title mt-1 text-2xl font-semibold">Record payment</h1>
+                    <h1 class="card-title mt-1 text-2xl font-semibold">{% if is_refund %}Record refund{% else %}Record payment{% endif %}</h1>
                     <p class="mt-2 text-sm text-base-content/70">
                         Reservation #{{ reservation.pk }} for {% include "partials/account_link.html" with account_user=reservation.guest account_link_class="link link-hover" %}
                     </p>
@@ -30,10 +30,17 @@
                         <dt class="text-sm text-base-content/60">Paid so far</dt>
                         <dd class="font-semibold">₱ {{ paid_total|floatformat:2 }}</dd>
                     </div>
-                    <div>
-                        <dt class="text-sm text-base-content/60">Remaining balance</dt>
-                        <dd class="font-semibold">{% if remaining_balance is not None %}₱ {{ remaining_balance|floatformat:2 }}{% else %}—{% endif %}</dd>
-                    </div>
+                    {% if is_refund %}
+                        <div>
+                            <dt class="text-sm text-base-content/60">Refund (50% of amount paid)</dt>
+                            <dd class="font-semibold">₱ {{ refund_amount|floatformat:2 }}</dd>
+                        </div>
+                    {% else %}
+                        <div>
+                            <dt class="text-sm text-base-content/60">Remaining balance</dt>
+                            <dd class="font-semibold">{% if remaining_balance is not None %}₱ {{ remaining_balance|floatformat:2 }}{% else %}—{% endif %}</dd>
+                        </div>
+                    {% endif %}
                 </dl>
 
                 <form method="post" class="space-y-4">
@@ -41,7 +48,7 @@
                     {% for field in form %}
                         <div
                             {% if field.name == "method" or field.name == "transaction_reference" %}
-                                data-payment-detail-field hidden
+                                data-payment-detail-field{% if not is_refund %} hidden{% endif %}
                             {% endif %}
                         >
                             <label class="label" for="{{ field.id_for_label }}">
@@ -74,7 +81,7 @@
                             href="{% url 'reservation-detail' request.branch.slug reservation.pk %}"
                             class="btn btn-ghost"
                         >Cancel</a>
-                        <button type="submit" class="btn btn-primary">Save payment</button>
+                        <button type="submit" class="btn btn-primary">{% if is_refund %}Save refund{% else %}Save payment{% endif %}</button>
                     </div>
                 </form>
             </div>
@@ -85,11 +92,11 @@
     const paymentStatusField = document.getElementById("id_status")
     const paymentDetailFields = document.querySelectorAll("[data-payment-detail-field]")
     const updatePaymentDetailFields = () => {
-        const isSucceeded = paymentStatusField.value === "succeeded"
+        const isCompleted = ["succeeded", "refunded"].includes(paymentStatusField.value)
         paymentDetailFields.forEach((container) => {
-            container.hidden = !isSucceeded
+            container.hidden = !isCompleted
             const input = container.querySelector("input")
-            if (input) input.required = isSucceeded && input.name === "method"
+            if (input) input.required = isCompleted && input.name === "method"
         })
     }
     paymentStatusField.addEventListener("change", updatePaymentDetailFields)

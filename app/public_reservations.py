@@ -12,7 +12,11 @@ from django.utils import timezone
 from django.views import View
 
 from app.forms import PublicReservationForm
-from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
+from dashboard.billing import (
+    RATE_REQUIRED_ERROR,
+    calculate_cancellation_refund,
+    calculate_total_amount,
+)
 from dashboard.models import (
     Branch,
     Calendar,
@@ -247,7 +251,15 @@ class PublicReservationDetailView(View):
         )
         calendar_entry = getattr(reservation, "calendar_entry", None)
         show_payment_info = reservation.current_status == Calendar.Status.CONFIRMED
-        payments = reservation.payments.all() if show_payment_info else []
+        show_payment_history = (
+            show_payment_info
+            or reservation.current_status == Calendar.Status.CANCELLED
+        )
+        payments = reservation.payments.all() if show_payment_history else []
+        refund_settled = (
+            reservation.current_status == Calendar.Status.CANCELLED
+            and payments.filter(status=Payment.Status.REFUNDED).exists()
+        )
         pending_payments = (
             reservation.payments.filter(status=Payment.Status.PENDING)
             if reservation.current_status
@@ -259,8 +271,13 @@ class PublicReservationDetailView(View):
                 total=Sum("amount")
             )["total"]
             or Decimal("0.00")
-            if show_payment_info
+            if show_payment_history
             else Decimal("0.00")
+        )
+        refund_amount = calculate_cancellation_refund(paid_total)
+        show_branch_contact_notice = (
+            reservation.current_status != Calendar.Status.CANCELLED
+            or (not refund_settled and refund_amount > 0)
         )
         pending_total = (
             payments.filter(status=Payment.Status.PENDING).aggregate(
@@ -286,7 +303,11 @@ class PublicReservationDetailView(View):
                 "payments": payments,
                 "pending_payments": pending_payments,
                 "show_payment_info": show_payment_info,
+                "show_payment_history": show_payment_history,
+                "refund_settled": refund_settled,
+                "show_branch_contact_notice": show_branch_contact_notice,
                 "paid_total": paid_total,
+                "refund_amount": refund_amount,
                 "pending_total": pending_total,
                 "remaining_balance": remaining_balance,
                 "can_cancel": (

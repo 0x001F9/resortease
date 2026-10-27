@@ -169,21 +169,31 @@
                             {% endif %}
                         </dl>
 
-                    {% if reservation.current_status == 'confirmed' or reservation.current_status == 'pending' %}
+                    {% if reservation.current_status == 'confirmed' or reservation.current_status == 'pending' or reservation.current_status == 'cancelled' %}
                         <div class="mt-5 border-t border-base-300 pt-4">
                             <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                                 <div>
-                                    <h3 class="font-semibold">{% if reservation.current_status == 'confirmed' %}Payment activity{% else %}Payments{% endif %}</h3>
+                                    <h3 class="font-semibold">{% if reservation.current_status == 'confirmed' %}Payment activity{% elif reservation.current_status == 'cancelled' %}Payment history{% else %}Payments{% endif %}</h3>
                                 </div>
                                 {% if reservation.current_status == 'confirmed' and is_fully_paid %}
                                     <span class="badge badge-success">Paid in full</span>
                                 {% endif %}
-                                <a
-                                    class="btn btn-primary btn-sm"
-                                    href="{% url 'create-payment' request.branch.slug reservation.pk %}"
-                                >Add payment</a>
+                                {% if reservation.current_status == 'confirmed' or reservation.current_status == 'pending' %}
+                                    <a
+                                        class="btn btn-primary btn-sm"
+                                        href="{% url 'create-payment' request.branch.slug reservation.pk %}"
+                                    >Add payment</a>
+                                {% elif can_record_refund %}
+                                    <a
+                                        class="btn btn-primary btn-sm"
+                                        href="{% url 'create-payment' request.branch.slug reservation.pk %}"
+                                    >Record 50% refund</a>
+                                {% elif reservation.current_status == 'cancelled' and paid_total > 0 %}
+                                    <span class="badge badge-success">Refund recorded</span>
+                                {% endif %}
                             </div>
-                            {% if reservation.current_status == 'confirmed' and payments %}
+                            {% if reservation.current_status == 'confirmed' or reservation.current_status == 'cancelled' %}
+                                {% if payments %}
                                 <div class="overflow-x-auto rounded-box border border-base-300">
                                     <table class="table">
                                         <thead>
@@ -204,7 +214,7 @@
                                                     <td>₱ {{ payment.amount|floatformat:2 }}</td>
                                                     <td>{{ payment.method }}</td>
                                                     <td>
-                                                        {% if payment.status == "pending" %}
+                                                        {% if payment.status == "pending" and reservation.current_status == 'confirmed' %}
                                                             <button
                                                                 type="button"
                                                                 class="btn btn-ghost btn-xs"
@@ -257,10 +267,11 @@
                                         </tbody>
                                     </table>
                                 </div>
-                            {% elif reservation.current_status == 'confirmed' %}
-                                <p class="rounded-box border border-base-300 p-4 text-sm text-base-content/70">
-                                    No payments have been recorded for this reservation.
-                                </p>
+                                {% else %}
+                                    <p class="rounded-box border border-base-300 p-4 text-sm text-base-content/70">
+                                        No payments have been recorded for this reservation.
+                                    </p>
+                                {% endif %}
                             {% endif %}
                         </div>
                     {% endif %}

@@ -70,7 +70,6 @@
                     </details>
                 {% else %}
                     <a class="btn btn-ghost btn-sm" href="{% url 'login' %}{% if request.GET.next %}?next={{ request.GET.next|urlencode }}{% endif %}">Sign in</a>
-                    <a class="btn btn-outline btn-sm hidden sm:inline-flex" href="{% url 'sign-up' %}">Create account</a>
                 {% endif %}
             </div>
         </div>

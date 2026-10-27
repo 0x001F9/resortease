@@ -518,8 +518,136 @@ class PublicReservationFlowTests(TestCase):
         self.assertNotContains(response, "Payment activity")
         self.assertNotContains(response, "Total paid")
 
+    def test_cancelled_reservation_details_show_read_only_payment_history(self):
+        self.client.force_login(self.user)
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+            status=Reservation.Status.CONFIRMED,
+        )
+        Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+            status=Calendar.Status.CANCELLED,
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Down payment",
+            amount=Decimal("25.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+            transaction_reference="cancelled-reservation-receipt",
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Pending deposit",
+            amount=Decimal("10.00"),
+            method="cash",
+            status=Payment.Status.CANCELLED,
+        )
+
+        response = self.client.get(
+            reverse(
+                "public-reservation-detail",
+                kwargs={"reservation_id": reservation.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Payment history")
+        self.assertContains(response, "Down payment")
+        self.assertContains(response, "Pending deposit")
+        self.assertContains(response, "cancelled-reservation-receipt")
+        self.assertNotContains(response, "Payment activity")
+        self.assertNotContains(response, "Total paid")
+
+    def test_settled_refund_hides_refund_contact_notice_but_keeps_payment_history(self):
+        self.client.force_login(self.user)
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+            status=Reservation.Status.CONFIRMED,
+        )
+        Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+            status=Calendar.Status.CANCELLED,
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Down payment",
+            amount=Decimal("1200.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+            transaction_reference="paid-reference",
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Refund",
+            amount=Decimal("600.00"),
+            method="cash",
+            status=Payment.Status.REFUNDED,
+            transaction_reference="refund-reference",
+        )
+
+        response = self.client.get(
+            reverse(
+                "public-reservation-detail",
+                kwargs={"reservation_id": reservation.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Arrange your refund")
+        self.assertNotContains(response, "Contact Harbor Branch to arrange it.")
+        self.assertNotContains(response, "1 Shore Road")
+        self.assertContains(response, "Payment history")
+        self.assertContains(response, "paid-reference")
+        self.assertContains(response, "refund-reference")
+
+    def test_zero_refund_hides_refund_contact_notice(self):
+        self.client.force_login(self.user)
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+            status=Reservation.Status.CONFIRMED,
+        )
+        Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+            status=Calendar.Status.CANCELLED,
+        )
+
+        response = self.client.get(
+            reverse(
+                "public-reservation-detail",
+                kwargs={"reservation_id": reservation.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["refund_amount"], Decimal("0.00"))
+        self.assertNotContains(response, "Arrange your refund")
+        self.assertNotContains(response, "1 Shore Road")
+        self.assertContains(response, "Payment history")
+
     def test_confirmed_reservation_can_be_cancelled_with_required_reason(self):
         self.client.force_login(self.user)
+        self.branch.phone_number = "+15551234567"
+        self.branch.email = "coastal@example.com"
+        self.branch.save(update_fields=["phone_number", "email", "updated_at"])
         reservation = Reservation.objects.create(
             guest=self.user,
             facility=self.facility,
@@ -541,6 +669,14 @@ class PublicReservationFlowTests(TestCase):
             method="cash",
             status=Payment.Status.PENDING,
         )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Down payment",
+            amount=Decimal("100.01"),
+            method="card",
+            status=Payment.Status.SUCCEEDED,
+            transaction_reference="cancelled-reservation-receipt",
+        )
         detail_url = reverse(
             "public-reservation-detail",
             kwargs={"reservation_id": reservation.pk},
@@ -554,6 +690,10 @@ class PublicReservationFlowTests(TestCase):
         self.assertContains(detail_response, "Cancel reservation")
         self.assertContains(detail_response, "Edit reservation")
         self.assertContains(detail_response, "Why are you cancelling?")
+        self.assertContains(detail_response, "50% of the amount already paid")
+        self.assertContains(detail_response, "₱ 50.01")
+        self.assertContains(detail_response, "tel:+15551234567")
+        self.assertContains(detail_response, "mailto:coastal@example.com")
 
         missing_reason_response = self.client.post(cancel_url, {"reason": "  "})
         self.assertRedirects(
@@ -587,6 +727,10 @@ class PublicReservationFlowTests(TestCase):
         detail_response = self.client.get(detail_url)
         self.assertContains(detail_response, "Calendar notes")
         self.assertContains(detail_response, "Our travel dates changed.")
+        self.assertContains(detail_response, "Arrange your refund")
+        self.assertContains(detail_response, "₱ 50.01")
+        self.assertContains(detail_response, "Contact Harbor Branch to arrange it.")
+        self.assertContains(detail_response, "cancelled-reservation-receipt")
         self.assertNotContains(detail_response, "Cancel reservation")
         self.assertNotContains(detail_response, "Edit reservation")
 

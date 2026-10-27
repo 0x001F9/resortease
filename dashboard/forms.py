@@ -66,33 +66,74 @@ class PaymentForm(forms.ModelForm):
         choices=(
             (Payment.Status.PENDING, Payment.Status.PENDING.label),
             (Payment.Status.SUCCEEDED, Payment.Status.SUCCEEDED.label),
-            (Payment.Status.REFUNDED, Payment.Status.REFUNDED.label),
         ),
         initial=Payment.Status.PENDING,
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
     )
 
-    def __init__(self, *args, pending_only=False, **kwargs):
+    def __init__(
+        self,
+        *args,
+        pending_only=False,
+        refund_only=False,
+        refund_amount=None,
+        refund_limit=None,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
-        if pending_only:
+        self.refund_amount = refund_amount
+        self.refund_limit = refund_limit
+        if refund_only:
+            self.fields["status"].choices = (
+                (Payment.Status.REFUNDED, Payment.Status.REFUNDED.label),
+            )
+            self.initial["status"] = Payment.Status.REFUNDED
+            self.initial["name"] = "Refund"
+            self.initial["amount"] = refund_amount
+            self.fields["amount"].widget.attrs["readonly"] = True
+        elif pending_only:
             self.fields["status"].choices = (
                 (Payment.Status.PENDING, Payment.Status.PENDING.label),
             )
             self.initial["status"] = Payment.Status.PENDING
+        elif refund_limit is not None and refund_limit > 0:
+            self.fields["status"].choices = (
+                *self.fields["status"].choices,
+                (Payment.Status.REFUNDED, Payment.Status.REFUNDED.label),
+            )
+            self.fields["amount"].widget.attrs["max"] = f"{refund_limit:.2f}"
+            self.fields["amount"].help_text = (
+                f"Refunds cannot exceed the remaining amount paid: "
+                f"₱ {refund_limit:.2f}."
+            )
         selected_status = (
             self.data.get(self.add_prefix("status"))
             if self.is_bound
             else self.initial.get("status", Payment.Status.PENDING)
         )
-        self.fields["method"].required = (
-            selected_status == Payment.Status.SUCCEEDED
-        )
+        self.fields["method"].required = selected_status in {
+            Payment.Status.SUCCEEDED,
+            Payment.Status.REFUNDED,
+        }
 
     def clean(self):
         cleaned_data = super().clean()
-        if cleaned_data.get("status") != Payment.Status.SUCCEEDED:
+        if cleaned_data.get("status") not in {
+            Payment.Status.SUCCEEDED,
+            Payment.Status.REFUNDED,
+        }:
             cleaned_data["method"] = ""
             cleaned_data["transaction_reference"] = None
+        if (
+            cleaned_data.get("status") == Payment.Status.REFUNDED
+            and self.refund_limit is not None
+            and cleaned_data.get("amount") is not None
+            and cleaned_data["amount"] > self.refund_limit
+        ):
+            self.add_error(
+                "amount",
+                "The refund cannot exceed the remaining amount already paid.",
+            )
         return cleaned_data
 
     class Meta:
@@ -124,6 +165,10 @@ class PaymentForm(forms.ModelForm):
         amount = self.cleaned_data["amount"]
         if amount <= 0:
             raise forms.ValidationError("Enter an amount greater than zero.")
+        if self.refund_amount is not None and amount != self.refund_amount:
+            raise forms.ValidationError(
+                "The refund amount must be exactly 50% of the total paid."
+            )
         return amount
 
 
