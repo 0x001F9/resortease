@@ -51,7 +51,7 @@
             <div class="card-body p-4">
                 <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">Inventory value</p>
                 <div class="mt-2 flex items-end justify-between">
-                    <span class="text-3xl font-bold">PHP {{ total_stock_value|floatformat:2 }}</span>
+                    <span class="text-3xl font-bold">₱ {{ total_stock_value|floatformat:2 }}</span>
                     <span class="badge badge-accent badge-soft">Stock</span>
                 </div>
             </div>
@@ -147,11 +147,11 @@
                         </div>
                         <div>
                             <dt class="text-xs text-base-content/60">Cost</dt>
-                            <dd class="font-medium">{% if item.unit_cost %}PHP {{ item.unit_cost|floatformat:2 }}{% else %}—{% endif %}</dd>
+                            <dd class="font-medium">{% if item.unit_cost %}₱ {{ item.unit_cost|floatformat:2 }}{% else %}—{% endif %}</dd>
                         </div>
                         <div>
                             <dt class="text-xs text-base-content/60">Value</dt>
-                            <dd class="font-medium">{% if item.stock_value %}PHP {{ item.stock_value|floatformat:2 }}{% else %}—{% endif %}</dd>
+                            <dd class="font-medium">{% if item.stock_value %}₱ {{ item.stock_value|floatformat:2 }}{% else %}—{% endif %}</dd>
                         </div>
                     </dl>
                 </article>
@@ -185,8 +185,8 @@
                             <td>{{ item.sku|default:"—" }}</td>
                             <td>{{ item.get_unit_display }}</td>
                             <td>{{ item.quantity_on_hand }}</td>
-                            <td>{% if item.unit_cost %}PHP {{ item.unit_cost|floatformat:2 }}{% else %}—{% endif %}</td>
-                            <td>{% if item.stock_value %}PHP {{ item.stock_value|floatformat:2 }}{% else %}—{% endif %}</td>
+                            <td>{% if item.unit_cost %}₱ {{ item.unit_cost|floatformat:2 }}{% else %}—{% endif %}</td>
+                            <td>{% if item.stock_value %}₱ {{ item.stock_value|floatformat:2 }}{% else %}—{% endif %}</td>
                             <td>
                                 {% if item.quantity_on_hand == 0 %}
                                     <span class="badge badge-error badge-soft">Out of stock</span>
@@ -326,7 +326,7 @@
                     </div>
                     <div>
                         <dt class="text-xs text-base-content/60">Purchase cost</dt>
-                        <dd class="font-medium">{% if asset.purchase_cost != None %}PHP {{ asset.purchase_cost|floatformat:2 }}{% else %}—{% endif %}</dd>
+                        <dd class="font-medium">{% if asset.purchase_cost != None %}₱ {{ asset.purchase_cost|floatformat:2 }}{% else %}—{% endif %}</dd>
                     </div>
                 </dl>
             </article>
@@ -377,7 +377,7 @@
                         </td>
                         <td>{% include "partials/account_link.html" with account_user=asset.borrowed_by account_link_class="link link-hover" %}</td>
                         <td>{{ asset.due_date|date:"M d, Y H:i"|default:"—" }}</td>
-                        <td>{% if asset.purchase_cost != None %}PHP {{ asset.purchase_cost|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td>{% if asset.purchase_cost != None %}₱ {{ asset.purchase_cost|floatformat:2 }}{% else %}—{% endif %}</td>
                     </tr>
                     {% empty %}
                     <tr>

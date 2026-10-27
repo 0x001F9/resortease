@@ -477,15 +477,15 @@ class PublicReservationFlowTests(TestCase):
         self.assertContains(response, "Facility reserve fees")
         self.assertContains(response, "Total paid")
         self.assertContains(response, "Total")
-        self.assertContains(response, "PHP 100.00")
+        self.assertContains(response, "₱ 100.00")
         self.assertContains(response, "Balance")
-        self.assertContains(response, "PHP 90.50")
+        self.assertContains(response, "₱ 90.50")
         self.assertNotContains(response, "Pending payments")
         self.assertContains(response, "Down payment")
         self.assertContains(response, "Balance payment")
-        self.assertContains(response, "PHP 10.00")
+        self.assertContains(response, "₱ 10.00")
         self.assertContains(response, "Cleaning fee")
-        self.assertContains(response, "PHP 5.50")
+        self.assertContains(response, "₱ 5.50")
         self.assertContains(response, "public-payment-receipt")
 
     def test_pending_reservation_shows_pending_payment_items(self):
@@ -514,7 +514,7 @@ class PublicReservationFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Pending deposit")
-        self.assertContains(response, "PHP 35.00")
+        self.assertContains(response, "₱ 35.00")
         self.assertNotContains(response, "Payment activity")
         self.assertNotContains(response, "Total paid")
 

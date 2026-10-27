@@ -24,15 +24,15 @@
                 <dl class="grid gap-3 rounded-box border border-base-300 p-4 sm:grid-cols-3">
                     <div>
                         <dt class="text-sm text-base-content/60">Reservation total</dt>
-                        <dd class="font-semibold">{% if reservation.total_amount is not None %}PHP {{ reservation.total_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
+                        <dd class="font-semibold">{% if reservation.total_amount is not None %}₱ {{ reservation.total_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
                     </div>
                     <div>
                         <dt class="text-sm text-base-content/60">Paid so far</dt>
-                        <dd class="font-semibold">PHP {{ paid_total|floatformat:2 }}</dd>
+                        <dd class="font-semibold">₱ {{ paid_total|floatformat:2 }}</dd>
                     </div>
                     <div>
                         <dt class="text-sm text-base-content/60">Remaining balance</dt>
-                        <dd class="font-semibold">{% if remaining_balance is not None %}PHP {{ remaining_balance|floatformat:2 }}{% else %}—{% endif %}</dd>
+                        <dd class="font-semibold">{% if remaining_balance is not None %}₱ {{ remaining_balance|floatformat:2 }}{% else %}—{% endif %}</dd>
                     </div>
                 </dl>
 

@@ -28,7 +28,7 @@
 			</a>
 			<a class="card border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'financial-reports' request.branch.slug %}?branch={{ request.branch.slug }}">
 				<span class="text-xs font-bold uppercase tracking-wider text-base-content/60">Reservation revenue</span>
-				<span class="mt-2 text-3xl font-bold">PHP {{ month_revenue|floatformat:2 }}</span>
+				<span class="mt-2 text-3xl font-bold">₱ {{ month_revenue|floatformat:2 }}</span>
 				<span class="mt-1 text-sm text-base-content/65">Payments received this month</span>
 			</a>
 			<a class="card border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'inventory' request.branch.slug %}">
@@ -70,8 +70,8 @@
 	{% endif %}
 
 	<section class="dashboard-activity-grid grid gap-6">
-		<div class="dashboard-revenue-card card border border-base-300 bg-base-100">
-			<div class="card-body">
+		<div class="dashboard-revenue-card card min-w-0 border border-base-300 bg-base-100">
+			<div class="card-body min-w-0">
 				<div class="flex flex-wrap items-start justify-between gap-3">
 					<div>
 						<h2 class="card-title">Reservation revenue</h2>
@@ -79,7 +79,9 @@
 					</div>
 					<a class="btn btn-ghost btn-sm" href="{% url 'financial-reports' request.branch.slug %}?branch={{ request.branch.slug }}">Financial reports</a>
 				</div>
-				<div id="revenue-chart" class="w-full" style="height: 18rem" role="img" aria-label="Line chart of monthly reservation revenue"></div>
+				<div class="line-chart-scroll" data-chart-points="{{ revenue_chart_data.months|length }}">
+					<div id="revenue-chart" class="line-chart-canvas" style="height: 18rem" role="img" aria-label="Line chart of monthly reservation revenue"></div>
+				</div>
 				<p id="revenue-chart-error" class="hidden text-sm text-error">The revenue chart could not be loaded.</p>
 			</div>
 		</div>
@@ -166,12 +168,36 @@
 	const chartElement = document.getElementById("revenue-chart")
 	const chartData = JSON.parse(document.getElementById("revenue-chart-data").textContent)
 	if (window.echarts && chartElement) {
+		const chartScroll = chartElement.parentElement
+		const chartParent = chartScroll.parentElement
 		const revenueChart = window.echarts.init(chartElement)
+		const resizeChart = () => {
+			const chartWidth = chartScroll.clientWidth
+			chartElement.style.width = "100%"
+			revenueChart.resize({
+				width: chartWidth,
+				height: chartScroll.clientHeight,
+			})
+		}
 		revenueChart.setOption({
-			tooltip: { trigger: "axis", valueFormatter: (value) => `PHP ${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
-			grid: { left: 16, right: 24, top: 24, bottom: 24, containLabel: true },
+			tooltip: { trigger: "axis", valueFormatter: (value) => `₱ ${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+			grid: { left: 16, right: 24, top: 24, bottom: 58, containLabel: true },
 			xAxis: { type: "category", data: chartData.months, boundaryGap: false },
-			yAxis: { type: "value", min: 0, axisLabel: { formatter: (value) => `PHP ${Number(value).toLocaleString()}` } },
+			yAxis: { type: "value", min: 0, axisLabel: { formatter: (value) => `₱ ${Number(value).toLocaleString()}` } },
+			dataZoom: [
+				{
+					type: "inside",
+					xAxisIndex: 0,
+					zoomOnMouseWheel: false,
+					moveOnMouseMove: true,
+				},
+				{
+					type: "slider",
+					xAxisIndex: 0,
+					height: 18,
+					bottom: 4,
+				},
+			],
 			series: [{
 				name: "Reservation revenue",
 				type: "line",
@@ -181,6 +207,7 @@
 				areaStyle: { opacity: 0.12 },
 			}],
 		})
+		resizeChart()
 		revenueChart.on("click", (event) => {
 			if (event.componentType !== "series") return
 			const month = chartData.months.indexOf(event.name) + 1
@@ -195,7 +222,9 @@
 			reportUrl.searchParams.set("end_date", endDate)
 			window.location.href = reportUrl
 		})
-		window.addEventListener("resize", () => revenueChart.resize())
+		const chartResizeObserver = new ResizeObserver(resizeChart)
+		chartResizeObserver.observe(chartParent)
+		window.addEventListener("resize", resizeChart)
 	} else {
 		document.getElementById("revenue-chart-error").classList.remove("hidden")
 	}

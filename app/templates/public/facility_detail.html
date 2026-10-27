@@ -24,10 +24,10 @@
             {% endif %}
             <dl class="mt-5 grid grid-cols-2 gap-x-5 gap-y-4 border-y border-base-300 py-4">
                 {% if facility.capacity %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Capacity</dt><dd class="mt-1 font-semibold">{{ facility.capacity }} guests</dd></div>{% endif %}
-                {% if facility.rate_24hours %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">24-hour rate</dt><dd class="mt-1 font-semibold">PHP {{ facility.rate_24hours }}</dd></div>{% endif %}
-                {% if facility.rate_22hours %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">22-hour rate</dt><dd class="mt-1 font-semibold">PHP {{ facility.rate_22hours }}</dd></div>{% endif %}
-                {% if facility.rate_morning %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Morning rate</dt><dd class="mt-1 font-semibold">PHP {{ facility.rate_morning }}</dd></div>{% endif %}
-                {% if facility.rate_evening %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Evening rate</dt><dd class="mt-1 font-semibold">PHP {{ facility.rate_evening }}</dd></div>{% endif %}
+                {% if facility.rate_24hours %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">24-hour rate</dt><dd class="mt-1 font-semibold">₱ {{ facility.rate_24hours }}</dd></div>{% endif %}
+                {% if facility.rate_22hours %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">22-hour rate</dt><dd class="mt-1 font-semibold">₱ {{ facility.rate_22hours }}</dd></div>{% endif %}
+                {% if facility.rate_morning %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Morning rate</dt><dd class="mt-1 font-semibold">₱ {{ facility.rate_morning }}</dd></div>{% endif %}
+                {% if facility.rate_evening %}<div><dt class="text-xs font-semibold uppercase text-base-content/60">Evening rate</dt><dd class="mt-1 font-semibold">₱ {{ facility.rate_evening }}</dd></div>{% endif %}
             </dl>
             <div class="mt-5 flex flex-wrap gap-3">
                 {% if facility.status == "operational" %}

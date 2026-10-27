@@ -27,8 +27,34 @@
 	width: 100%;
 }
 
-.dashboard-page #revenue-chart {
+.dashboard-revenue-card,
+.dashboard-revenue-card > .card-body,
+.financial-reports-page,
+.financial-reports-page > section,
+.financial-reports-page > form,
+.financial-reports-page .card-body,
+.line-chart-scroll {
+	box-sizing: border-box;
+	min-width: 0;
 	max-width: 100%;
+}
+
+.line-chart-scroll {
+	display: block;
+	width: 100%;
+	flex: 0 1 100%;
+	overflow: hidden;
+	contain: inline-size;
+}
+
+.line-chart-canvas {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	min-width: 100%;
+}
+
+.dashboard-page #revenue-chart {
 	height: clamp(15rem, 55vw, 20rem) !important;
 }
 

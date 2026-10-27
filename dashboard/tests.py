@@ -1,4 +1,3 @@
-from calendar import monthrange
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
@@ -11,6 +10,7 @@ from account.models import User
 from dashboard.models import (
     Branch,
     Calendar,
+    Expense,
     Facility,
     Inventory,
     InventoryAsset,
@@ -766,11 +766,11 @@ class CalendarEntryViewTests(TestCase):
         self.assertContains(response, "Price summary")
         self.assertContains(response, "Raw amount")
         self.assertNotContains(response, "Invoice reference")
-        self.assertContains(response, "PHP 120.00")
-        self.assertContains(response, "−PHP 15.00")
-        self.assertContains(response, "PHP 105.00")
-        self.assertContains(response, "Total paid: PHP 50.00")
-        self.assertContains(response, "Balance: PHP 55.00")
+        self.assertContains(response, "₱ 120.00")
+        self.assertContains(response, "−₱ 15.00")
+        self.assertContains(response, "₱ 105.00")
+        self.assertContains(response, "Total paid: ₱ 50.00")
+        self.assertContains(response, "Balance: ₱ 55.00")
         self.assertContains(response, "Down payment")
         self.assertContains(response, "cash")
         self.assertContains(response, "receipt-123")
@@ -860,7 +860,7 @@ class CalendarEntryViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Pending deposit")
-        self.assertContains(response, "PHP 35.00")
+        self.assertContains(response, "₱ 35.00")
         self.assertContains(response, "Add payment")
         self.assertNotContains(response, "Payment activity")
         self.assertNotContains(response, "Total paid")
@@ -1319,8 +1319,8 @@ class CalendarEntryViewTests(TestCase):
                 },
             )
         )
-        self.assertContains(detail_response, "Total paid: PHP 35.00")
-        self.assertContains(detail_response, "Balance: PHP 65.00")
+        self.assertContains(detail_response, "Total paid: ₱ 35.00")
+        self.assertContains(detail_response, "Balance: ₱ 65.00")
         self.assertNotContains(detail_response, "Paid in full")
         self.assertContains(detail_response, "Add payment")
 
@@ -1340,8 +1340,8 @@ class CalendarEntryViewTests(TestCase):
                 },
             )
         )
-        self.assertContains(fully_paid_response, "Total paid: PHP 100.00")
-        self.assertContains(fully_paid_response, "Balance: PHP 0.00")
+        self.assertContains(fully_paid_response, "Total paid: ₱ 100.00")
+        self.assertContains(fully_paid_response, "Balance: ₱ 0.00")
         self.assertContains(fully_paid_response, "Paid in full")
         self.assertContains(fully_paid_response, "Add payment")
 
@@ -1396,11 +1396,11 @@ class CalendarEntryViewTests(TestCase):
             )
         )
         self.assertNotContains(detail_response, "Pending payments")
-        self.assertContains(detail_response, "PHP 212.35")
-        self.assertContains(detail_response, "PHP 100.01")
+        self.assertContains(detail_response, "₱ 212.35")
+        self.assertContains(detail_response, "₱ 100.01")
         self.assertContains(detail_response, "Full payment")
         self.assertContains(detail_response, "Booking deposit")
-        self.assertContains(detail_response, "PHP 12.34")
+        self.assertContains(detail_response, "₱ 12.34")
 
     def test_pending_payment_status_changes_and_other_statuses_are_read_only(self):
         starts_at = timezone.make_aware(
@@ -3544,6 +3544,9 @@ class DashboardAndFinancialReportTests(TestCase):
         )
         self.assertContains(response, "Good ")
         self.assertContains(response, "Financial reports")
+        self.assertContains(response, 'class="line-chart-scroll"')
+        self.assertContains(response, "new ResizeObserver(resizeChart)")
+        self.assertContains(response, "css/dashboard.css")
         self.assertContains(response, "No upcoming bookings")
         self.assertContains(
             response,
@@ -3834,10 +3837,19 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
 
     def test_financial_report_combines_branch_revenue_and_filters_dates(self):
-        self.create_reservation_with_payment(
+        reservation, _payment = self.create_reservation_with_payment(
             self.branch,
             amount="25.00",
             username="dashboard_report_guest",
+        )
+        reservation.raw_amount = Decimal("25.00")
+        reservation.save(update_fields=["raw_amount"])
+        Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+            status=Calendar.Status.COMPLETED,
         )
         other_branch = Branch.objects.create(
             name="Other Dashboard Branch",
@@ -3845,10 +3857,19 @@ class DashboardAndFinancialReportTests(TestCase):
             city="Test City",
             address="2 Dashboard Street",
         )
-        self.create_reservation_with_payment(
+        other_reservation, _payment = self.create_reservation_with_payment(
             other_branch,
             amount="75.00",
             username="other_dashboard_report_guest",
+        )
+        other_reservation.raw_amount = Decimal("75.00")
+        other_reservation.save(update_fields=["raw_amount"])
+        Calendar.objects.create(
+            reservation=other_reservation,
+            facility=other_reservation.facility,
+            starts_at=other_reservation.starts_at,
+            ends_at=other_reservation.ends_at,
+            status=Calendar.Status.COMPLETED,
         )
         today = timezone.localdate()
 
@@ -3866,33 +3887,36 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertTrue(response.context["show_all_branches"])
         self.assertEqual(len(response.context["branch_revenue"]), 2)
         self.assertContains(response, "Other Dashboard Branch")
-        self.assertContains(response, "Combined revenue by month")
-        self.assertEqual(response.context["chart_period"], "year")
+        self.assertContains(response, "Monthly reservation payments collected")
+        self.assertContains(response, 'class="line-chart-scroll"')
+        self.assertContains(response, "new ResizeObserver(resizeChart)")
+        self.assertEqual(response.context["chart_period"], "day")
         self.assertEqual(
-            response.context["revenue_chart_data"]["labels"],
-            [
-                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-            ],
+            len(response.context["revenue_chart_data"]["labels"]),
+            today.day,
         )
         self.assertEqual(
-            response.context["revenue_chart_data"]["values"][today.month - 1],
+            response.context["revenue_chart_data"]["values"][today.day - 1],
             100.0,
         )
         self.assertEqual(
             response.context["revenue_chart_data"]["reservations"][
-                today.month - 1
+                today.day - 1
             ],
             2,
         )
         self.assertEqual(
             response.context["revenue_chart_data"]["bookings"][
-                today.month - 1
+                today.day - 1
             ],
-            0,
+            2,
         )
-        self.assertContains(response, "Months in a year")
-        self.assertContains(response, "Days in a month")
+        self.assertEqual(
+            response.context["revenue_chart_data"]["recognized_values"][
+                today.day - 1
+            ],
+            100.0,
+        )
 
     def test_financial_report_chart_groups_reservation_payments_by_day(self):
         today = timezone.localdate()
@@ -3960,19 +3984,16 @@ class DashboardAndFinancialReportTests(TestCase):
         response = self.client.get(
             reverse("financial-reports", kwargs={"branch": self.branch.slug}),
             {
-                "chart_period": "month",
-                "chart_year": str(today.year),
-                "chart_month": str(today.month),
+                "period": "custom",
+                "start_date": today.replace(day=1).isoformat(),
+                "end_date": today.replace(day=3).isoformat(),
             },
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["chart_period"], "month")
+        self.assertEqual(response.context["chart_period"], "day")
         chart_data = response.context["revenue_chart_data"]
-        self.assertEqual(
-            len(chart_data["labels"]),
-            monthrange(today.year, today.month)[1],
-        )
+        self.assertEqual(len(chart_data["labels"]), 3)
         self.assertEqual(chart_data["values"][0], 80.0)
         self.assertEqual(chart_data["values"][2], 30.0)
         self.assertEqual(chart_data["reservations"][0], 2)
@@ -3980,7 +4001,8 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertEqual(chart_data["reservations"][2], 1)
         self.assertEqual(chart_data["bookings"][2], 1)
         self.assertEqual(sum(chart_data["values"]), 110.0)
-        self.assertNotContains(response, "Daily Chart Other Branch")
+        self.assertNotContains(response, "daily_report_other_branch_guest")
+        self.assertEqual(response.context["payments_collected"], Decimal("110.00"))
 
     def test_operation_manager_is_limited_to_assigned_branch(self):
         manager = User.object.create(
@@ -4055,3 +4077,324 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertEqual(dashboard_response.status_code, 200)
         self.assertEqual(report_response.status_code, 200)
         self.assertTrue(report_response.context["show_all_branches"])
+
+    def test_financial_report_separates_revenue_cash_and_balances(self):
+        reservation, first_payment = self.create_reservation_with_payment(
+            self.branch,
+            amount="20.00",
+            username="financial_summary_guest",
+        )
+        reservation.raw_amount = Decimal("100.00")
+        reservation.discount = Decimal("10.00")
+        reservation.save(update_fields=["raw_amount", "discount"])
+        Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+            status=Calendar.Status.COMPLETED,
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Balance payment",
+            amount=Decimal("30.00"),
+            method="card",
+            status=Payment.Status.SUCCEEDED,
+            paid_at=timezone.now(),
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Refund",
+            amount=Decimal("5.00"),
+            method="cash",
+            status=Payment.Status.REFUNDED,
+            paid_at=timezone.now(),
+        )
+
+        cancelled, _cancelled_payment = self.create_reservation_with_payment(
+            self.branch,
+            amount="500.00",
+            status=Payment.Status.REFUNDED,
+            username="financial_cancelled_guest",
+        )
+        cancelled.raw_amount = Decimal("500.00")
+        cancelled.save(update_fields=["raw_amount"])
+        Calendar.objects.create(
+            reservation=cancelled,
+            facility=self.facility,
+            starts_at=cancelled.starts_at,
+            ends_at=cancelled.ends_at,
+            status=Calendar.Status.CANCELLED,
+        )
+        unpaid, _pending_payment = self.create_reservation_with_payment(
+            self.branch,
+            amount="50.00",
+            status=Payment.Status.PENDING,
+            username="financial_unpaid_guest",
+        )
+        unpaid.raw_amount = Decimal("50.00")
+        unpaid.save(update_fields=["raw_amount"])
+        Expense.objects.create(
+            branch=self.branch,
+            category=Expense.Category.UTILITIES,
+            description="Water bill",
+            amount=Decimal("15.00"),
+            expense_date=timezone.localdate(),
+            recorded_by=self.user,
+        )
+        today = timezone.localdate()
+        response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
+            {
+                "period": "custom",
+                "start_date": today.isoformat(),
+                "end_date": today.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["gross_revenue"], Decimal("100.00"))
+        self.assertEqual(response.context["discounts"], Decimal("10.00"))
+        self.assertEqual(response.context["total_revenue"], Decimal("85.00"))
+        self.assertEqual(response.context["payments_collected"], Decimal("50.00"))
+        self.assertEqual(response.context["outstanding_balances"], Decimal("95.00"))
+        self.assertEqual(response.context["refunds_total"], Decimal("505.00"))
+        self.assertEqual(response.context["operating_expenses"], Decimal("15.00"))
+        self.assertContains(response, "₱15.00")
+        self.assertEqual(
+            response.context["revenue_chart_data"]["recognized_values"][0],
+            85.0,
+        )
+        self.assertFalse(response.context["profit_loss_complete"])
+        self.assertEqual(
+            response.context["transaction_page"].paginator.count,
+            8,
+        )
+
+        filtered_response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
+            {
+                "period": "custom",
+                "start_date": today.isoformat(),
+                "end_date": today.isoformat(),
+                "transaction_category": "reservations",
+                "payment_method": "cash",
+                "payment_status": Payment.Status.SUCCEEDED,
+            },
+        )
+        self.assertEqual(filtered_response.status_code, 200)
+        self.assertEqual(
+            filtered_response.context["transaction_page"].paginator.count,
+            1,
+        )
+        self.assertEqual(
+            filtered_response.context["transaction_page"].object_list[0]["amount"],
+            first_payment.amount,
+        )
+
+        expense_response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
+            {
+                "period": "custom",
+                "start_date": today.isoformat(),
+                "end_date": today.isoformat(),
+                "transaction_category": "expense:utilities",
+            },
+        )
+        self.assertEqual(expense_response.status_code, 200)
+        self.assertEqual(
+            expense_response.context["transaction_page"].paginator.count,
+            1,
+        )
+        self.assertEqual(
+            expense_response.context["transaction_page"].object_list[0]["amount"],
+            Decimal("15.00"),
+        )
+
+    def test_financial_report_records_expenses_for_the_current_branch(self):
+        today = timezone.localdate()
+        report_url = reverse(
+            "financial-reports",
+            kwargs={"branch": self.branch.slug},
+        )
+        response = self.client.post(
+            report_url,
+            {
+                "period": "custom",
+                "start_date": today.isoformat(),
+                "end_date": today.isoformat(),
+                "category": Expense.Category.MAINTENANCE,
+                "description": "Pump repair",
+                "amount": "1250.50",
+                "expense_date": today.isoformat(),
+                "reference": "INV-100",
+            },
+        )
+        self.assertRedirects(
+            response,
+            report_url,
+            fetch_redirect_response=False,
+        )
+        expense = Expense.objects.get(reference="INV-100")
+        self.assertEqual(expense.branch, self.branch)
+        self.assertEqual(expense.recorded_by, self.user)
+        self.assertEqual(expense.amount, Decimal("1250.50"))
+
+        invalid_response = self.client.post(
+            report_url,
+            {
+                "category": Expense.Category.MAINTENANCE,
+                "description": "Invalid expense",
+                "amount": "0",
+                "expense_date": today.isoformat(),
+            },
+        )
+        self.assertEqual(invalid_response.status_code, 200)
+        self.assertContains(invalid_response, "Enter an amount greater than zero.")
+        self.assertFalse(Expense.objects.filter(description="Invalid expense").exists())
+
+    def test_financial_report_date_presets_override_custom_dates(self):
+        today = timezone.localdate()
+        yesterday = timezone.make_aware(
+            datetime.combine(today - timedelta(days=1), time(12))
+        )
+        self.create_reservation_with_payment(
+            self.branch,
+            amount="20.00",
+            paid_at=timezone.now(),
+            username="financial_today_guest",
+        )
+        self.create_reservation_with_payment(
+            self.branch,
+            amount="70.00",
+            paid_at=yesterday,
+            username="financial_yesterday_guest",
+        )
+
+        response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
+            {
+                "period": "today",
+                "start_date": (today - timedelta(days=1)).isoformat(),
+                "end_date": today.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["start_date"], today)
+        self.assertEqual(response.context["end_date"], today)
+        self.assertEqual(response.context["payments_collected"], Decimal("20.00"))
+
+    def test_financial_report_week_month_and_year_presets(self):
+        today = timezone.localdate()
+        week_start = today - timedelta(days=today.weekday())
+        month_start = today.replace(day=1)
+        year_start = today.replace(month=1, day=1)
+        dated_payments = [
+            (today, Decimal("10.00")),
+            (week_start - timedelta(days=1), Decimal("20.00")),
+            (month_start - timedelta(days=1), Decimal("30.00")),
+            (year_start - timedelta(days=1), Decimal("40.00")),
+        ]
+        for index, (paid_day, amount) in enumerate(dated_payments):
+            self.create_reservation_with_payment(
+                self.branch,
+                amount=amount,
+                paid_at=timezone.make_aware(
+                    datetime.combine(paid_day, time(12))
+                ),
+                username=f"financial_period_guest_{index}",
+            )
+
+        report_url = reverse(
+            "financial-reports",
+            kwargs={"branch": self.branch.slug},
+        )
+        for period, start in (
+            ("week", week_start),
+            ("month", month_start),
+            ("year", year_start),
+        ):
+            with self.subTest(period=period):
+                response = self.client.get(
+                    report_url,
+                    {
+                        "period": period,
+                        "start_date": (today - timedelta(days=365)).isoformat(),
+                        "end_date": today.isoformat(),
+                    },
+                )
+                expected_total = sum(
+                    (
+                        amount
+                        for paid_day, amount in dated_payments
+                        if start <= paid_day <= today
+                    ),
+                    Decimal("0.00"),
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context["start_date"], start)
+                self.assertEqual(response.context["end_date"], today)
+                self.assertEqual(
+                    response.context["payments_collected"],
+                    expected_total,
+                )
+
+    def test_financial_report_includes_inventory_movements_without_calling_them_sales(self):
+        inventory = Inventory.objects.create(
+            branch=self.branch,
+            name="Report beverage stock",
+            unit=Inventory.Unit.PIECE,
+            quantity_on_hand=0,
+            unit_cost=Decimal("10.50"),
+        )
+        inventory.record_transaction(
+            transaction_type=InventoryTransaction.Type.RECEIVED,
+            quantity_change=3,
+            unit_cost=Decimal("10.50"),
+            performed_by=self.user,
+            reference="PUR-001",
+        )
+
+        response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
+            {"period": "today"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["inventory_purchase_cost"],
+            Decimal("31.50"),
+        )
+        self.assertEqual(
+            response.context["inventory_movement_rows"],
+            [
+                {
+                    "name": inventory.name,
+                    "received": 3,
+                    "consumed": 0,
+                    "returned": 0,
+                    "adjustment": 0,
+                }
+            ],
+        )
+        self.assertFalse(response.context["cogs_available"])
+
+    def test_regular_users_cannot_access_financial_reports(self):
+        guest_user = User.object.create(
+            username="financial_report_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5559000099",
+            email="financial_report_guest@example.com",
+            first_name="Report",
+            last_name="Guest",
+            is_active=True,
+        )
+        self.client.force_login(guest_user)
+
+        response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(response.status_code, 403)

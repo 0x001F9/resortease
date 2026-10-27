@@ -136,18 +136,18 @@
                         <dl class="space-y-2">
                             <div class="flex justify-between gap-4">
                                 <dt class="text-base-content/70">Facility reserve fees</dt>
-                                <dd class="font-medium">{% if reservation.raw_amount is not None %}PHP {{ reservation.raw_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
+                                <dd class="font-medium">{% if reservation.raw_amount is not None %}₱ {{ reservation.raw_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
                             </div>
                             <div class="flex justify-between gap-4">
                                 <dt class="text-base-content/70">Discount</dt>
-                                <dd class="font-medium text-success">−PHP {{ reservation.discount|floatformat:2 }}</dd>
+                                <dd class="font-medium text-success">−₱ {{ reservation.discount|floatformat:2 }}</dd>
                             </div>
 
                             {% if reservation.current_status == 'confirmed' or reservation.current_status == 'pending' %}
                                 {% for payment in pending_payments %}
                                     <div class="flex justify-between gap-4">
                                         <dt class="text-base-content/70">{{ payment.name }}</dt>
-                                        <dd class="font-medium">PHP {{ payment.amount|floatformat:2 }}</dd>
+                                        <dd class="font-medium">₱ {{ payment.amount|floatformat:2 }}</dd>
                                     </div>
                                 {% endfor %}
                             {% endif %}
@@ -155,16 +155,16 @@
                             {% if reservation.current_status == 'confirmed' %}
                                 <div class="flex justify-between gap-4 border-t border-base-300 pt-3">
                                     <dt class="font-semibold">Total paid</dt>
-                                    <dd class="font-medium">PHP {{ paid_total|floatformat:2 }}</dd>
+                                    <dd class="font-medium">₱ {{ paid_total|floatformat:2 }}</dd>
                                 </div>
                                 <div class="flex justify-between gap-4">
                                     <dt class="font-semibold">{% if reservation.current_status == 'confirmed' %}Balance{% else %}Total amount{% endif %}</dt>
-                                    <dd class="text-lg font-bold text-primary">{% if remaining_balance is not None %}PHP {{ remaining_balance|floatformat:2 }}{% else %}—{% endif %}</dd>
+                                    <dd class="text-lg font-bold text-primary">{% if remaining_balance is not None %}₱ {{ remaining_balance|floatformat:2 }}{% else %}—{% endif %}</dd>
                                 </div>
                             {% else %}
                                 <div class="flex justify-between gap-4 border-t border-base-300 pt-3">
                                     <dt class="font-semibold">Total amount</dt>
-                                    <dd class="text-lg font-bold text-primary">{% if reservation.raw_amount is not None %}PHP {{ reservation.raw_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
+                                    <dd class="text-lg font-bold text-primary">{% if reservation.raw_amount is not None %}₱ {{ reservation.raw_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
                                 </div>
                             {% endif %}
                         </dl>
@@ -201,7 +201,7 @@
                                             {% for payment in payments %}
                                                 <tr>
                                                     <td>{{ payment.name }}</td>
-                                                    <td>PHP {{ payment.amount|floatformat:2 }}</td>
+                                                    <td>₱ {{ payment.amount|floatformat:2 }}</td>
                                                     <td>{{ payment.method }}</td>
                                                     <td>
                                                         {% if payment.status == "pending" %}
@@ -216,7 +216,7 @@
                                                                         <button class="btn btn-ghost btn-sm" aria-label="Close">Close</button>
                                                                     </form>
                                                                     <h3 class="text-lg font-semibold">Update payment status</h3>
-                                                                    <p class="mt-1 text-sm text-base-content/70">{{ payment.name }} · PHP {{ payment.amount|floatformat:2 }}</p>
+                                                                    <p class="mt-1 text-sm text-base-content/70">{{ payment.name }} · ₱ {{ payment.amount|floatformat:2 }}</p>
                                                                     <form method="post" action="{% url 'update-payment-status' request.branch.slug reservation.pk payment.pk %}" class="mt-4 space-y-4">
                                                                         {% csrf_token %}
                                                                         <label class="form-control w-full">

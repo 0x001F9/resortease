@@ -1,37 +1,45 @@
 {% extends "partials/layout.html" %}
 
+{% block extra_head %}
+{% load static %}
+<link href="{% static 'css/dashboard.css' %}" rel="stylesheet" type="text/css" />
+{% endblock %}
+
 {% block content %}
-<main class="mx-auto w-full max-w-[100rem] space-y-8 px-4 py-6 sm:px-6 lg:px-8">
+<main class="financial-reports-page mx-auto w-full min-w-0 max-w-[100rem] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
 	<header class="flex flex-col gap-4 border-b border-base-300 pb-6 sm:flex-row sm:items-end sm:justify-between">
 		<div>
 			<p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">Resort operations</p>
 			<h1 class="mt-2 text-3xl font-semibold">Financial reports</h1>
 			<p class="mt-1 text-sm text-base-content/65">
 				{% if show_all_branches %}All branches{% else %}{{ selected_branch.name }}{% endif %}
-				· Succeeded reservation payments
+				· {{ start_date|date:"M j, Y" }} – {{ end_date|date:"M j, Y" }}
 			</p>
 		</div>
-		{% if selected_branch %}
-			<a class="btn btn-ghost" href="{% url 'dashboard' selected_branch.slug %}">Back to dashboard</a>
-		{% else %}
-			<a class="btn btn-ghost" href="{% url 'dashboard' request.branch.slug %}">Back to dashboard</a>
-		{% endif %}
+		<a class="btn btn-ghost" href="{% url 'dashboard' request.branch.slug %}">Back to dashboard</a>
 	</header>
 
 	<form class="card border border-base-300 bg-base-100" method="get">
-		<div class="card-body">
+		<div class="card-body min-w-0">
 			<h2 class="card-title">Report filters</h2>
-			<input type="hidden" name="chart_period" value="{{ chart_period }}" />
-			<input type="hidden" name="chart_year" value="{{ chart_year }}" />
-			<input type="hidden" name="chart_month" value="{{ chart_month }}" />
-			<div class="flex flex-wrap gap-4 items-end">
+			<div class="flex flex-wrap items-end gap-4">
+				<label class="form-control">
+					<span class="label"><span class="label-text">Date range</span></span>
+					<select class="select select-bordered" name="period">
+						<option value="today" {% if period == "today" %}selected{% endif %}>Today</option>
+						<option value="week" {% if period == "week" %}selected{% endif %}>This week</option>
+						<option value="month" {% if period == "month" %}selected{% endif %}>This month</option>
+						<option value="year" {% if period == "year" %}selected{% endif %}>This year</option>
+						<option value="custom" {% if period == "custom" %}selected{% endif %}>Custom</option>
+					</select>
+				</label>
 				<label class="form-control">
 					<span class="label"><span class="label-text">Start date</span></span>
-					<input class="input input-bordered" type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" required />
+					<input class="input input-bordered" type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" required onchange="this.form.elements.period.value='custom'" />
 				</label>
 				<label class="form-control">
 					<span class="label"><span class="label-text">End date</span></span>
-					<input class="input input-bordered" type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" required />
+					<input class="input input-bordered" type="date" name="end_date" value="{{ end_date|date:'Y-m-d' }}" required onchange="this.form.elements.period.value='custom'" />
 				</label>
 				{% if can_view_all_branches %}
 					<label class="form-control">
@@ -50,79 +58,149 @@
 						<p class="input flex items-center">{{ request.branch.name }}</p>
 					</div>
 				{% endif %}
-				<div class="form-control justify-end">
-					<button class="btn btn-primary" type="submit">Apply filters</button>
-				</div>
-			</div>
-		</div>
-	</form>
-
-	<section class="card border border-base-300 bg-base-100">
-		<div class="card-body">
-			<p class="text-sm font-semibold uppercase tracking-wide text-base-content/60">Total received</p>
-			<p class="text-3xl font-bold">PHP {{ total_revenue|floatformat:2 }}</p>
-			<p class="text-sm text-base-content/65">{{ start_date|date:"M j, Y" }} – {{ end_date|date:"M j, Y" }}</p>
-		</div>
-	</section>
-
-	<section class="card border border-base-300 bg-base-100">
-		<div class="card-body">
-			<div>
-				<h2 class="card-title">Reservation revenue</h2>
-				<p class="text-sm text-base-content/65">
-					Succeeded reservation payments received
-					{% if show_all_branches %}across all branches{% else %}for {{ selected_branch.name }}{% endif %}.
-					{% if chart_period == "year" %}Monthly totals for {{ chart_year }}.{% else %}Daily totals for {{ chart_month_label }} {{ chart_year }}.{% endif %}
-				</p>
-			</div>
-			<form method="get" class="flex gap-4 items-end flex-wrap rounded-box bg-base-200/50 p-4">
-				<input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}" />
-				<input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}" />
-				<input type="hidden" name="branch" value="{{ selected_branch_slug }}" />
 				<label class="form-control">
-					<span class="label"><span class="label-text">Chart period</span></span>
-					<select class="select select-bordered" name="chart_period">
-						<option value="year" {% if chart_period == "year" %}selected{% endif %}>Months in a year</option>
-						<option value="month" {% if chart_period == "month" %}selected{% endif %}>Days in a month</option>
+					<span class="label"><span class="label-text">Transaction type</span></span>
+					<select class="select select-bordered" name="transaction_category">
+						<option value="" {% if not transaction_category %}selected{% endif %}>All types</option>
+						<option value="reservations" {% if transaction_category == "reservations" %}selected{% endif %}>Reservation payments</option>
+						<option value="expenses" {% if transaction_category == "expenses" %}selected{% endif %}>Expenses</option>
+						{% for value, label in expense_categories %}
+							<option value="expense:{{ value }}" {% if transaction_category == "expense:"|add:value %}selected{% endif %}>Expense · {{ label }}</option>
+						{% endfor %}
 					</select>
 				</label>
 				<label class="form-control">
-					<span class="label"><span class="label-text">Year</span></span>
-					<input class="input input-bordered" type="number" name="chart_year" min="1" max="9998" value="{{ chart_year }}" required />
+					<span class="label"><span class="label-text">Payment method</span></span>
+					<select class="select select-bordered" name="payment_method">
+						<option value="">All methods</option>
+						{% for method in payment_methods %}
+							<option value="{{ method }}" {% if transaction_method == method %}selected{% endif %}>{{ method }}</option>
+						{% endfor %}
+					</select>
 				</label>
-				{% if chart_period == "month" %}
-					<label class="form-control">
-						<span class="label"><span class="label-text">Month</span></span>
-						<select class="select select-bordered" name="chart_month">
-							{% for month in chart_month_choices %}
-								<option value="{{ month.value }}" {% if chart_month == month.value %}selected{% endif %}>{{ month.label }}</option>
-							{% endfor %}
-						</select>
-					</label>
-				{% else %}
-					<input type="hidden" name="chart_month" value="{{ chart_month }}" />
-				{% endif %}
-				<div class="form-control justify-end">
-					<button class="btn btn-primary" type="submit">Update chart</button>
-				</div>
-			</form>
-			<div id="reservation-revenue-chart" class="w-full" style="height: 20rem" role="img" aria-label="Line chart of reservation revenue"></div>
-			<p id="reservation-revenue-chart-error" class="hidden text-sm text-error">The reservation revenue chart could not be loaded.</p>
-			{{ revenue_chart_data|json_script:"reservation-revenue-chart-data" }}
+				<label class="form-control">
+					<span class="label"><span class="label-text">Payment status</span></span>
+					<select class="select select-bordered" name="payment_status">
+						<option value="">All statuses</option>
+						{% for value, label in payment_statuses %}
+							<option value="{{ value }}" {% if transaction_status == value %}selected{% endif %}>{{ label }}</option>
+						{% endfor %}
+					</select>
+				</label>
+				<button class="btn btn-primary" type="submit">Apply filters</button>
+			</div>
+			<p class="text-sm text-base-content/60">Transaction filters apply to the table below. Summary totals and the chart use the selected date range and branch.</p>
 		</div>
+	</form>
+
+	<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Financial summary">
+		<article class="card border border-base-300 bg-base-100">
+			<div class="card-body gap-1">
+				<p class="text-sm font-semibold text-base-content/60">Net recognized revenue</p>
+				<p class="text-2xl font-bold">₱{{ total_revenue|floatformat:2 }}</p>
+				<p class="text-xs text-base-content/60">Completed reservations, less discounts and recorded refunds</p>
+			</div>
+		</article>
+		<article class="card border border-base-300 bg-base-100">
+			<div class="card-body gap-1">
+				<p class="text-sm font-semibold text-base-content/60">Payments collected</p>
+				<p class="text-2xl font-bold">₱{{ payments_collected|floatformat:2 }}</p>
+				<p class="text-xs text-base-content/60">Successful payments recorded in this period</p>
+			</div>
+		</article>
+		<article class="card border border-base-300 bg-base-100">
+			<div class="card-body gap-1">
+				<p class="text-sm font-semibold text-base-content/60">Outstanding balances</p>
+				<p class="text-2xl font-bold">₱{{ outstanding_balances|floatformat:2 }}</p>
+				<p class="text-xs text-base-content/60">Uncancelled stays ending in this period</p>
+			</div>
+		</article>
+		<article class="card border border-base-300 bg-base-100">
+			<div class="card-body gap-1">
+				<p class="text-sm font-semibold text-base-content/60">Operating expenses</p>
+				<p class="text-2xl font-bold">₱{{ operating_expenses|floatformat:2 }}</p>
+				<p class="text-xs text-base-content/60">Expenses recorded in ResortEase during this period</p>
+			</div>
+		</article>
+	</section>
+
+	<section class="grid gap-4 md:grid-cols-3">
+		<article class="stat rounded-box border border-base-300 bg-base-100">
+			<div class="stat-title">Gross recognized charges</div>
+			<div class="stat-value text-xl">₱{{ gross_revenue|floatformat:2 }}</div>
+		</article>
+		<article class="stat rounded-box border border-base-300 bg-base-100">
+			<div class="stat-title">Discounts applied</div>
+			<div class="stat-value text-xl">₱{{ discounts|floatformat:2 }}</div>
+		</article>
+		<article class="stat rounded-box border border-base-300 bg-base-100">
+			<div class="stat-title">Refunds recorded</div>
+			<div class="stat-value text-xl">₱{{ refunds_total|floatformat:2 }}</div>
+			<p class="stat-desc">Refund records use their latest status-update date.</p>
+		</article>
+	</section>
+
+	<section class="card border border-warning/40 bg-base-100">
+		<div class="card-body">
+			<h2 class="card-title">Profit and loss is incomplete</h2>
+			<p>
+				Operating expenses include entries recorded in ResortEase. Cost of goods sold is unavailable because inventory consumption is not linked to sales, and this application has no POS sales records. Gross profit and net profit are therefore not reported. Refunds adjust completed-stay revenue, but the payment model stores only the latest status and update time, not an auditable refund history.
+			</p>
+			{% if unpriced_reservations %}
+				<p class="text-warning">{{ unpriced_reservations }} completed reservation(s) have no stored price and are excluded from revenue totals.</p>
+			{% endif %}
+		</div>
+	</section>
+
+	<section class="grid gap-6 xl:grid-cols-2">
+	<article class="card border border-base-300 bg-base-100">
+		<div class="card-body">
+			<h2 class="card-title">Recognized revenue by facility category</h2>
+				<p class="text-sm text-base-content/65">Completed reservation charges are recognized on the booking end date.</p>
+				<div class="overflow-x-auto">
+					<table class="table">
+						<thead><tr><th>Category</th><th class="text-right">Reservations</th><th class="text-right">Gross</th><th class="text-right">Discounts</th><th class="text-right">Refunds</th><th class="text-right">Net</th></tr></thead>
+						<tbody>
+							{% for row in revenue_by_category %}
+								<tr><td>{{ row.category }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.gross|floatformat:2 }}</td><td class="text-right">₱{{ row.discounts|floatformat:2 }}</td><td class="text-right">₱{{ row.refunds|floatformat:2 }}</td><td class="text-right">₱{{ row.net|floatformat:2 }}</td></tr>
+							{% empty %}
+								<tr><td colspan="6" class="py-6 text-center text-base-content/65">No completed, priced reservations in this period.</td></tr>
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+		</div>
+	</article>
+	<article class="card border border-base-300 bg-base-100">
+		<div class="card-body">
+			<h2 class="card-title">Expenses by category</h2>
+			<div class="overflow-x-auto">
+				<table class="table">
+					<thead><tr><th>Category</th><th class="text-right">Entries</th><th class="text-right">Total</th></tr></thead>
+					<tbody>
+						{% for row in expense_breakdown %}
+							<tr><td>{{ row.category }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.total|floatformat:2 }}</td></tr>
+						{% empty %}
+							<tr><td colspan="3" class="py-6 text-center text-base-content/65">No expenses recorded in this period.</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</article>
 	</section>
 
 	<section class="card border border-base-300 bg-base-100">
 		<div class="card-body">
-			<h2 class="card-title">{% if show_all_branches %}Combined revenue by month{% else %}Revenue by month{% endif %}</h2>
+			<h2 class="card-title">Recognized revenue by service date</h2>
 			<div class="overflow-x-auto">
 				<table class="table">
-					<thead><tr><th>Month</th><th class="text-right">Reservation payments received</th></tr></thead>
+					<thead><tr><th>Service date</th><th class="text-right">Completed stays</th><th class="text-right">Gross</th><th class="text-right">Discounts</th><th class="text-right">Refunds</th><th class="text-right">Net revenue</th></tr></thead>
 					<tbody>
-						{% for row in monthly_revenue %}
-							<tr><td>{{ row.month|date:"F Y" }}</td><td class="text-right">PHP {{ row.total|floatformat:2 }}</td></tr>
+						{% for row in revenue_by_date %}
+							<tr><td>{{ row.date|date:"M j, Y" }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.gross|floatformat:2 }}</td><td class="text-right">₱{{ row.discounts|floatformat:2 }}</td><td class="text-right">₱{{ row.refunds|floatformat:2 }}</td><td class="text-right">₱{{ row.net|floatformat:2 }}</td></tr>
 						{% empty %}
-							<tr><td colspan="2" class="py-8 text-center text-base-content/65">No succeeded payments in this date range.</td></tr>
+							<tr><td colspan="6" class="py-6 text-center text-base-content/65">No completed, priced reservations in this period.</td></tr>
 						{% endfor %}
 					</tbody>
 				</table>
@@ -130,25 +208,135 @@
 		</div>
 	</section>
 
-	{% if show_all_branches %}
-		<section class="card border border-base-300 bg-base-100">
-			<div class="card-body">
-				<h2 class="card-title">Revenue by branch</h2>
+	<section class="card border border-base-300 bg-base-100">
+		<div class="card-body">
+			<div>
+				<h2 class="card-title">Revenue and payment trend</h2>
+				<p class="text-sm text-base-content/65">Net recognized revenue by service date and successful payments by payment date, for the selected date range.</p>
+			</div>
+			<div class="line-chart-scroll" data-chart-points="{{ revenue_chart_data.labels|length }}">
+				<div id="reservation-revenue-chart" class="line-chart-canvas" style="height: 20rem" role="img" aria-label="Line chart comparing recognized revenue and payments collected"></div>
+			</div>
+			<p id="reservation-revenue-chart-error" class="hidden text-sm text-error">The financial trend chart could not be loaded.</p>
+			{{ revenue_chart_data|json_script:"reservation-revenue-chart-data" }}
+		</div>
+	</section>
+
+	<section class="card border border-base-300 bg-base-100">
+		<div class="card-body">
+			<h2 class="card-title">Monthly reservation payments collected</h2>
+			<div class="overflow-x-auto">
+				<table class="table">
+					<thead><tr><th>Month</th><th class="text-right">Payments collected</th></tr></thead>
+					<tbody>
+						{% for row in monthly_revenue %}
+							<tr><td>{{ row.month|date:"F Y" }}</td><td class="text-right">₱{{ row.total|floatformat:2 }}</td></tr>
+						{% empty %}
+							<tr><td colspan="2" class="py-8 text-center text-base-content/65">No successful payments in this date range.</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			</div>
+			{% if show_all_branches %}
+				<h3 class="mt-4 font-semibold">Net recognized revenue by branch</h3>
 				<div class="overflow-x-auto">
 					<table class="table">
-						<thead><tr><th>Branch</th><th class="text-right">Reservation payments received</th></tr></thead>
+						<thead><tr><th>Branch</th><th class="text-right">Net recognized revenue</th></tr></thead>
 						<tbody>
 							{% for row in branch_revenue %}
-								<tr><td>{{ row.branch_name }}</td><td class="text-right">PHP {{ row.total|floatformat:2 }}</td></tr>
+								<tr><td>{{ row.branch_name }}</td><td class="text-right">₱{{ row.total|floatformat:2 }}</td></tr>
 							{% empty %}
-								<tr><td colspan="2" class="py-8 text-center text-base-content/65">No branch payments in this date range.</td></tr>
+								<tr><td colspan="2" class="py-6 text-center text-base-content/65">No recognized revenue in this period.</td></tr>
 							{% endfor %}
 						</tbody>
 					</table>
 				</div>
+			{% endif %}
+		</div>
+	</section>
+
+	<section class="grid gap-6 xl:grid-cols-2">
+	<article class="card border border-base-300 bg-base-100">
+		<div class="card-body">
+			<h2 class="card-title">Record an operating expense</h2>
+			<form method="post" class="grid gap-3 sm:grid-cols-2">
+				{% csrf_token %}
+				<input type="hidden" name="period" value="{{ period }}" />
+				<input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}" />
+				<input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}" />
+				<p class="sm:col-span-2 text-sm text-base-content/60">The expense will be recorded under {{ request.branch.name }}.</p>
+				<div class="sm:col-span-2">{{ expense_form.non_field_errors }}</div>
+				{% for field in expense_form %}
+					<label class="form-control">
+						<span class="label"><span class="label-text">{{ field.label }}</span></span>
+						{{ field }}
+						{% for error in field.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
+					</label>
+				{% endfor %}
+				<div class="sm:col-span-2"><button class="btn btn-primary" type="submit">Save expense</button></div>
+			</form>
+		</div>
+	</article>
+	<article class="card border border-base-300 bg-base-100">
+		<div class="card-body">
+			<h2 class="card-title">Store and inventory data</h2>
+				<p class="text-sm text-base-content/65">
+					There are no POS sales or product-price records in the current data model, so best-selling products, sales totals, discounts, and sales margins cannot be calculated. Inventory movements are shown below and are not treated as sales or cost of goods sold.
+				</p>
+				<p class="font-semibold">Known received-stock cost: ₱{{ inventory_purchase_cost|floatformat:2 }} <span class="font-normal text-base-content/60">(movements without a recorded unit cost are omitted)</span></p>
+				<div class="overflow-x-auto">
+					<table class="table table-sm">
+						<thead><tr><th>Inventory item</th><th class="text-right">Received</th><th class="text-right">Consumed</th><th class="text-right">Returned</th><th class="text-right">Adjustments</th></tr></thead>
+						<tbody>
+							{% for row in inventory_movement_rows %}
+								<tr><td>{{ row.name }}</td><td class="text-right">{{ row.received }}</td><td class="text-right">{{ row.consumed }}</td><td class="text-right">{{ row.returned }}</td><td class="text-right">{{ row.adjustment }}</td></tr>
+							{% empty %}
+								<tr><td colspan="5" class="py-6 text-center text-base-content/65">No inventory movements recorded in this period.</td></tr>
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+		</div>
+	</article>
+	</section>
+
+	<section class="card border border-base-300 bg-base-100">
+		<div class="card-body">
+			<h2 class="card-title">Financial transactions</h2>
+			<p class="text-sm text-base-content/65">Reservation charge rows show billed value and current balance; payment rows and expenses are separate records. The summary cards above are authoritative—do not sum charge and payment rows together.</p>
+			<div class="overflow-x-auto">
+				<table class="table table-sm">
+					<thead><tr><th>Date</th><th>Reference</th><th>Category</th><th>Related reservation / expense</th><th class="text-right">Charge / payment / expense</th><th class="text-right">Discount</th><th class="text-right">Refund</th><th class="text-right">Amount paid</th><th class="text-right">Balance</th><th>Method</th><th>Status</th></tr></thead>
+					<tbody>
+						{% for row in transaction_page %}
+							<tr>
+								<td class="whitespace-nowrap">{{ row.date|date:"M j, Y" }}</td>
+								<td>{{ row.reference }}</td>
+								<td>{{ row.category }}</td>
+								<td>{{ row.related }}</td>
+								<td class="text-right">{% if row.gross is not None %}₱{{ row.gross|floatformat:2 }}{% else %}—{% endif %}</td>
+								<td class="text-right">₱{{ row.discount|floatformat:2 }}</td>
+								<td class="text-right">₱{{ row.refund|floatformat:2 }}</td>
+								<td class="text-right">{% if row.is_expense %}-₱{{ row.amount|floatformat:2 }}{% else %}₱{{ row.amount|floatformat:2 }}{% endif %}</td>
+								<td class="text-right">{% if row.balance is not None %}₱{{ row.balance|floatformat:2 }}{% else %}—{% endif %}</td>
+								<td>{{ row.method }}</td>
+								<td>{{ row.status }}</td>
+							</tr>
+						{% empty %}
+							<tr><td colspan="11" class="py-8 text-center text-base-content/65">No transactions match these filters.</td></tr>
+						{% endfor %}
+					</tbody>
+				</table>
 			</div>
-		</section>
-	{% endif %}
+			{% if transaction_page.paginator.num_pages > 1 %}
+				<nav class="flex items-center justify-between" aria-label="Transaction pages">
+					{% if transaction_page.has_previous %}<a class="btn btn-ghost btn-sm" href="?{{ pagination_query }}{% if pagination_query %}&{% endif %}page={{ transaction_page.previous_page_number }}">Previous</a>{% else %}<span></span>{% endif %}
+					<span class="text-sm">Page {{ transaction_page.number }} of {{ transaction_page.paginator.num_pages }}</span>
+					{% if transaction_page.has_next %}<a class="btn btn-ghost btn-sm" href="?{{ pagination_query }}{% if pagination_query %}&{% endif %}page={{ transaction_page.next_page_number }}">Next</a>{% else %}<span></span>{% endif %}
+				</nav>
+			{% endif %}
+		</div>
+	</section>
 </main>
 {% endblock %}
 
@@ -160,41 +348,84 @@
 		const chartData = JSON.parse(
 			document.getElementById("reservation-revenue-chart-data").textContent,
 		)
+		const chartScroll = chartElement.parentElement
+		const chartParent = chartScroll.parentElement
 		const revenueChart = window.echarts.init(chartElement)
+		const resizeChart = () => {
+			const chartWidth = chartScroll.clientWidth
+			chartElement.style.width = "100%"
+			revenueChart.resize({
+				width: chartWidth,
+				height: chartScroll.clientHeight,
+			})
+		}
 		revenueChart.setOption({
 			tooltip: {
 				trigger: "axis",
 				formatter: (params) => {
 					const index = params[0].dataIndex
-					const revenue = Number(params[0].value).toLocaleString(
+					const payments = Number(chartData.values[index]).toLocaleString(
 						undefined,
 						{ minimumFractionDigits: 2, maximumFractionDigits: 2 },
 					)
+					const recognized = Number(
+						chartData.recognized_values[index],
+					).toLocaleString(undefined, {
+						minimumFractionDigits: 2,
+						maximumFractionDigits: 2,
+					})
 					return [
 						params[0].axisValue,
-						`Revenue: PHP ${revenue}`,
-						`Bookings: ${chartData.bookings[index]}`,
-						`Reservations: ${chartData.reservations[index]}`,
+						`Recognized revenue: ₱${recognized}`,
+						`Payments collected: ₱${payments}`,
+						`Reservations with payments: ${chartData.reservations[index]}`,
 					].join("<br/>")
 				},
 			},
-			grid: { left: 64, right: 24, top: 24, bottom: 36 },
+			grid: { left: 64, right: 24, top: 42, bottom: 58 },
 			xAxis: { type: "category", boundaryGap: false, data: chartData.labels },
+			legend: { data: ["Recognized revenue", "Payments collected"] },
+			dataZoom: [
+				{
+					type: "inside",
+					xAxisIndex: 0,
+					zoomOnMouseWheel: false,
+					moveOnMouseMove: true,
+				},
+				{
+					type: "slider",
+					xAxisIndex: 0,
+					height: 18,
+					bottom: 4,
+				},
+			],
 			yAxis: {
 				type: "value",
-				name: "PHP",
+				name: "Revenue",
 				axisLabel: { formatter: (value) => Number(value).toLocaleString() },
 			},
-			series: [{
-				name: "Reservation revenue",
-				type: "line",
-				smooth: true,
-				showSymbol: false,
-				data: chartData.values,
-				areaStyle: { opacity: 0.12 },
-			}],
+			series: [
+				{
+					name: "Recognized revenue",
+					type: "line",
+					smooth: true,
+					showSymbol: false,
+					data: chartData.recognized_values,
+				},
+				{
+					name: "Payments collected",
+					type: "line",
+					smooth: true,
+					showSymbol: false,
+					data: chartData.values,
+					areaStyle: { opacity: 0.12 },
+				},
+			],
 		})
-		window.addEventListener("resize", () => revenueChart.resize())
+		resizeChart()
+		const chartResizeObserver = new ResizeObserver(resizeChart)
+		chartResizeObserver.observe(chartParent)
+		window.addEventListener("resize", resizeChart)
 	} else if (chartError) {
 		chartError.classList.remove("hidden")
 	}
