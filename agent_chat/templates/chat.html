@@ -13,9 +13,9 @@
         </header>
 
         <!-- message part -->
-        <section class="mx-auto w-full max-w-3xl flex-1 py-8 sm:py-10" aria-label="Conversation with ResortEase assistant" aria-live="polite">
+        <section id="chat-messages" class="mx-auto w-full max-w-3xl flex-1 py-8 sm:py-10" aria-label="Conversation with ResortEase assistant" aria-live="polite">
 
-            <div class="chat chat-start">
+            <div id="chat-welcome" class="chat chat-start">
                 <div class="chat-image avatar placeholder">
                     <div class="w-9 rounded-full bg-primary/10 text-primary flex justify-center items-center">
                         <span class="text-xs font-bold" aria-hidden="true">R</span>
@@ -32,24 +32,223 @@
 
 
         <div class="sticky bottom-0 z-10 mx-auto w-full max-w-3xl bg-gradient-to-t from-base-100 via-base-100 to-transparent pb-5 pt-4 sm:pb-6">
-            <div class="rounded-3xl border border-base-300 bg-base-100 p-3 shadow-lg transition focus-within:border-base-content/25 focus-within:shadow-xl sm:p-4">
+            <form id="chat-form" class="rounded-3xl border border-base-300 bg-base-100 p-3 shadow-lg transition focus-within:border-base-content/25 focus-within:shadow-xl sm:p-4">
                 <label class="sr-only" for="chat-message">Your message</label>
                 <textarea
                     id="chat-message"
                     class="textarea min-h-12 w-full resize-none border-0 bg-transparent px-2 py-1 text-base shadow-none outline-none focus:outline-none"
                     rows="2"
+                    maxlength="4000"
                     placeholder="Message ResortEase..."
                 ></textarea>
                 <div class="flex items-center justify-between gap-3 px-1 pt-2">
-                    <button class="btn btn-primary btn-circle btn-sm shrink-0" type="button" aria-label="Send message">
+                    <span id="chat-status" class="text-xs text-base-content/60" role="status">Connecting...</span>
+                    <button id="chat-send" class="btn btn-primary btn-circle btn-sm shrink-0" type="submit" aria-label="Send message" disabled>
                         <span aria-hidden="true">&uarr;</span>
                     </button>
                 </div>
-            </div>
+            </form>
+            <p id="chat-unavailable" class="hidden rounded-2xl border border-base-300 bg-base-200 px-4 py-3 text-center text-sm text-base-content/70" role="alert">
+                Chat is unavailable because the connection was interrupted. Refresh the page to try again.
+            </p>
             <p class="mt-3 text-center text-xs text-base-content/50">
                 Don’t share sensitive personal or payment information.
             </p>
         </div>
     </section>
 </main>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    @keyframes chat-dot-blink {
+        0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+        40% { opacity: 1; transform: translateY(-3px); }
+    }
+
+    .chat-typing-dot {
+        width: 0.4rem;
+        height: 0.4rem;
+        border-radius: 9999px;
+        background: currentColor;
+        animation: chat-dot-blink 1.2s infinite ease-in-out;
+    }
+
+    .chat-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+    .chat-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+    @media (prefers-reduced-motion: reduce) {
+        .chat-typing-dot { animation: none; opacity: 0.7; }
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+    const form = document.getElementById("chat-form");
+    const textarea = document.getElementById("chat-message");
+    const sendButton = document.getElementById("chat-send");
+    const status = document.getElementById("chat-status");
+    const unavailableNotice = document.getElementById("chat-unavailable");
+    const conversation = document.getElementById("chat-messages");
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socketUrl = `${protocol}//${window.location.host}/ws/chat/`;
+    let socket = null;
+    let activeReply = null;
+    let replyStarted = false;
+    let sending = false;
+    let expiredSession = false;
+    let reconnectTimer = null;
+
+    function showUnavailable() {
+        status.textContent = "Connection closed. Refresh to reconnect.";
+        sendButton.disabled = true;
+        form.hidden = true;
+        unavailableNotice.classList.remove("hidden");
+        if (activeReply) {
+            activeReply.textContent = "This response is unavailable because the chat connection was interrupted.";
+            activeReply.parentElement.scrollIntoView({ behavior: "smooth", block: "end" });
+            activeReply = null;
+        }
+        replyStarted = false;
+        sending = false;
+    }
+
+    function appendMessage(role, content, isLoading = false) {
+        const message = document.createElement("div");
+        message.className = role === "user" ? "chat chat-end" : "chat chat-start";
+
+        const heading = document.createElement("div");
+        heading.className = "chat-header mb-1 text-sm font-semibold";
+        heading.textContent = role === "user" ? "You" : "ResortEase assistant";
+
+        const bubble = document.createElement("div");
+        bubble.className = role === "user"
+            ? "chat-bubble chat-bubble-secondary max-w-[min(90%,40rem)] text-sm leading-6 sm:text-base"
+            : "chat-bubble chat-bubble-primary max-w-[min(90%,40rem)] text-sm leading-6 sm:text-base";
+        if (isLoading) {
+            const indicator = document.createElement("span");
+            indicator.className = "inline-flex items-center gap-1.5";
+            indicator.setAttribute("role", "status");
+            indicator.setAttribute("aria-label", "ResortEase assistant is typing");
+            for (let index = 0; index < 3; index += 1) {
+                const dot = document.createElement("span");
+                dot.className = "chat-typing-dot";
+                dot.setAttribute("aria-hidden", "true");
+                indicator.append(dot);
+            }
+            bubble.append(indicator);
+        } else {
+            bubble.textContent = content;
+        }
+
+        message.append(heading, bubble);
+        conversation.append(message);
+        message.scrollIntoView({ behavior: "smooth", block: "end" });
+        return bubble;
+    }
+
+    function connectSocket() {
+        socket = new WebSocket(socketUrl);
+
+        socket.addEventListener("open", () => {
+            status.textContent = "Connected";
+            form.hidden = false;
+            unavailableNotice.classList.add("hidden");
+            sendButton.disabled = false;
+        });
+
+        socket.addEventListener("close", (event) => {
+            if (expiredSession || event.code === 4408) {
+                expiredSession = false;
+                status.textContent = "Starting a fresh chat...";
+                form.hidden = false;
+                sendButton.disabled = true;
+                reconnectTimer = window.setTimeout(connectSocket, 250);
+                return;
+            }
+            showUnavailable();
+        });
+
+        socket.addEventListener("error", () => {
+            showUnavailable();
+        });
+
+        socket.addEventListener("message", (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === "history") {
+                if (data.messages.length) {
+                    document.getElementById("chat-welcome")?.remove();
+                    for (const message of data.messages) {
+                        appendMessage(message.role, message.content);
+                    }
+                }
+            } else if (data.type === "session_expired") {
+                expiredSession = true;
+                activeReply = null;
+                replyStarted = false;
+                sending = false;
+                conversation.replaceChildren();
+                appendMessage("assistant", data.message);
+                status.textContent = "Starting a fresh chat...";
+                form.hidden = true;
+            } else if (data.type === "token") {
+                if (activeReply) {
+                    if (!replyStarted) {
+                        activeReply.replaceChildren();
+                        replyStarted = true;
+                    }
+                    activeReply.textContent += data.content;
+                    activeReply.parentElement.scrollIntoView({ behavior: "smooth", block: "end" });
+                }
+            } else if (data.type === "done") {
+                if (activeReply && !replyStarted) {
+                    activeReply.parentElement.remove();
+                }
+                activeReply = null;
+                replyStarted = false;
+                sending = false;
+                sendButton.disabled = socket.readyState !== WebSocket.OPEN;
+                textarea.focus();
+            } else if (data.type === "error") {
+                if (activeReply) {
+                    activeReply.textContent = data.message;
+                } else {
+                    appendMessage("assistant", data.message);
+                }
+                activeReply = null;
+                replyStarted = false;
+                sending = false;
+                sendButton.disabled = socket.readyState !== WebSocket.OPEN;
+            }
+        });
+    }
+
+    connectSocket();
+
+    form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const message = textarea.value.trim();
+        if (!message || sending || socket.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        appendMessage("user", message);
+        activeReply = appendMessage("assistant", "", true);
+        replyStarted = false;
+        socket.send(JSON.stringify({ message }));
+        textarea.value = "";
+        sending = true;
+        sendButton.disabled = true;
+    });
+
+    textarea.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            form.requestSubmit();
+        }
+    });
+})();
+</script>
 {% endblock %}

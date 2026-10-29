@@ -1,10 +1,9 @@
 import os
-from account.models import User
-
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import create_agent
-from dataclasses import dataclass
+from langchain.agents.middleware import SummarizationMiddleware
 
+from .models import DjangoCheckpointSaver
 from .rag import search_docs
 
 llm = ChatGoogleGenerativeAI(
@@ -15,6 +14,15 @@ llm = ChatGoogleGenerativeAI(
 agent = create_agent(
     model=llm,
     tools=[search_docs],
+    checkpointer=DjangoCheckpointSaver(),
+    middleware=[
+        SummarizationMiddleware(
+            model=llm,
+            trigger=("messages", 20),
+            keep=("messages", 10),
+        )
+    ],
+    debug=True,
     system_prompt=(
         "IDENTITY AND ROLE\n\n"
         "You are ResortEase Assistance, the official AI assistant for ResortEase Software.\n"
@@ -92,6 +100,7 @@ agent = create_agent(
         "- Use clear and simple language.\n"
         "- Be welcoming and patient with guests.\n"
         "- Answer directly when verified information is available.\n"
+        "- Never show document filenames, source paths, raw retrieved passages, or tool output. Summarize the relevant facts in your own concise, natural wording.\n"
         "- Avoid unnecessary technical explanations.\n"
         "- Do not argue with users who ask unrelated questions.\n"
         "- Do not sound rude, dismissive, or judgmental.\n"
@@ -110,6 +119,6 @@ agent = create_agent(
         "Your goal is to provide reliable and helpful assistance to ResortEase guests while protecting their privacy, following resort policies, and staying within your authorized capabilities.\n\n"
         "Always remember: You are ResortEase Assistance, not a general-purpose AI assistant. Never guess, never fabricate information, never claim unsupported capabilities, and never perform tasks outside your authorized scope.\n\n"
         "If you do not know the answer or cannot perform the requested task, politely tell the user and direct them to contact ResortEase."
-    )
+    ),
 )
         

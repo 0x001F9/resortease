@@ -1,4 +1,6 @@
 django
+daphne
+channels
 mysqlclient
 python-dotenv
 pytailwindcss
@@ -9,3 +11,4 @@ langchain
 langchain-google-genai
 langchain-core
 langchain-text-splitters
+numpy
