@@ -3815,6 +3815,54 @@ class DashboardAndFinancialReportTests(TestCase):
         )
         return reservation, payment
 
+    def test_facility_detail_total_revenue_uses_payment_status(self):
+        self.create_reservation_with_payment(
+            self.branch,
+            amount="50.00",
+            status=Payment.Status.PENDING,
+            username="facility_pending_guest",
+        )
+
+        response = self.client.get(
+            reverse(
+                "facility-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "facility_slug": self.facility.slug,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_revenue"], Decimal("0.00"))
+
+    def test_facility_detail_total_revenue_is_net_of_refunds(self):
+        self.create_reservation_with_payment(
+            self.branch,
+            amount="125.50",
+            status=Payment.Status.SUCCEEDED,
+            username="facility_successful_guest",
+        )
+        self.create_reservation_with_payment(
+            self.branch,
+            amount="25.50",
+            status=Payment.Status.REFUNDED,
+            username="facility_refunded_guest",
+        )
+
+        response = self.client.get(
+            reverse(
+                "facility-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "facility_slug": self.facility.slug,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_revenue"], Decimal("100.00"))
+
     def test_dashboard_summarizes_branch_bookings_and_received_revenue(self):
         now = timezone.now()
         reservation, _payment = self.create_reservation_with_payment(
