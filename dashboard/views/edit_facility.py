@@ -31,7 +31,6 @@ class EditFacilityView(View):
                 "description": facility.description,
                 "status": facility.status,
                 "capacity": facility.capacity,
-                "notes": facility.notes,
             },
             "errors": errors or {},
             "hide_aside": True,
@@ -53,7 +52,6 @@ class EditFacilityView(View):
             "description": request.POST.get("description", "").strip(),
             "status": request.POST.get("status", "").strip(),
             "capacity": request.POST.get("capacity", "").strip(),
-            "notes": request.POST.get("notes", "").strip(),
         }
         errors = {}
 
@@ -92,7 +90,6 @@ class EditFacilityView(View):
         facility.description = form_data["description"]
         facility.status = form_data["status"]
         facility.capacity = capacity
-        facility.notes = form_data["notes"]
         facility.save()
 
         return redirect(

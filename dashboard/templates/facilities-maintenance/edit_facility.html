@@ -12,7 +12,7 @@
         </a>
 
         <section class="card border border-base-300 bg-base-100 shadow-sm">
-            <div class="card-body gap-5 p-5 sm:p-8">
+            <div class="card-body gap-6 p-6 sm:gap-7 sm:p-8">
                 <header>
                     <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
                         {{ branch.name }}
@@ -29,7 +29,7 @@
                     </div>
                 {% endif %}
 
-                <form method="post" class="space-y-5">
+                <form method="post" class="space-y-6 sm:space-y-7">
                     {% csrf_token %}
 
                     <label class="form-control w-full">
@@ -47,7 +47,7 @@
                         {% if errors.name %}<span class="mt-1 text-sm text-error">{{ errors.name }}</span>{% endif %}
                     </label>
 
-                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-5">
                         <label class="form-control w-full">
                             <span class="label">
                                 <span class="label-text font-medium">Facility type <span class="text-error">*</span></span>
@@ -106,16 +106,7 @@
                         >{{ form_data.description }}</textarea>
                     </label>
 
-                    <label class="form-control w-full">
-                        <span class="label"><span class="label-text font-medium">Notes</span></span>
-                        <textarea
-                            name="notes"
-                            rows="4"
-                            class="textarea textarea-bordered w-full"
-                        >{{ form_data.notes }}</textarea>
-                    </label>
-
-                    <div class="flex flex-col-reverse gap-3 border-t border-base-300 pt-5 sm:flex-row sm:justify-end">
+                    <div class="flex flex-col-reverse gap-3 border-t border-base-300 pt-6 sm:flex-row sm:justify-end">
                         <a href="/dashboard/{{ branch.slug }}/{{ facility.slug }}/" class="btn btn-ghost">
                             Cancel
                         </a>

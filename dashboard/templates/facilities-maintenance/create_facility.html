@@ -1,0 +1,163 @@
+{% extends "../partials/layout.html" %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-3xl">
+        <a
+            href="/dashboard/{{ branch.slug }}/facilities-and-maintenance/"
+            class="btn btn-ghost btn-sm mb-4"
+        >
+            <span aria-hidden="true">&larr;</span>
+            Facilities &amp; maintenance
+        </a>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-6 p-6 sm:gap-7 sm:p-8">
+                <header>
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+                        {{ branch.name }}
+                    </p>
+                    <h1 class="card-title mt-1 text-2xl font-semibold sm:text-3xl">Add facility</h1>
+                    <p class="mt-2 text-sm text-base-content/70">
+                        Create a facility in the current branch.
+                    </p>
+                </header>
+
+                {% if errors %}
+                    <div role="alert" class="alert alert-error">
+                        <span>Please review the highlighted fields and try again.</span>
+                    </div>
+                {% endif %}
+
+                <form method="post" class="space-y-6 sm:space-y-7">
+                    {% csrf_token %}
+
+                    <label class="form-control w-full">
+                        <span class="label">
+                            <span class="label-text font-medium">Facility name <span class="text-error">*</span></span>
+                        </span>
+                        <input
+                            type="text"
+                            name="name"
+                            value="{{ form_data.name }}"
+                            maxlength="150"
+                            required
+                            class="input input-bordered w-full {% if errors.name %}input-error{% endif %}"
+                        >
+                        {% if errors.name %}<span class="mt-1 text-sm text-error">{{ errors.name }}</span>{% endif %}
+                    </label>
+
+                    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-5">
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Facility type <span class="text-error">*</span></span>
+                            </span>
+                            <select
+                                name="facility_type"
+                                required
+                                class="select select-bordered w-full {% if errors.facility_type %}select-error{% endif %}"
+                            >
+                                {% for value, label in facility_types %}
+                                    <option value="{{ value }}" {% if form_data.facility_type == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.facility_type %}<span class="mt-1 text-sm text-error">{{ errors.facility_type }}</span>{% endif %}
+                        </label>
+
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Status <span class="text-error">*</span></span>
+                            </span>
+                            <select
+                                name="status"
+                                required
+                                class="select select-bordered w-full {% if errors.status %}select-error{% endif %}"
+                            >
+                                {% for value, label in facility_statuses %}
+                                    <option value="{{ value }}" {% if form_data.status == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.status %}<span class="mt-1 text-sm text-error">{{ errors.status }}</span>{% endif %}
+                        </label>
+                    </div>
+
+                    <label class="form-control w-full">
+                        <span class="label">
+                            <span class="label-text font-medium">Capacity <span class="text-error">*</span></span>
+                        </span>
+                        <input
+                            type="number"
+                            name="capacity"
+                            value="{{ form_data.capacity }}"
+                            min="0"
+                            max="2147483647"
+                            required
+                            class="input input-bordered w-full {% if errors.capacity %}input-error{% endif %}"
+                        >
+                        {% if errors.capacity %}<span class="mt-1 text-sm text-error">{{ errors.capacity }}</span>{% endif %}
+                    </label>
+
+                    <label class="form-control w-full">
+                        <span class="label"><span class="label-text font-medium">Image URL</span></span>
+                        <input
+                            type="text"
+                            name="image_url"
+                            value="{{ form_data.image_url }}"
+                            maxlength="255"
+                            class="input input-bordered w-full {% if errors.image_url %}input-error{% endif %}"
+                        >
+                        {% if errors.image_url %}<span class="mt-1 text-sm text-error">{{ errors.image_url }}</span>{% endif %}
+                    </label>
+
+                    <label class="form-control w-full">
+                        <span class="label"><span class="label-text font-medium">Description</span></span>
+                        <textarea
+                            name="description"
+                            rows="4"
+                            class="textarea textarea-bordered w-full"
+                        >{{ form_data.description }}</textarea>
+                    </label>
+
+                    <fieldset class="mt-2 rounded-box border border-base-300 p-5 sm:p-6">
+                        <legend class="px-2 text-sm font-semibold">Facility rates</legend>
+                        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
+                            <label class="form-control w-full">
+                                <span class="label"><span class="label-text font-medium">24-hour rate</span></span>
+                                <input type="number" name="rate_24hours" value="{{ form_data.rate_24hours }}" min="0" max="2147483647" class="input input-bordered w-full {% if errors.rate_24hours %}input-error{% endif %}">
+                                {% if errors.rate_24hours %}<span class="mt-1 text-sm text-error">{{ errors.rate_24hours }}</span>{% endif %}
+                            </label>
+                            <label class="form-control w-full">
+                                <span class="label"><span class="label-text font-medium">22-hour rate</span></span>
+                                <input type="number" name="rate_22hours" value="{{ form_data.rate_22hours }}" min="0" max="2147483647" class="input input-bordered w-full {% if errors.rate_22hours %}input-error{% endif %}">
+                                {% if errors.rate_22hours %}<span class="mt-1 text-sm text-error">{{ errors.rate_22hours }}</span>{% endif %}
+                            </label>
+                            <label class="form-control w-full">
+                                <span class="label"><span class="label-text font-medium">Morning rate</span></span>
+                                <input type="number" name="rate_morning" value="{{ form_data.rate_morning }}" min="0" max="2147483647" class="input input-bordered w-full {% if errors.rate_morning %}input-error{% endif %}">
+                                {% if errors.rate_morning %}<span class="mt-1 text-sm text-error">{{ errors.rate_morning }}</span>{% endif %}
+                            </label>
+                            <label class="form-control w-full">
+                                <span class="label"><span class="label-text font-medium">Evening rate</span></span>
+                                <input type="number" name="rate_evening" value="{{ form_data.rate_evening }}" min="0" max="2147483647" class="input input-bordered w-full {% if errors.rate_evening %}input-error{% endif %}">
+                                {% if errors.rate_evening %}<span class="mt-1 text-sm text-error">{{ errors.rate_evening }}</span>{% endif %}
+                            </label>
+                            <label class="form-control w-full sm:col-span-2">
+                                <span class="label"><span class="label-text font-medium">Rate per extra hour</span></span>
+                                <input type="number" name="rate_per_extra_hour" value="{{ form_data.rate_per_extra_hour }}" min="0" max="2147483647" class="input input-bordered w-full {% if errors.rate_per_extra_hour %}input-error{% endif %}">
+                                {% if errors.rate_per_extra_hour %}<span class="mt-1 text-sm text-error">{{ errors.rate_per_extra_hour }}</span>{% endif %}
+                            </label>
+                        </div>
+                    </fieldset>
+
+                    <div class="flex flex-col-reverse gap-3 border-t border-base-300 pt-6 sm:flex-row sm:justify-end">
+                        <a href="/dashboard/{{ branch.slug }}/facilities-and-maintenance/" class="btn btn-ghost">
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">Create facility</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

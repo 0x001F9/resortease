@@ -77,13 +77,102 @@
     .chat-typing-dot:nth-child(2) { animation-delay: 0.15s; }
     .chat-typing-dot:nth-child(3) { animation-delay: 0.3s; }
 
+    .chat-markdown {
+        overflow-wrap: anywhere;
+    }
+
+    .chat-markdown > :first-child { margin-top: 0; }
+    .chat-markdown > :last-child { margin-bottom: 0; }
+    .chat-markdown p { margin: 0.5rem 0; }
+    .chat-markdown h1, .chat-markdown h2, .chat-markdown h3,
+    .chat-markdown h4, .chat-markdown h5, .chat-markdown h6 {
+        margin: 0.75rem 0 0.35rem;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+    .chat-markdown h1 { font-size: 1.25rem; }
+    .chat-markdown h2 { font-size: 1.125rem; }
+    .chat-markdown h3 { font-size: 1rem; }
+    .chat-markdown ul, .chat-markdown ol { margin: 0.5rem 0; padding-left: 1.25rem; }
+    .chat-markdown ul { list-style: disc; }
+    .chat-markdown ol { list-style: decimal; }
+    .chat-markdown blockquote {
+        margin: 0.5rem 0;
+        border-left: 0.2rem solid currentColor;
+        padding-left: 0.75rem;
+        opacity: 0.85;
+    }
+    .chat-markdown pre {
+        max-width: 100%;
+        overflow-x: auto;
+        margin: 0.75rem 0;
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        background: oklch(0 0 0 / 0.12);
+    }
+    .chat-markdown code {
+        border-radius: 0.25rem;
+        padding: 0.1em 0.25em;
+        background: oklch(0 0 0 / 0.12);
+        font-size: 0.875em;
+    }
+    .chat-markdown pre code { padding: 0; background: transparent; }
+    .chat-markdown table {
+        margin: 0.75rem 0;
+        border-collapse: collapse;
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    .chat-markdown th, .chat-markdown td {
+        border: 1px solid currentColor;
+        padding: 0.35rem 0.5rem;
+    }
+    .chat-markdown a { text-decoration: underline; }
+
+    @keyframes chat-bubble-enter {
+        0% {
+            opacity: 0;
+            transform: translate(var(--chat-enter-x, 0), 8px) scale(0.92);
+        }
+        55% {
+            opacity: 1;
+            transform: translate(0, -1px) scale(1.025);
+        }
+        100% {
+            opacity: 1;
+            transform: translate(0, 0) scale(1);
+        }
+    }
+
+    .chat-bubble-enter {
+        animation: chat-bubble-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        will-change: transform, opacity;
+    }
+
+    .chat-bubble-enter-sent {
+        --chat-enter-x: 12px;
+        transform-origin: right bottom;
+    }
+
+    .chat-bubble-enter-received {
+        --chat-enter-x: -12px;
+        transform-origin: left bottom;
+    }
+
     @media (prefers-reduced-motion: reduce) {
         .chat-typing-dot { animation: none; opacity: 0.7; }
+        .chat-bubble-enter {
+            animation: none;
+            will-change: auto;
+        }
     }
 </style>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script>
 (() => {
     const form = document.getElementById("chat-form");
@@ -100,6 +189,54 @@
     let sending = false;
     let expiredSession = false;
     let reconnectTimer = null;
+    let activeReplyContent = "";
+    let scrollFrame = null;
+
+    function scrollToLatest(behavior = "smooth") {
+        if (scrollFrame !== null) {
+            cancelAnimationFrame(scrollFrame);
+        }
+        scrollFrame = requestAnimationFrame(() => {
+            window.scrollTo({
+                top: document.documentElement.scrollHeight,
+                behavior,
+            });
+            scrollFrame = null;
+        });
+    }
+
+    function renderMarkdownContent(element, content) {
+        element.classList.add("chat-markdown");
+        if (!window.marked || !window.DOMPurify) {
+            element.textContent = content;
+            return;
+        }
+
+        const html = window.marked.parse(content, {
+            breaks: true,
+            gfm: true,
+        });
+        element.innerHTML = window.DOMPurify.sanitize(html, {
+            USE_PROFILES: { html: true },
+        });
+
+        for (const link of element.querySelectorAll("a")) {
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+        }
+    }
+
+    function renderActiveReply(content) {
+        if (!activeReply) {
+            return;
+        }
+        activeReplyContent = content;
+        if (!replyStarted) {
+            activeReply.replaceChildren();
+            replyStarted = true;
+        }
+        renderMarkdownContent(activeReply, activeReplyContent);
+    }
 
     function showUnavailable() {
         status.textContent = "Connection closed. Refresh to reconnect.";
@@ -108,14 +245,15 @@
         unavailableNotice.classList.remove("hidden");
         if (activeReply) {
             activeReply.textContent = "This response is unavailable because the chat connection was interrupted.";
-            activeReply.parentElement.scrollIntoView({ behavior: "smooth", block: "end" });
+            scrollToLatest();
             activeReply = null;
         }
+        activeReplyContent = "";
         replyStarted = false;
         sending = false;
     }
 
-    function appendMessage(role, content, isLoading = false) {
+    function appendMessage(role, content, isLoading = false, animate = true) {
         const message = document.createElement("div");
         message.className = role === "user" ? "chat chat-end" : "chat chat-start";
 
@@ -127,6 +265,12 @@
         bubble.className = role === "user"
             ? "chat-bubble chat-bubble-secondary max-w-[min(90%,40rem)] text-sm leading-6 sm:text-base"
             : "chat-bubble chat-bubble-primary max-w-[min(90%,40rem)] text-sm leading-6 sm:text-base";
+        if (animate) {
+            bubble.classList.add(
+                "chat-bubble-enter",
+                role === "user" ? "chat-bubble-enter-sent" : "chat-bubble-enter-received",
+            );
+        }
         if (isLoading) {
             const indicator = document.createElement("span");
             indicator.className = "inline-flex items-center gap-1.5";
@@ -140,12 +284,12 @@
             }
             bubble.append(indicator);
         } else {
-            bubble.textContent = content;
+            renderMarkdownContent(bubble, content);
         }
 
         message.append(heading, bubble);
         conversation.append(message);
-        message.scrollIntoView({ behavior: "smooth", block: "end" });
+        scrollToLatest();
         return bubble;
     }
 
@@ -181,26 +325,25 @@
                 if (data.messages.length) {
                     document.getElementById("chat-welcome")?.remove();
                     for (const message of data.messages) {
-                        appendMessage(message.role, message.content);
+                        appendMessage(message.role, message.content, false, false);
                     }
+                    scrollToLatest("auto");
                 }
             } else if (data.type === "session_expired") {
                 expiredSession = true;
                 activeReply = null;
                 replyStarted = false;
+                activeReplyContent = "";
                 sending = false;
                 conversation.replaceChildren();
                 appendMessage("assistant", data.message);
                 status.textContent = "Starting a fresh chat...";
                 form.hidden = true;
+                scrollToLatest("auto");
             } else if (data.type === "token") {
                 if (activeReply) {
-                    if (!replyStarted) {
-                        activeReply.replaceChildren();
-                        replyStarted = true;
-                    }
-                    activeReply.textContent += data.content;
-                    activeReply.parentElement.scrollIntoView({ behavior: "smooth", block: "end" });
+                    renderActiveReply(activeReplyContent + data.content);
+                    scrollToLatest("auto");
                 }
             } else if (data.type === "done") {
                 if (activeReply && !replyStarted) {
@@ -208,19 +351,23 @@
                 }
                 activeReply = null;
                 replyStarted = false;
+                activeReplyContent = "";
                 sending = false;
                 sendButton.disabled = socket.readyState !== WebSocket.OPEN;
                 textarea.focus();
+                scrollToLatest();
             } else if (data.type === "error") {
                 if (activeReply) {
-                    activeReply.textContent = data.message;
+                    renderMarkdownContent(activeReply, data.message);
                 } else {
                     appendMessage("assistant", data.message);
                 }
                 activeReply = null;
                 replyStarted = false;
+                activeReplyContent = "";
                 sending = false;
                 sendButton.disabled = socket.readyState !== WebSocket.OPEN;
+                scrollToLatest();
             }
         });
     }
@@ -237,6 +384,7 @@
         appendMessage("user", message);
         activeReply = appendMessage("assistant", "", true);
         replyStarted = false;
+        activeReplyContent = "";
         socket.send(JSON.stringify({ message }));
         textarea.value = "";
         sending = true;

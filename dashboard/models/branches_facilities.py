@@ -61,7 +61,6 @@ class Facility(models.Model):
         default=FacilityStatus.OPERATIONAL,
     )
     capacity = models.PositiveIntegerField(default=0)
-    notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

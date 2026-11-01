@@ -13,6 +13,7 @@ from dashboard.views.edit_maintenance import EditFacilitiesMaintenanceView
 from dashboard.views.maintenance_detail import MaintenanceDetailView
 from dashboard.views.facility_detail import FacilityDetailView
 from dashboard.views.edit_facility import EditFacilityView
+from dashboard.views.create_facility import CreateFacilityView
 from dashboard.views.inventory import (
     InventoryAssetActivityView,
     InventoryAssetDetailView,
@@ -184,6 +185,11 @@ urlpatterns = [
         '<str:branch>/maintenance/<int:maintenance_id>/',
         MaintenanceDetailView.as_view(),
         name='maintenance-detail',
+    ),
+    path(
+        '<str:branch>/facilities/new/',
+        CreateFacilityView.as_view(),
+        name='add-facility',
     ),
     path(
         '<str:branch>/<str:facility_slug>/edit/',
