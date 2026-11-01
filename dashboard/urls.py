@@ -3,6 +3,7 @@ from dashboard.views.dashboard import (
     DashboardView,
     DashboardRedirectView,
     FinancialReportView,
+    RecordOperatingExpenseView,
 )
 from dashboard.views.facilities_maintenance import (
     FacilitiesMaintenanceView,
@@ -54,6 +55,11 @@ urlpatterns = [
         '<str:branch>/financial-reports/',
         FinancialReportView.as_view(),
         name='financial-reports',
+    ),
+    path(
+        '<str:branch>/financial-reports/expenses/new/',
+        RecordOperatingExpenseView.as_view(),
+        name='record-operating-expense',
     ),
     path(
         '<str:branch>/inventory/',

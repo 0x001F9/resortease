@@ -1,0 +1,35 @@
+{% extends "partials/layout.html" %}
+
+{% block content %}
+<main class="px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto w-full max-w-3xl">
+        <a href="{% url 'financial-reports' branch=request.branch.slug %}" class="btn btn-ghost btn-sm mb-4">
+            <span aria-hidden="true">&larr;</span>
+            Financial report
+        </a>
+
+        <section class="card border border-base-300 bg-base-100 shadow-sm">
+            <div class="card-body gap-5 p-5 sm:p-8">
+                <header>
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">Financial report · {{ request.branch.name }}</p>
+                    <h1 class="card-title mt-1 text-2xl font-semibold sm:text-3xl">Record an operating expense</h1>
+                </header>
+
+                <form method="post" class="grid gap-4 sm:grid-cols-2">
+                    {% csrf_token %}
+                    {% for field in expense_form %}
+                    <label class="form-control">
+                        <span class="label"><span class="label-text">{{ field.label }}</span></span>
+                        {{ field }}
+                        {% for error in field.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
+                    </label>
+                    {% endfor %}
+                    <div class="sm:col-span-2 flex justify-end">
+                        <button class="btn btn-primary" type="submit">Save expense</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</main>
+{% endblock %}

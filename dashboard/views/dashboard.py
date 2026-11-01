@@ -176,9 +176,18 @@ class DashboardView(View):
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
 @method_decorator(check_branch_dashboard, name="dispatch")
-class FinancialReportView(View):
+class RecordOperatingExpenseView(View):
+    template_name = "record_operating_expense.html"
+
     def get(self, request):
-        return self.render_report(request, request.GET)
+        return render(
+            request,
+            self.template_name,
+            {
+                "expense_form": ExpenseForm(),
+                "hide_aside": True,
+            },
+        )
 
     def post(self, request):
         form = ExpenseForm(request.POST)
@@ -187,14 +196,24 @@ class FinancialReportView(View):
             expense.branch = request.branch
             expense.recorded_by = request.user
             expense.save()
-            return redirect(
-                f"{request.path}?{request.GET.urlencode()}"
-                if request.GET
-                else request.path
-            )
-        return self.render_report(request, request.POST, expense_form=form)
+            return redirect("financial-reports", branch=request.branch.slug)
+        return render(
+            request,
+            self.template_name,
+            {
+                "expense_form": form,
+                "hide_aside": True,
+            },
+        )
 
-    def render_report(self, request, params, expense_form=None):
+
+@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(check_branch_dashboard, name="dispatch")
+class FinancialReportView(View):
+    def get(self, request):
+        return self.render_report(request, request.GET)
+
+    def render_report(self, request, params):
         today = timezone.localdate()
         period = params.get(
             "period",
@@ -795,7 +814,6 @@ class FinancialReportView(View):
                 "transaction_status": selected_status,
                 "payment_methods": payment_methods,
                 "payment_statuses": Payment.Status.choices,
-                "expense_form": expense_form or ExpenseForm(),
                 "expense_categories": Expense.Category.choices,
                 "inventory_movement_rows": [
                     {"name": name, **values}

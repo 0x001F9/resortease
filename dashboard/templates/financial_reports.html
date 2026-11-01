@@ -255,28 +255,7 @@
 		</div>
 	</section>
 
-	<section class="grid gap-6 xl:grid-cols-2">
-	<article class="card border border-base-300 bg-base-100">
-		<div class="card-body">
-			<h2 class="card-title">Record an operating expense</h2>
-			<form method="post" class="grid gap-3 sm:grid-cols-2">
-				{% csrf_token %}
-				<input type="hidden" name="period" value="{{ period }}" />
-				<input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}" />
-				<input type="hidden" name="end_date" value="{{ end_date|date:'Y-m-d' }}" />
-				<p class="sm:col-span-2 text-sm text-base-content/60">The expense will be recorded under {{ request.branch.name }}.</p>
-				<div class="sm:col-span-2">{{ expense_form.non_field_errors }}</div>
-				{% for field in expense_form %}
-					<label class="form-control">
-						<span class="label"><span class="label-text">{{ field.label }}</span></span>
-						{{ field }}
-						{% for error in field.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
-					</label>
-				{% endfor %}
-				<div class="sm:col-span-2"><button class="btn btn-primary" type="submit">Save expense</button></div>
-			</form>
-		</div>
-	</article>
+	<section>
 	<article class="card border border-base-300 bg-base-100">
 		<div class="card-body">
 			<h2 class="card-title">Store and inventory data</h2>
@@ -337,6 +316,14 @@
 			{% endif %}
 		</div>
 	</section>
+	<a
+		href="{% url 'record-operating-expense' branch=request.branch.slug %}"
+		class="btn btn-primary btn-circle tooltip tooltip-left fixed bottom-6 right-6 z-50 h-14 w-14 shadow-lg"
+		data-tip="Expense"
+		aria-label="Record an operating expense"
+	>
+		<span aria-hidden="true" class="text-2xl leading-none">+</span>
+	</a>
 </main>
 {% endblock %}
 
