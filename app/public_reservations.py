@@ -92,6 +92,55 @@ def _reservation_edit_initial(reservation):
     }
 
 
+def resume_pending_public_reservation(request):
+    pending = request.session.get(PENDING_RESERVATION_SESSION_KEY)
+    if not pending:
+        return None, None, "There is no reservation request to continue."
+
+    branch = Branch.objects.filter(pk=pending.get("branch_id")).first()
+    if branch is None:
+        request.session.pop(PENDING_RESERVATION_SESSION_KEY, None)
+        return None, None, "The branch for your saved reservation could not be found."
+
+    facilities = _public_facilities(branch)
+    form = PublicReservationForm(data=pending, facilities=facilities)
+    if not form.is_valid():
+        request.session.pop(PENDING_RESERVATION_SESSION_KEY, None)
+        return (
+            None,
+            branch,
+            "Your saved reservation details are no longer valid. Please start again.",
+        )
+
+    facility = form.cleaned_data["facility"]
+    starts_at = form.cleaned_data["starts_at"]
+    ends_at = form.cleaned_data["ends_at"]
+    if calculate_total_amount(facility, starts_at, ends_at) is None:
+        return (
+            None,
+            branch,
+            "The selected rate is no longer available. Please choose another time.",
+        )
+    if has_calendar_conflict(facility, starts_at, ends_at):
+        return (
+            None,
+            branch,
+            "Availability has changed. Please choose another time.",
+        )
+
+    reservation = Reservation.objects.create(
+        guest=request.user,
+        facility=facility,
+        starts_at=starts_at,
+        ends_at=ends_at,
+        party_size=form.cleaned_data["party_size"],
+        status=Reservation.Status.PENDING,
+        special_requests=form.cleaned_data["special_requests"],
+    )
+    request.session.pop(PENDING_RESERVATION_SESSION_KEY, None)
+    return reservation, branch, None
+
+
 class PublicReservationView(View):
     def get(self, request, slug):
         return self._handle(request, slug)
@@ -186,48 +235,14 @@ class PublicReservationView(View):
 @method_decorator(login_required(login_url="login"), name="dispatch")
 class ResumePublicReservationView(View):
     def get(self, request):
-        pending = request.session.get(PENDING_RESERVATION_SESSION_KEY)
-        if not pending:
-            messages.info(request, "There is no reservation request to continue.")
-            return redirect("branch-list")
-
-        branch = get_object_or_404(Branch, pk=pending.get("branch_id"))
-        facilities = _public_facilities(branch)
-        form = PublicReservationForm(data=pending, facilities=facilities)
-        if not form.is_valid():
-            request.session.pop(PENDING_RESERVATION_SESSION_KEY, None)
-            messages.error(
-                request,
-                "Your saved reservation details are no longer valid. Please start again.",
-            )
+        reservation, branch, error = resume_pending_public_reservation(request)
+        if error is not None:
+            if branch is None:
+                messages.info(request, error)
+                return redirect("branch-list")
+            messages.error(request, error)
             return redirect("public-reservation", slug=branch.slug)
 
-        facility = form.cleaned_data["facility"]
-        starts_at = form.cleaned_data["starts_at"]
-        ends_at = form.cleaned_data["ends_at"]
-        if calculate_total_amount(facility, starts_at, ends_at) is None:
-            messages.error(
-                request,
-                "The selected rate is no longer available. Please choose another time.",
-            )
-            return redirect("public-reservation", slug=branch.slug)
-        if has_calendar_conflict(facility, starts_at, ends_at):
-            messages.error(
-                request,
-                "Availability has changed. Please choose another time.",
-            )
-            return redirect("public-reservation", slug=branch.slug)
-
-        reservation = Reservation.objects.create(
-            guest=request.user,
-            facility=facility,
-            starts_at=starts_at,
-            ends_at=ends_at,
-            party_size=form.cleaned_data["party_size"],
-            status=Reservation.Status.PENDING,
-            special_requests=form.cleaned_data["special_requests"],
-        )
-        request.session.pop(PENDING_RESERVATION_SESSION_KEY, None)
         messages.success(
             request,
             "Your reservation request was submitted and is pending confirmation.",

@@ -6,8 +6,13 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from langchain_core.messages import AIMessageChunk
 
+from app.public_reservations import PENDING_RESERVATION_SESSION_KEY
+
 from .agent import agent
+from .context import AgentContext
+from .functions.reservations import auth_action_urls
 from .models import (
+    CHAT_SESSION_ID_SESSION_KEY,
     ChatMessageModel,
     chat_session_seconds_until_expiry,
     expire_chat_session_if_idle,
@@ -54,17 +59,24 @@ class AgentChatConsumer(AsyncJsonWebsocketConsumer):
         user_id = user.pk if user is not None and user.is_authenticated else None
         self.chat_session, _ = await database_sync_to_async(
             get_or_create_active_chat_session, thread_sensitive=True
-        )(session_key, user_id)
+        )(
+            session_key,
+            user_id,
+            session.get(CHAT_SESSION_ID_SESSION_KEY),
+        )
         self.chat_session_id = self.chat_session.pk
         self.thread_id = str(self.chat_session.thread_id)
+        self.user_id = user_id
+        self.first_name = user.first_name if user_id is not None else "User"
         await self.accept()
+        history = await database_sync_to_async(
+            get_chat_session_history, thread_sensitive=True
+        )(self.chat_session_id)
+        history_event = {"type": "history", "messages": history}
+        if user_id is None and PENDING_RESERVATION_SESSION_KEY in session:
+            history_event["auth_actions"] = auth_action_urls()
         await self.send_json(
-            {
-                "type": "history",
-                "messages": await database_sync_to_async(
-                    get_chat_session_history, thread_sensitive=True
-                )(self.chat_session_id),
-            }
+            history_event
         )
         self._restart_expiration_timer()
 
@@ -124,10 +136,16 @@ class AgentChatConsumer(AsyncJsonWebsocketConsumer):
         started_at = time.perf_counter()
         first_token_at = None
         response_text = []
+        context = AgentContext(
+            user_id=self.user_id,
+            first_name=self.first_name,
+            session=self.scope["session"],
+        )
         try:
             async for chunk, metadata in agent.astream(
                 {"messages": [{"role": "user", "content": message}]},
                 config={"configurable": {"thread_id": self.thread_id}},
+                context=context,
                 stream_mode="messages",
             ):
                 text = _assistant_text_from_chunk(chunk, metadata)
@@ -141,6 +159,13 @@ class AgentChatConsumer(AsyncJsonWebsocketConsumer):
                     self.chat_session_id,
                     ChatMessageModel.Role.ASSISTANT,
                     "".join(response_text),
+                )
+            if context.requires_auth_actions:
+                await self.send_json(
+                    {
+                        "type": "auth_actions",
+                        **auth_action_urls(),
+                    }
                 )
             await self.send_json({"type": "done"})
             elapsed = time.perf_counter() - started_at

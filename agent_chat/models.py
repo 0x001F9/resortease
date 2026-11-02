@@ -19,6 +19,7 @@ from langgraph.checkpoint.base import (
 
 
 CHAT_SESSION_IDLE_TIMEOUT = timedelta(hours=1)
+CHAT_SESSION_ID_SESSION_KEY = "agent_chat_session_id"
 
 
 class ChatSessionModel(models.Model):
@@ -60,7 +61,11 @@ class ChatMessageModel(models.Model):
         indexes = [models.Index(fields=["session", "id"])]
 
 
-def get_or_create_active_chat_session(browser_session_key: str, user_id: Any = None):
+def get_or_create_active_chat_session(
+    browser_session_key: str,
+    user_id: Any = None,
+    preserved_session_id: int | None = None,
+):
     now = timezone.now()
     with transaction.atomic():
         chat_session = (
@@ -69,6 +74,34 @@ def get_or_create_active_chat_session(browser_session_key: str, user_id: Any = N
             .order_by("-created_at")
             .first()
         )
+
+        if chat_session is None and preserved_session_id is not None:
+            preserved_session = (
+                ChatSessionModel.objects.select_for_update()
+                .filter(pk=preserved_session_id, is_active=True)
+                .first()
+            )
+            if preserved_session is not None:
+                is_expired = (
+                    preserved_session.last_message_at
+                    <= now - CHAT_SESSION_IDLE_TIMEOUT
+                )
+                belongs_to_another_user = (
+                    preserved_session.user_id not in (None, user_id)
+                )
+                if is_expired:
+                    preserved_session.is_active = False
+                    preserved_session.save(update_fields=["is_active"])
+                elif not belongs_to_another_user:
+                    preserved_session.browser_session_key = browser_session_key
+                    if user_id is not None and preserved_session.user_id is None:
+                        preserved_session.user_id = user_id
+                        preserved_session.save(
+                            update_fields=["browser_session_key", "user"]
+                        )
+                    else:
+                        preserved_session.save(update_fields=["browser_session_key"])
+                    return preserved_session, False
 
         if chat_session is not None:
             is_expired = chat_session.last_message_at <= now - CHAT_SESSION_IDLE_TIMEOUT

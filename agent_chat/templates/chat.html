@@ -238,6 +238,36 @@
         renderMarkdownContent(activeReply, activeReplyContent);
     }
 
+    function appendAuthActions(data, bubble = activeReply) {
+        if (!bubble) {
+            return;
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "mt-3 flex flex-wrap gap-2";
+        for (const [url, label] of [
+            [data.login_url, "Sign in"],
+            [data.create_account_url, "Create an account"],
+        ]) {
+            const destination = new URL(url, window.location.origin);
+            if (destination.origin !== window.location.origin) {
+                continue;
+            }
+            const link = document.createElement("a");
+            link.className = "btn btn-sm btn-primary";
+            link.href = destination.href;
+            link.textContent = label;
+            actions.append(link);
+        }
+        if (actions.childElementCount) {
+            if (bubble === activeReply) {
+                replyStarted = true;
+            }
+            bubble.append(actions);
+            scrollToLatest();
+        }
+    }
+
     function showUnavailable() {
         status.textContent = "Connection closed. Refresh to reconnect.";
         sendButton.disabled = true;
@@ -329,6 +359,33 @@
                     }
                     scrollToLatest("auto");
                 }
+                if (data.auth_actions) {
+                    if (!data.messages.length) {
+                        document.getElementById("chat-welcome")?.remove();
+                        const bubble = appendMessage(
+                            "assistant",
+                            "Please sign in or create an account to save your reservation.",
+                            false,
+                            false,
+                        );
+                        appendAuthActions(data.auth_actions, bubble);
+                    } else {
+                        const assistantMessages = conversation.querySelectorAll(".chat-start");
+                        const lastAssistant = assistantMessages[assistantMessages.length - 1];
+                        const bubble = lastAssistant?.querySelector(".chat-bubble");
+                        if (bubble) {
+                            appendAuthActions(data.auth_actions, bubble);
+                        } else {
+                            const reply = appendMessage(
+                                "assistant",
+                                "Please sign in or create an account to save your reservation.",
+                                false,
+                                false,
+                            );
+                            appendAuthActions(data.auth_actions, reply);
+                        }
+                    }
+                }
             } else if (data.type === "session_expired") {
                 expiredSession = true;
                 activeReply = null;
@@ -345,6 +402,8 @@
                     renderActiveReply(activeReplyContent + data.content);
                     scrollToLatest("auto");
                 }
+            } else if (data.type === "auth_actions") {
+                appendAuthActions(data);
             } else if (data.type === "done") {
                 if (activeReply && !replyStarted) {
                     activeReply.parentElement.remove();

@@ -1,29 +1,31 @@
 import os
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import create_agent
-from langchain.agents.middleware import SummarizationMiddleware
 
+from langchain.agents import create_agent
+from langchain.agents.middleware import (
+    ModelRequest,
+    SummarizationMiddleware,
+    dynamic_prompt as dynamic_prompt_middleware,
+)
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+from .context import AgentContext
+from .functions.branches_facilities import get_branch, get_facility
+from .functions.current_time import get_current_datetime
+from .functions.reservations import (
+    add_pending_reservation,
+    check_reservation_availability,
+    get_latest_reservation,
+)
 from .models import DjangoCheckpointSaver
 from .rag import search_docs
 
+
 llm = ChatGoogleGenerativeAI(
     model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
-    api_key=os.getenv("GEMINI_API_KEY")
+    api_key=os.getenv("GEMINI_API_KEY"),
 )
 
-agent = create_agent(
-    model=llm,
-    tools=[search_docs],
-    checkpointer=DjangoCheckpointSaver(),
-    middleware=[
-        SummarizationMiddleware(
-            model=llm,
-            trigger=("messages", 20),
-            keep=("messages", 10),
-        )
-    ],
-    debug=True,
-    system_prompt=(
+_SYSTEM_PROMPT = (
         "IDENTITY AND ROLE\n\n"
         "You are ResortEase Assistance, the official AI assistant for ResortEase Software.\n"
         "Your primary responsibility is to assist guests with resort-related information, services, facilities, policies, reservations, and other tasks explicitly supported by your available tools.\n"
@@ -119,6 +121,63 @@ agent = create_agent(
         "Your goal is to provide reliable and helpful assistance to ResortEase guests while protecting their privacy, following resort policies, and staying within your authorized capabilities.\n\n"
         "Always remember: You are ResortEase Assistance, not a general-purpose AI assistant. Never guess, never fabricate information, never claim unsupported capabilities, and never perform tasks outside your authorized scope.\n\n"
         "If you do not know the answer or cannot perform the requested task, politely tell the user and direct them to contact ResortEase."
-    ),
+        "\n\nRESERVATION WORKFLOW\n\n"
+        "Use the reservation tools for availability checks, reservation creation, and the authenticated guest's latest reservation.\n"
+        "When answering questions about today's date, current time, or relative reservation dates such as today or tomorrow, use the current date/time tool. Interpret reservation times in the ResortEase local timezone.\n"
+        "Availability replies must be brief and must not expose reservation or guest details.\n"
+        "The morning rate has a fixed time of 8:00 AM to 5:00 PM on the same day; the evening rate has a fixed time of 7:00 PM to 6:00 AM the following day. These rates cannot use a different start time. When collecting reservation details, explain these fixed times and ask the guest to choose a matching start time.\n"
+        "A staged reservation is not saved until authentication succeeds. Tell the guest to sign in or create an account; login and account buttons will appear in the chat.\n"
+        "After authentication, the reservation is saved automatically and a static chat confirmation is shown.\n"
+        "Never claim a reservation is confirmed: newly created reservation requests have pending status.\n"
+        "For unauthenticated guests asking for their latest reservation, request sign-in or account creation without revealing reservation data.\n"
+)
+
+
+def dynamic_prompt(request: ModelRequest[AgentContext]) -> str:
+    context = getattr(request.runtime, "context", None)
+    is_authenticated = context is not None and context.user_id is not None
+    if not is_authenticated:
+        return (
+            f"{_SYSTEM_PROMPT}\n\n"
+            "AUTHENTICATION CONTEXT\n"
+            "The user is not authenticated. Address them as User. "
+            "Do not access or disclose account-specific reservation information."
+        )
+
+    first_name = context.first_name.strip() or "User"
+    return (
+        f"{_SYSTEM_PROMPT}\n\n"
+        "AUTHENTICATION CONTEXT\n"
+        "The user is authenticated. You may use the reservation tools only for "
+        "this user's own account. Address them by their first name: "
+        f"{first_name}."
+    )
+
+
+dynamic_prompt_middleware_instance = dynamic_prompt_middleware(dynamic_prompt)
+
+
+agent = create_agent(
+    model=llm,
+    tools=[
+        search_docs,
+        get_branch,
+        get_facility,
+        get_current_datetime,
+        check_reservation_availability,
+        add_pending_reservation,
+        get_latest_reservation,
+    ],
+    checkpointer=DjangoCheckpointSaver(),
+    middleware=[
+        dynamic_prompt_middleware_instance,
+        SummarizationMiddleware(
+            model=llm,
+            trigger=("messages", 20),
+            keep=("messages", 10),
+        ),
+    ],
+    context_schema=AgentContext,
+    debug=True,
 )
         
