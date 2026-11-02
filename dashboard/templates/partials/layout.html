@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-timezone="{{ TIME_ZONE }}">
+<html lang="en" data-theme="{{ current_theme }}" data-timezone="{{ TIME_ZONE }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -40,6 +40,7 @@
                     </label>
                 </div>
                 <div class="navbar-end gap-1 sm:gap-3">
+                    {% include "partials/theme_picker.html" %}
                     <a class="btn btn-primary btn-sm" href="/dashboard/{{ request.branch.slug }}/reservations/booking/new/">Create booking</a>
                     <details class="dropdown dropdown-end">
                         <summary class="btn btn-ghost btn-circle avatar" aria-label="Open account menu">

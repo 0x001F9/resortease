@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-timezone="{{ TIME_ZONE }}">
+<html lang="en" data-theme="{{ current_theme }}" data-timezone="{{ TIME_ZONE }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,6 +26,7 @@
                 </nav>
             </div>
             <div class="navbar-end gap-2">
+                {% include "partials/theme_picker.html" %}
                 <a class="btn btn-primary btn-sm hidden sm:inline-flex" href="{% url 'chat' %}">Inquiry</a>
                 <div class="dropdown dropdown-end md:hidden">
                     <button type="button" class="btn btn-ghost btn-sm" aria-label="Open site navigation">Menu</button>

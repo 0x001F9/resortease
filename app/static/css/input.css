@@ -23,5 +23,5 @@
 
 
 @plugin "./daisyui.mjs" {
-  themes: forest --default;
+  themes: all;
 };

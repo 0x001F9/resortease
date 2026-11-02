@@ -14,6 +14,14 @@ from .views.security import mask_email
 from dashboard.models import Branch, Calendar, Facility, Reservation
 
 
+class LoginPasswordVisibilityTests(TestCase):
+    def test_login_page_has_password_visibility_control(self):
+        response = self.client.get(reverse("login"))
+
+        self.assertContains(response, 'id="toggle-password"', html=False)
+        self.assertContains(response, 'aria-label="Show password"', html=False)
+
+
 class EmailVerificationLoginTests(TestCase):
     def create_unverified_user(self, username):
         return User.object.create_user(

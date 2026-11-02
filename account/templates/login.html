@@ -22,7 +22,21 @@
                         <span class="label-text font-medium">Password</span>
                         <a href="{% url 'forgot-password' %}" class="link link-hover label-text-alt">Forgot password?</a>
                     </span>
-                    <input type="password" id="password" name="password" class="input input-bordered w-full" autocomplete="current-password" required />
+                    <span class="relative block">
+                        <input type="password" id="password" name="password" class="input input-bordered w-full pr-12" autocomplete="current-password" required />
+                        <button type="button" id="toggle-password" class="btn btn-ghost btn-sm btn-circle absolute right-1 top-1/2 -translate-y-1/2" aria-label="Show password" aria-pressed="false">
+                            <svg id="password-eye" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <svg id="password-eye-off" xmlns="http://www.w3.org/2000/svg" class="hidden h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M3 3l18 18"></path>
+                                <path d="M10.6 10.6a2 2 0 002.8 2.8"></path>
+                                <path d="M9.9 4.2A10.5 10.5 0 0122 12a16 16 0 01-2.3 3"></path>
+                                <path d="M6.6 6.6A16 16 0 002 12s3.5 7 10 7a9.8 9.8 0 004.1-.9"></path>
+                            </svg>
+                        </button>
+                    </span>
                 </label>
                 <button type="submit" class="btn btn-primary mt-2 w-full">Sign in</button>
             </form>
@@ -30,4 +44,20 @@
         </div>
     </section>
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const passwordInput = document.getElementById("password")
+    const togglePassword = document.getElementById("toggle-password")
+
+    togglePassword.addEventListener("click", () => {
+        const showPassword = passwordInput.type === "password"
+        passwordInput.type = showPassword ? "text" : "password"
+        togglePassword.setAttribute("aria-label", showPassword ? "Hide password" : "Show password")
+        togglePassword.setAttribute("aria-pressed", String(showPassword))
+        document.getElementById("password-eye").classList.toggle("hidden", showPassword)
+        document.getElementById("password-eye-off").classList.toggle("hidden", !showPassword)
+    })
+</script>
 {% endblock %}

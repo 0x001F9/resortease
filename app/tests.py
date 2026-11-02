@@ -16,6 +16,35 @@ from dashboard.models import (
     Payment,
     Reservation,
 )
+from app.theme import DEFAULT_THEME, THEME_COOKIE_NAME
+
+
+class ThemeTests(TestCase):
+    def test_public_page_defaults_to_forest_theme(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, 'data-theme="forest"', html=False)
+
+    def test_theme_change_sets_cookie(self):
+        response = self.client.post(
+            reverse("change-theme"),
+            {"theme": "nord", "next": reverse("home")},
+        )
+
+        self.assertRedirects(response, reverse("home"))
+        self.assertEqual(self.client.cookies[THEME_COOKIE_NAME].value, "nord")
+
+    def test_theme_change_rejects_unknown_theme(self):
+        response = self.client.post(
+            reverse("change-theme"),
+            {"theme": "not-a-theme", "next": reverse("home")},
+        )
+
+        self.assertRedirects(response, reverse("home"))
+        self.assertEqual(
+            self.client.cookies[THEME_COOKIE_NAME].value,
+            DEFAULT_THEME,
+        )
 
 
 class PublicResortPagesTests(TestCase):

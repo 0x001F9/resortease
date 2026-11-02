@@ -1,0 +1,36 @@
+<details class="dropdown dropdown-end">
+    <summary class="btn btn-ghost btn-circle" aria-label="Change theme" title="Change theme">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+        </svg>
+    </summary>
+    <ul class="menu dropdown-content z-40 mt-3 h-80 w-56 flex-col flex-nowrap overflow-x-hidden overflow-y-scroll rounded-box border border-base-300 bg-base-100 p-2 shadow-xl gap-1">
+        {% for theme in daisyui_themes %}
+            <li class="w-full ">
+                <form class="flex w-full p-0" action="{% url 'change-theme' %}" method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}" />
+                    <input type="hidden" name="theme" value="{{ theme }}" />
+                    <button
+                        type="submit"
+                        class="h-8 w-full px-2 py-1 text-sm text-base-content flex-1 hover:bg-base-200 rounded-sm"
+                        data-theme="{{ theme }}"
+                    >
+                        <div class="flex items-center gap-2 w-full">
+                            <span class="grid grid-cols-2 gap-1 rounded-box bg-base-300 p-1">
+                                <span class="h-2 w-2 rounded-sm bg-primary"></span>
+                                <span class="h-2 w-2 rounded-sm bg-secondary"></span>
+                                <span class="h-2 w-2 rounded-sm bg-accent"></span>
+                                <span class="h-2 w-2 rounded-sm bg-neutral"></span>
+                            </span>
+                            <span class="capitalize">{{ theme }}</span>
+
+                            {% if theme == current_theme %}<span aria-hidden="true">✓</span>{% endif %}
+                        </div>
+                    </button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+</details>
