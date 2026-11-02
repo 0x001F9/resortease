@@ -1,4 +1,9 @@
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import Q
+
 from account.models import User
 
 class Branch(models.Model):
@@ -64,20 +69,25 @@ class Facility(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    rate_24hours = models.PositiveIntegerField(null=True, default=None)
-    rate_22hours = models.PositiveIntegerField(null=True, default=None)
+    rate_24hours = models.DecimalField(max_digits=12, decimal_places=2, null=True, default=None, validators=[MinValueValidator(Decimal("1.01"))])
+    rate_22hours = models.DecimalField(max_digits=12, decimal_places=2, null=True, default=None, validators=[MinValueValidator(Decimal("1.01"))])
     # 8AM to 5PM = 9 hours
-    rate_morning = models.PositiveIntegerField(null=True, default=None)
+    rate_morning = models.DecimalField(max_digits=12, decimal_places=2, null=True, default=None, validators=[MinValueValidator(Decimal("1.01"))])
     # 7PM to 6AM = 11 hours
-    rate_evening = models.PositiveIntegerField(null=True, default=None)
+    rate_evening = models.DecimalField(max_digits=12, decimal_places=2, null=True, default=None, validators=[MinValueValidator(Decimal("1.01"))])
     # Additional amount charged when the facility exceeds the included hours,
     # calculated per extra hour.
-    rate_per_extra_hour = models.PositiveIntegerField(null=True, default=None)
+    rate_per_extra_hour = models.DecimalField(max_digits=12, decimal_places=2, null=True, default=None, validators=[MinValueValidator(Decimal("1.01"))])
 
     class Meta:
         db_table = "facilities"
         constraints = [
-            models.UniqueConstraint(fields=["branch", "name"], name="unique_branch_facility_name")
+            models.UniqueConstraint(fields=["branch", "name"], name="unique_branch_facility_name"),
+            models.CheckConstraint(condition=Q(rate_24hours__isnull=True) | Q(rate_24hours__gt=Decimal("1.00")), name="facility_rate_24hours_gt_1"),
+            models.CheckConstraint(condition=Q(rate_22hours__isnull=True) | Q(rate_22hours__gt=Decimal("1.00")), name="facility_rate_22hours_gt_1"),
+            models.CheckConstraint(condition=Q(rate_morning__isnull=True) | Q(rate_morning__gt=Decimal("1.00")), name="facility_rate_morning_gt_1"),
+            models.CheckConstraint(condition=Q(rate_evening__isnull=True) | Q(rate_evening__gt=Decimal("1.00")), name="facility_rate_evening_gt_1"),
+            models.CheckConstraint(condition=Q(rate_per_extra_hour__isnull=True) | Q(rate_per_extra_hour__gt=Decimal("1.00")), name="facility_extra_hour_gt_1"),
         ]
 
     def __str__(self):

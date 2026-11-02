@@ -106,6 +106,37 @@
                         >{{ form_data.description }}</textarea>
                     </label>
 
+                    <fieldset class="mt-2 rounded-box border border-base-300 p-5 sm:p-6">
+                        <legend class="px-2 text-sm font-semibold">Facility rates</legend>
+                        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6">
+                            <label class="form-control w-full">
+                                <span class="label"><span class="label-text font-medium">24-hour rate</span></span>
+                                <input type="number" name="rate_24hours" value="{{ form_data.rate_24hours }}" min="1.01" max="2147483647.99" step="0.01" class="input input-bordered w-full {% if errors.rate_24hours %}input-error{% endif %}">
+                                {% if errors.rate_24hours %}<span class="mt-1 text-sm text-error">{{ errors.rate_24hours }}</span>{% endif %}
+                            </label>
+                            <label class="form-control w-full">
+                                <span class="label"><span class="label-text font-medium">22-hour rate</span></span>
+                                <input type="number" name="rate_22hours" value="{{ form_data.rate_22hours }}" min="1.01" max="2147483647.99" step="0.01" class="input input-bordered w-full {% if errors.rate_22hours %}input-error{% endif %}">
+                                {% if errors.rate_22hours %}<span class="mt-1 text-sm text-error">{{ errors.rate_22hours }}</span>{% endif %}
+                            </label>
+                            <label class="form-control w-full">
+                                <span class="label"><span class="label-text font-medium">Morning rate</span></span>
+                                <input type="number" name="rate_morning" value="{{ form_data.rate_morning }}" min="1.01" max="2147483647.99" step="0.01" class="input input-bordered w-full {% if errors.rate_morning %}input-error{% endif %}">
+                                {% if errors.rate_morning %}<span class="mt-1 text-sm text-error">{{ errors.rate_morning }}</span>{% endif %}
+                            </label>
+                            <label class="form-control w-full">
+                                <span class="label"><span class="label-text font-medium">Evening rate</span></span>
+                                <input type="number" name="rate_evening" value="{{ form_data.rate_evening }}" min="1.01" max="2147483647.99" step="0.01" class="input input-bordered w-full {% if errors.rate_evening %}input-error{% endif %}">
+                                {% if errors.rate_evening %}<span class="mt-1 text-sm text-error">{{ errors.rate_evening }}</span>{% endif %}
+                            </label>
+                            <label class="form-control w-full sm:col-span-2">
+                                <span class="label"><span class="label-text font-medium">Rate per extra hour</span></span>
+                                <input type="number" name="rate_per_extra_hour" value="{{ form_data.rate_per_extra_hour }}" min="1.01" max="2147483647.99" step="0.01" class="input input-bordered w-full {% if errors.rate_per_extra_hour %}input-error{% endif %}">
+                                {% if errors.rate_per_extra_hour %}<span class="mt-1 text-sm text-error">{{ errors.rate_per_extra_hour }}</span>{% endif %}
+                            </label>
+                        </div>
+                    </fieldset>
+
                     <div class="flex flex-col-reverse gap-3 border-t border-base-300 pt-6 sm:flex-row sm:justify-end">
                         <a href="/dashboard/{{ branch.slug }}/{{ facility.slug }}/" class="btn btn-ghost">
                             Cancel

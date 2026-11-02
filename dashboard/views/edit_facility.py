@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -31,6 +33,11 @@ class EditFacilityView(View):
                 "description": facility.description,
                 "status": facility.status,
                 "capacity": facility.capacity,
+                "rate_24hours": facility.rate_24hours,
+                "rate_22hours": facility.rate_22hours,
+                "rate_morning": facility.rate_morning,
+                "rate_evening": facility.rate_evening,
+                "rate_per_extra_hour": facility.rate_per_extra_hour,
             },
             "errors": errors or {},
             "hide_aside": True,
@@ -52,6 +59,11 @@ class EditFacilityView(View):
             "description": request.POST.get("description", "").strip(),
             "status": request.POST.get("status", "").strip(),
             "capacity": request.POST.get("capacity", "").strip(),
+            "rate_24hours": request.POST.get("rate_24hours", "").strip(),
+            "rate_22hours": request.POST.get("rate_22hours", "").strip(),
+            "rate_morning": request.POST.get("rate_morning", "").strip(),
+            "rate_evening": request.POST.get("rate_evening", "").strip(),
+            "rate_per_extra_hour": request.POST.get("rate_per_extra_hour", "").strip(),
         }
         errors = {}
 
@@ -78,6 +90,31 @@ class EditFacilityView(View):
             if capacity > 2147483647:
                 errors["capacity"] = "Capacity must be 2,147,483,647 or fewer."
 
+        rates = {}
+        for field, label in (
+            ("rate_24hours", "The 24-hour rate"),
+            ("rate_22hours", "The 22-hour rate"),
+            ("rate_morning", "The morning rate"),
+            ("rate_evening", "The evening rate"),
+            ("rate_per_extra_hour", "The extra-hour rate"),
+        ):
+            value = form_data[field]
+            if not value:
+                rates[field] = None
+                continue
+            try:
+                parsed = Decimal(value)
+                if (
+                    not parsed.is_finite()
+                    or parsed <= Decimal("1.00")
+                    or parsed > Decimal("2147483647.99")
+                    or parsed.as_tuple().exponent < -2
+                ):
+                    raise InvalidOperation
+                rates[field] = parsed.quantize(Decimal("0.01"))
+            except (InvalidOperation, ValueError):
+                errors[field] = f"Enter {label} greater than 1.00 with up to 2 decimal places."
+
         if errors:
             return render(
                 request,
@@ -90,6 +127,8 @@ class EditFacilityView(View):
         facility.description = form_data["description"]
         facility.status = form_data["status"]
         facility.capacity = capacity
+        for field, value in rates.items():
+            setattr(facility, field, value)
         facility.save()
 
         return redirect(

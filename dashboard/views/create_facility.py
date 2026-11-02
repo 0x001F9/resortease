@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.text import slugify
@@ -46,15 +48,19 @@ class CreateFacilityView(View):
         value = form_data[field_name].strip()
         if not value:
             return None
-        if not value.isdecimal():
-            errors[field_name] = f"Enter {label} of zero or greater."
+        try:
+            parsed = Decimal(value)
+            if (
+                not parsed.is_finite()
+                or parsed <= Decimal("1.00")
+                or parsed > Decimal("2147483647.99")
+                or parsed.as_tuple().exponent < -2
+            ):
+                raise InvalidOperation
+        except (InvalidOperation, ValueError):
+            errors[field_name] = f"Enter {label} greater than 1.00 with up to 2 decimal places."
             return None
-
-        parsed = int(value)
-        if parsed > 2147483647:
-            errors[field_name] = f"{label} must be 2,147,483,647 or fewer."
-            return None
-        return parsed
+        return parsed.quantize(Decimal("0.01"))
 
     def post(self, request):
         form_data = {
