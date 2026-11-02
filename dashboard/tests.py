@@ -4573,6 +4573,14 @@ class DashboardAndFinancialReportTests(TestCase):
             filtered_response.context["transaction_page"].object_list[0]["amount"],
             first_payment.amount,
         )
+        self.assertContains(
+            filtered_response,
+            'name="payment_method"',
+        )
+        self.assertContains(
+            filtered_response,
+            'name="payment_status"',
+        )
 
         expense_response = self.client.get(
             reverse("financial-reports", kwargs={"branch": self.branch.slug}),
