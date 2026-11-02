@@ -29,6 +29,15 @@ class ReservationsCalendarView(View):
         now = timezone.now()
         Reservation.objects.filter(
             facility__branch=request.branch,
+            calendar_entry__isnull=False,
+        ).exclude(
+            status=Reservation.Status.CONFIRMED
+        ).update(
+            status=Reservation.Status.CONFIRMED,
+            updated_at=now,
+        )
+        Reservation.objects.filter(
+            facility__branch=request.branch,
             status=Reservation.Status.PENDING,
             starts_at__lte=now,
         ).update(

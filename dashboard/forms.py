@@ -3,9 +3,11 @@ from decimal import Decimal
 from django import forms
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
 from dashboard.models import (
+    Calendar,
     Expense,
     Inventory,
     InventoryAsset,
@@ -173,6 +175,9 @@ class PaymentForm(forms.ModelForm):
 
 
 class ReservationEditForm(forms.ModelForm):
+    status = forms.ChoiceField(
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"})
+    )
     party_size = forms.IntegerField(
         required=False,
         min_value=1,
@@ -210,6 +215,67 @@ class ReservationEditForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         facility = self.instance.facility
+        ends_at = self.instance.ends_at
+        if self.is_bound:
+            ends_at_value = self.data.get(self.add_prefix("ends_at"))
+            if ends_at_value:
+                try:
+                    parsed_ends_at = parse_datetime(ends_at_value)
+                    if parsed_ends_at is not None:
+                        if timezone.is_naive(parsed_ends_at):
+                            parsed_ends_at = timezone.make_aware(parsed_ends_at)
+                        ends_at = parsed_ends_at
+                except (TypeError, ValueError):
+                    pass
+        if (
+            self.instance.pk
+            and (
+                self.instance.status == Reservation.Status.PENDING
+                or (
+                    self.instance.status == Reservation.Status.CONFIRMED
+                    and ends_at >= timezone.now()
+                )
+            )
+        ):
+            if self.instance.status == Reservation.Status.PENDING:
+                self.fields["status"].choices = [
+                    choice
+                    for choice in Reservation.Status.choices
+                    if choice[0] != Reservation.Status.CONFIRMED
+                ]
+            else:
+                excluded_statuses = {
+                    Calendar.Status.UNAVAILABLE,
+                    Calendar.Status.CONFIRMED,
+                    Calendar.Status.COMPLETED,
+                }
+                self.fields["status"].choices = [
+                    choice
+                    for choice in Calendar.Status.choices
+                    if choice[0] not in excluded_statuses
+                ]
+        elif self.instance.pk and self.instance.status == Reservation.Status.CONFIRMED:
+            self.fields["status"].choices = [
+                choice
+                for choice in Calendar.Status.choices
+                if choice[0] != Calendar.Status.UNAVAILABLE
+            ]
+        elif self.instance.pk:
+            self.fields["status"].choices = Reservation.Status.choices
+            if self.instance.status == Reservation.Status.DECLINED:
+                self.fields["status"].choices = [
+                    choice
+                    for choice in Reservation.Status.choices
+                    if choice[0] != Reservation.Status.CONFIRMED
+                ]
+        if (
+            self.instance.pk
+            and not self.is_bound
+            and self.instance.status == Reservation.Status.CONFIRMED
+        ):
+            calendar_entry = getattr(self.instance, "calendar_entry", None)
+            if calendar_entry is not None:
+                self.initial["status"] = calendar_entry.status
         if facility is not None and facility.capacity > 0:
             self.fields["party_size"].help_text = (
                 f"Facility capacity: {facility.capacity} guests. "
@@ -267,6 +333,33 @@ class ReservationEditForm(forms.ModelForm):
         if party_size is None:
             return self.instance.party_size
         return party_size
+
+    def clean_status(self):
+        status = self.cleaned_data["status"]
+        if self.instance.status == Reservation.Status.PENDING:
+            if status == Reservation.Status.CONFIRMED:
+                raise forms.ValidationError(
+                    "Confirmed is not available for this reservation."
+                )
+        elif self.instance.status == Reservation.Status.CONFIRMED:
+            valid_statuses = {
+                value
+                for value, _label in Calendar.Status.choices
+                if value != Calendar.Status.UNAVAILABLE
+            }
+            ends_at = self.cleaned_data.get("ends_at", self.instance.ends_at)
+            if ends_at >= timezone.now():
+                valid_statuses.discard(Calendar.Status.CONFIRMED)
+                valid_statuses.discard(Calendar.Status.COMPLETED)
+            if status not in valid_statuses:
+                raise forms.ValidationError(
+                    "Select a valid status for this booking."
+                )
+        elif status == Reservation.Status.CONFIRMED:
+            raise forms.ValidationError(
+                "Confirmed is not available for this reservation."
+            )
+        return status
 
     def clean(self):
         cleaned_data = super().clean()

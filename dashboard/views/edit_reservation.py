@@ -64,8 +64,6 @@ class EditReservationView(View):
             pk=reservation_id,
             facility__branch=request.branch,
         )
-        if reservation.status == Reservation.Status.CONFIRMED:
-            return None
         return reservation
 
     def get(self, request, reservation_id, *args, **kwargs):
@@ -113,52 +111,42 @@ class EditReservationView(View):
                         "This facility already has a calendar entry during that time.",
                     )
                 else:
-                    reservation = form.save()
+                    original_status = reservation.status
+                    reservation = form.save(commit=False)
+                    if original_status == Reservation.Status.CONFIRMED:
+                        reservation.status = Reservation.Status.CONFIRMED
                     reservation.raw_amount = form.calculated_raw_amount
-                    reservation.save(
-                        update_fields=["raw_amount", "updated_at"]
-                    )
-                    if status == Reservation.Status.CONFIRMED:
+                    reservation.save()
+                    if original_status == Reservation.Status.CONFIRMED:
                         if calendar_entry is None:
                             Calendar.objects.create(
                                 reservation=reservation,
                                 facility=reservation.facility,
                                 starts_at=reservation.starts_at,
                                 ends_at=reservation.ends_at,
-                                status=Calendar.Status.CONFIRMED,
+                                status=status,
+                                notes=reservation.special_requests,
                             )
                         else:
                             calendar_entry.facility = reservation.facility
                             calendar_entry.starts_at = reservation.starts_at
                             calendar_entry.ends_at = reservation.ends_at
-                            calendar_entry.status = Calendar.Status.CONFIRMED
+                            calendar_entry.status = status
+                            calendar_entry.notes = reservation.special_requests
                             calendar_entry.save(
                                 update_fields=[
                                     "facility",
                                     "starts_at",
                                     "ends_at",
                                     "status",
+                                    "notes",
                                     "updated_at",
                                 ]
                             )
-                        Reservation.objects.decline_conflicts(reservation)
-                    elif calendar_entry:
-                        calendar_entry.facility = reservation.facility
-                        calendar_entry.starts_at = reservation.starts_at
-                        calendar_entry.ends_at = reservation.ends_at
-                        calendar_entry.status = Calendar.Status.CANCELLED
-                        calendar_entry.save(
-                            update_fields=[
-                                "facility",
-                                "starts_at",
-                                "ends_at",
-                                "status",
-                                "updated_at",
-                            ]
-                        )
-                        Reservation.objects.cancel_pending_payments(
-                            reservation
-                        )
+                        if status == Calendar.Status.CONFIRMED:
+                            Reservation.objects.decline_conflicts(reservation)
+                        elif status == Calendar.Status.CANCELLED:
+                            Reservation.objects.cancel_pending_payments(reservation)
 
                     return redirect(
                         reverse(

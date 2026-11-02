@@ -36,7 +36,7 @@
                 <section aria-labelledby="stay-heading">
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <h2 id="stay-heading" class="text-lg font-semibold">Reservation</h2>
-                        {% if reservation.status != 'confirmed' %}
+                        {% if reservation.status != 'declined' %}
                             <a
                                 class="btn btn-outline btn-sm"
                                 href="{% url 'edit-reservation' request.branch.slug reservation.pk %}"
@@ -277,14 +277,7 @@
                     {% endif %}
                     </section>
 
-                    {% if calendar_entry %}
-                        <div class="mt-5 flex justify-end">
-                            <a
-                                class="btn btn-outline"
-                                href="{% url 'edit-calendar-entry' request.branch.slug calendar_entry.pk %}"
-                            >Edit booking</a>
-                        </div>
-                    {% else %}
+                    {% if not calendar_entry %}
                         <p class="rounded-box border border-base-300 p-4 text-sm text-base-content/70">
                             This reservation has not been added to the calendar as a booking yet.
                         </p>

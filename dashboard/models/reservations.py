@@ -142,12 +142,14 @@ class Reservation(models.Model):
     @property
     def current_status(self):
         calendar_entry = getattr(self, "calendar_entry", None)
-        return calendar_entry.status if calendar_entry else self.status
+        if self.status == Reservation.Status.CONFIRMED and calendar_entry:
+            return calendar_entry.status
+        return self.status
 
     @property
     def current_status_display(self):
         calendar_entry = getattr(self, "calendar_entry", None)
-        if calendar_entry:
+        if self.status == Reservation.Status.CONFIRMED and calendar_entry:
             return calendar_entry.get_status_display()
         return self.get_status_display()
 
@@ -208,8 +210,13 @@ class Calendar(models.Model):
         if self.reservation_id is None:
             self.booking_reference = None
             self.status = self.Status.UNAVAILABLE
-        elif self.booking_reference is None:
-            self.booking_reference = uuid.uuid4()
+        else:
+            if self.booking_reference is None:
+                self.booking_reference = uuid.uuid4()
+            Reservation.objects.filter(pk=self.reservation_id).update(
+                status=Reservation.Status.CONFIRMED,
+                updated_at=timezone.now(),
+            )
         super().save(*args, **kwargs)
 
     @property

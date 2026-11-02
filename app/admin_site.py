@@ -1,10 +1,9 @@
+from account.admin import CustomUserAdmin
+from django.apps import apps
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.shortcuts import redirect
-from account.admin import CustomUserAdmin
-from dashboard.models.branches_facilities import Branch, Facility, Maintenance
-from dashboard.models.inventory import Inventory, InventoryTransaction
-from dashboard.models.inventory_assets import InventoryAsset, InventoryAssetHistory
+
 
 class SuperUserAdmin(admin.AdminSite):
     def has_permission(self, request):
@@ -13,18 +12,17 @@ class SuperUserAdmin(admin.AdminSite):
     def login(self, request, extra_context=None):
         return redirect("/login/")
 
-admin_site = SuperUserAdmin(name='admin')
 
-for model, model_admin in admin.site._registry.items():
-    if model is get_user_model():
+admin_site = SuperUserAdmin(name="admin")
+user_model = get_user_model()
+
+for model, default_model_admin in admin.site._registry.items():
+    if model is user_model:
         continue
-    admin_site.register(model, model_admin.__class__)
+    admin_site.register(model, default_model_admin.__class__)
 
-admin_site.register(get_user_model(), CustomUserAdmin)
-admin_site.register(Branch)
-admin_site.register(Facility)
-admin_site.register(Maintenance)
-admin_site.register(Inventory)
-admin_site.register(InventoryTransaction)
-admin_site.register(InventoryAsset)
-admin_site.register(InventoryAssetHistory)
+admin_site.register(user_model, CustomUserAdmin)
+
+for model in apps.get_models():
+    if not admin_site.is_registered(model):
+        admin_site.register(model)

@@ -351,17 +351,31 @@ class EditCalendarEntryView(View):
     def get_form_context(self, request, entry, form_data=None, errors=None):
         form_data = form_data or {}
         reservation = entry.reservation if entry.reservation_id else None
+        status_choices = [
+            choice
+            for choice in Calendar.Status.choices
+            if choice[0] != Calendar.Status.UNAVAILABLE
+        ]
+        ends_at = entry.ends_at
+        if form_data.get("ends_at"):
+            parsed_ends_at = parse_datetime(form_data["ends_at"])
+            if parsed_ends_at is not None:
+                if timezone.is_naive(parsed_ends_at):
+                    parsed_ends_at = timezone.make_aware(parsed_ends_at)
+                ends_at = parsed_ends_at
+        if ends_at >= timezone.now():
+            status_choices = [
+                choice
+                for choice in status_choices
+                if choice[0] != Calendar.Status.CONFIRMED
+            ]
         return {
             "entry": entry,
             "reservation": reservation,
             "facilities": with_in_progress_maintenance(
                 Facility.objects.filter(branch=request.branch).order_by("name")
             ),
-            "status_choices": [
-                choice
-                for choice in Calendar.Status.choices
-                if choice[0] != Calendar.Status.UNAVAILABLE
-            ],
+            "status_choices": status_choices,
             "form_data": form_data or {
                 "facility": str(entry.facility_id),
                 "starts_at": timezone.localtime(entry.starts_at).strftime(
@@ -385,6 +399,12 @@ class EditCalendarEntryView(View):
         entry = self.get_entry(request, entry_id)
         if entry.status == Calendar.Status.CANCELLED:
             return redirect("reservations", branch=request.branch.slug)
+        if entry.reservation_id is not None:
+            return redirect(
+                "edit-reservation",
+                branch=request.branch.slug,
+                reservation_id=entry.reservation_id,
+            )
         return render(
             request,
             self.template_name,
@@ -395,6 +415,12 @@ class EditCalendarEntryView(View):
         entry = self.get_entry(request, entry_id)
         if entry.status == Calendar.Status.CANCELLED:
             return redirect("reservations", branch=request.branch.slug)
+        if entry.reservation_id is not None:
+            return redirect(
+                "edit-reservation",
+                branch=request.branch.slug,
+                reservation_id=entry.reservation_id,
+            )
 
         facility_id = request.POST.get("facility", "").strip()
         starts_at_value = request.POST.get("starts_at", "").strip()
@@ -450,6 +476,8 @@ class EditCalendarEntryView(View):
                 Calendar.Status.CANCELLED,
                 Calendar.Status.COMPLETED,
             }
+            if ends_at is not None and ends_at >= timezone.now():
+                valid_statuses.discard(Calendar.Status.CONFIRMED)
             if status not in valid_statuses:
                 errors["status"] = "Select a valid booking status."
             party_size_value = request.POST.get(

@@ -20,6 +20,7 @@ from dashboard.models import (
     Reservation,
 )
 from dashboard.models.inventory_assets import InventoryAssetHistory
+from dashboard.forms import ReservationEditForm
 
 
 class CalendarEntryViewTests(TestCase):
@@ -80,6 +81,34 @@ class CalendarEntryViewTests(TestCase):
             ends_at=ends_at,
         )
         return reservation, entry
+
+    def test_upcoming_confirmed_booking_hides_confirmed_and_completed_statuses(self):
+        starts_at = timezone.now() + timedelta(days=1)
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+
+        form = ReservationEditForm(instance=reservation)
+        choices = {value for value, _label in form.fields["status"].choices}
+
+        self.assertNotIn(Calendar.Status.CONFIRMED, choices)
+        self.assertNotIn(Calendar.Status.COMPLETED, choices)
+        self.assertIn(Calendar.Status.CANCELLED, choices)
+
+        reservation.status = Reservation.Status.PENDING
+        reservation.save(update_fields=["status", "updated_at"])
+
+        form = ReservationEditForm(instance=reservation)
+        choices = {value for value, _label in form.fields["status"].choices}
+
+        self.assertEqual(
+            choices,
+            {
+                Reservation.Status.PENDING,
+                Reservation.Status.DECLINED,
+            },
+        )
 
     def get_calendar_day(self, response, selected_day):
         return next(
@@ -1185,7 +1214,7 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(payment.method, "")
         self.assertIsNone(payment.paid_at)
 
-    def test_edit_pending_reservation_updates_requests_discount_and_status(self):
+    def test_edit_pending_reservation_excludes_confirmed_status(self):
         self.facility.rate_24hours = 100
         self.facility.capacity = 5
         self.facility.save(update_fields=["rate_24hours", "capacity", "updated_at"])
@@ -1226,6 +1255,8 @@ class CalendarEntryViewTests(TestCase):
                 "reservation_id": reservation.pk,
             },
         )
+        edit_response = self.client.get(url)
+        self.assertNotContains(edit_response, '<option value="confirmed">Confirmed</option>', html=True)
 
         response = self.client.post(
             url,
@@ -1239,7 +1270,7 @@ class CalendarEntryViewTests(TestCase):
                 "party_size": "4",
                 "special_requests": "Please prepare towels.",
                 "discount": "20.00",
-                "status": Reservation.Status.CONFIRMED,
+                "status": Reservation.Status.PENDING,
             },
         )
 
@@ -1260,17 +1291,17 @@ class CalendarEntryViewTests(TestCase):
         )
         self.assertEqual(reservation.discount, Decimal("20.00"))
         self.assertEqual(reservation.party_size, 4)
-        self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
+        self.assertEqual(reservation.status, Reservation.Status.PENDING)
         self.assertEqual(reservation.starts_at, new_starts_at)
         self.assertEqual(reservation.raw_amount, Decimal("100.00"))
         entry = Calendar.objects.get(reservation=reservation)
-        self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
+        self.assertEqual(entry.status, Calendar.Status.CANCELLED)
         self.assertEqual(entry.starts_at, new_starts_at)
         self.assertEqual(entry.ends_at, new_starts_at + timedelta(hours=24))
         conflicting_reservation.refresh_from_db()
         self.assertEqual(
             conflicting_reservation.status,
-            Reservation.Status.DECLINED,
+            Reservation.Status.PENDING,
         )
 
     def test_edit_reservation_allows_party_size_above_facility_capacity(self):

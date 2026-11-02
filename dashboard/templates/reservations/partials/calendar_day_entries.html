@@ -37,7 +37,11 @@
                     {% endif %}
                     <a
                         class="btn btn-sm btn-outline"
-                        href="{% url 'edit-calendar-entry' request.branch.slug entry.pk %}"
+                        {% if entry.is_unavailable %}
+                            href="{% url 'edit-calendar-entry' request.branch.slug entry.pk %}"
+                        {% else %}
+                            href="{% url 'edit-reservation' request.branch.slug entry.reservation_id %}"
+                        {% endif %}
                     >Edit</a>
                     <form
                         method="post"
