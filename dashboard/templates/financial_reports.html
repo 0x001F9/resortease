@@ -64,7 +64,7 @@
 		</div>
 	</form>
 
-	<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Financial summary">
+	<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Financial summary">
 		<article class="card border border-base-300 bg-base-100">
 			<div class="card-body gap-1">
 				<p class="text-sm font-semibold text-base-content/60">Net recognized revenue</p>
@@ -86,13 +86,6 @@
 				<p class="text-xs text-base-content/60">Uncancelled stays ending in this period</p>
 			</div>
 		</article>
-		<article class="card border border-base-300 bg-base-100">
-			<div class="card-body gap-1">
-				<p class="text-sm font-semibold text-base-content/60">Operating expenses</p>
-				<p class="text-2xl font-bold">₱{{ operating_expenses|floatformat:2 }}</p>
-				<p class="text-xs text-base-content/60">Expenses recorded in ResortEase during this period</p>
-			</div>
-		</article>
 	</section>
 
 	<section class="grid gap-4 md:grid-cols-3">
@@ -111,19 +104,7 @@
 		</article>
 	</section>
 
-	<section class="card border border-warning/40 bg-base-100">
-		<div class="card-body">
-			<h2 class="card-title">Profit and loss is incomplete</h2>
-			<p>
-				Operating expenses include entries recorded in ResortEase. Cost of goods sold is unavailable because inventory consumption is not linked to sales, and this application has no POS sales records. Gross profit and net profit are therefore not reported. Refunds adjust completed-stay revenue, but the payment model stores only the latest status and update time, not an auditable refund history.
-			</p>
-			{% if unpriced_reservations %}
-				<p class="text-warning">{{ unpriced_reservations }} completed reservation(s) have no stored price and are excluded from revenue totals.</p>
-			{% endif %}
-		</div>
-	</section>
-
-	<section class="grid gap-6 xl:grid-cols-2">
+	<section class="grid gap-6 xl:grid-cols-1">
 	<article class="card border border-base-300 bg-base-100">
 		<div class="card-body">
 			<h2 class="card-title">Recognized revenue by facility category</h2>
@@ -140,23 +121,6 @@
 						</tbody>
 					</table>
 				</div>
-		</div>
-	</article>
-	<article class="card border border-base-300 bg-base-100">
-		<div class="card-body">
-			<h2 class="card-title">Expenses by category</h2>
-			<div class="overflow-x-auto">
-				<table class="table">
-					<thead><tr><th>Category</th><th class="text-right">Entries</th><th class="text-right">Total</th></tr></thead>
-					<tbody>
-						{% for row in expense_breakdown %}
-							<tr><td>{{ row.category }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.total|floatformat:2 }}</td></tr>
-						{% empty %}
-							<tr><td colspan="3" class="py-6 text-center text-base-content/65">No expenses recorded in this period.</td></tr>
-						{% endfor %}
-					</tbody>
-				</table>
-			</div>
 		</div>
 	</article>
 	</section>
@@ -253,7 +217,7 @@
 	<section class="card border border-base-300 bg-base-100">
 		<div class="card-body">
 			<h2 class="card-title">Financial transactions</h2>
-			<p class="text-sm text-base-content/65">Reservation charge rows show billed value and current balance; payment rows and expenses are separate records. The summary cards above are authoritative—do not sum charge and payment rows together.</p>
+			<p class="text-sm text-base-content/65">Reservation charge rows show billed value and current balance; payment rows are separate records. The summary cards above are authoritative—do not sum charge and payment rows together.</p>
 			<form method="get" class="mt-4 flex flex-wrap items-end gap-3 rounded-box border border-base-300 bg-base-200/30 p-3">
 				<input type="hidden" name="period" value="{{ period }}" />
 				<input type="hidden" name="start_date" value="{{ start_date|date:'Y-m-d' }}" />
@@ -264,10 +228,6 @@
 					<select class="select select-bordered" name="transaction_category">
 						<option value="" {% if not transaction_category %}selected{% endif %}>All types</option>
 						<option value="reservations" {% if transaction_category == "reservations" %}selected{% endif %}>Reservation payments</option>
-						<option value="expenses" {% if transaction_category == "expenses" %}selected{% endif %}>Expenses</option>
-						{% for value, label in expense_categories %}
-							<option value="expense:{{ value }}" {% if transaction_category == "expense:"|add:value %}selected{% endif %}>Expense · {{ label }}</option>
-						{% endfor %}
 					</select>
 				</label>
 				<label class="form-control">
@@ -295,7 +255,7 @@
 			</form>
 			<div class="overflow-x-auto">
 				<table class="table table-sm">
-					<thead><tr><th>Date</th><th>Reference</th><th>Category</th><th>Related reservation / expense</th><th class="text-right">Charge / payment / expense</th><th class="text-right">Discount</th><th class="text-right">Refund</th><th class="text-right">Amount paid</th><th class="text-right">Balance</th><th>Method</th><th>Status</th></tr></thead>
+					<thead><tr><th>Date</th><th>Reference</th><th>Category</th><th>Related reservation</th><th class="text-right">Charge / payment</th><th class="text-right">Discount</th><th class="text-right">Refund</th><th class="text-right">Amount paid</th><th class="text-right">Balance</th><th>Method</th><th>Status</th></tr></thead>
 					<tbody>
 						{% for row in transaction_page %}
 							<tr>
@@ -306,7 +266,7 @@
 								<td class="text-right">{% if row.gross is not None %}₱{{ row.gross|floatformat:2 }}{% else %}—{% endif %}</td>
 								<td class="text-right">₱{{ row.discount|floatformat:2 }}</td>
 								<td class="text-right">₱{{ row.refund|floatformat:2 }}</td>
-								<td class="text-right">{% if row.is_expense %}-₱{{ row.amount|floatformat:2 }}{% else %}₱{{ row.amount|floatformat:2 }}{% endif %}</td>
+								<td class="text-right">₱{{ row.amount|floatformat:2 }}</td>
 								<td class="text-right">{% if row.balance is not None %}₱{{ row.balance|floatformat:2 }}{% else %}—{% endif %}</td>
 								<td>{{ row.method }}</td>
 								<td>{{ row.status }}</td>
@@ -326,14 +286,6 @@
 			{% endif %}
 		</div>
 	</section>
-	<a
-		href="{% url 'record-operating-expense' branch=request.branch.slug %}"
-		class="btn btn-primary btn-circle tooltip tooltip-left fixed bottom-6 right-6 z-50 h-14 w-14 shadow-lg"
-		data-tip="Expense"
-		aria-label="Record an operating expense"
-	>
-		<span aria-hidden="true" class="text-2xl leading-none">+</span>
-	</a>
 </main>
 {% endblock %}
 

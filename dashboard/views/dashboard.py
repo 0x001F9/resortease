@@ -26,11 +26,9 @@ from django.views import View
 from account.decoration.role_required import normal_user_not_allowed
 from account.models import User
 from dashboard.decorations.branch_check import check_branch_dashboard
-from dashboard.forms import ExpenseForm
 from dashboard.models import (
     Branch,
     Calendar,
-    Expense,
     Facility,
     Inventory,
     InventoryAsset,
@@ -170,39 +168,6 @@ class DashboardView(View):
                 "overdue_assets_count": overdue_assets.count(),
                 "low_stock_count": low_stock_count,
                 "open_maintenance_count": open_maintenance_count,
-            },
-        )
-
-
-@method_decorator(normal_user_not_allowed, name="dispatch")
-@method_decorator(check_branch_dashboard, name="dispatch")
-class RecordOperatingExpenseView(View):
-    template_name = "record_operating_expense.html"
-
-    def get(self, request):
-        return render(
-            request,
-            self.template_name,
-            {
-                "expense_form": ExpenseForm(),
-                "hide_aside": True,
-            },
-        )
-
-    def post(self, request):
-        form = ExpenseForm(request.POST)
-        if form.is_valid():
-            expense = form.save(commit=False)
-            expense.branch = request.branch
-            expense.recorded_by = request.user
-            expense.save()
-            return redirect("financial-reports", branch=request.branch.slug)
-        return render(
-            request,
-            self.template_name,
-            {
-                "expense_form": form,
-                "hide_aside": True,
             },
         )
 
@@ -458,31 +423,6 @@ class FinancialReportView(View):
                 Decimal("0.00"),
             )
 
-        expenses = Expense.objects.filter(
-            branch__in=request.branches,
-            expense_date__gte=start_date,
-            expense_date__lte=end_date,
-        )
-        if selected_branch is not None:
-            expenses = expenses.filter(branch=selected_branch)
-        operating_expenses = expenses.aggregate(total=Sum("amount"))["total"] or Decimal(
-            "0.00"
-        )
-        expense_categories = (
-            expenses.values("category")
-            .annotate(total=Sum("amount"), count=Count("pk"))
-            .order_by("category")
-        )
-        expense_category_labels = dict(Expense.Category.choices)
-        expense_breakdown = [
-            {
-                "category": expense_category_labels.get(row["category"]),
-                "total": row["total"],
-                "count": row["count"],
-            }
-            for row in expense_categories
-        ]
-
         transaction_at = Case(
             When(status=Payment.Status.REFUNDED, then=F("updated_at")),
             When(status=Payment.Status.SUCCEEDED, then=F("paid_at")),
@@ -495,15 +435,7 @@ class FinancialReportView(View):
         selected_category = params.get("transaction_category", "")
         selected_method = params.get("payment_method", "")
         selected_status = params.get("payment_status", "")
-        selected_expense_category = ""
-        if selected_category == "expenses":
-            dated_payments = dated_payments.none()
-        elif selected_category.startswith("expense:"):
-            selected_expense_category = selected_category.removeprefix("expense:")
-            if selected_expense_category not in Expense.Category.values:
-                return HttpResponseBadRequest("Expense category is not supported.")
-            dated_payments = dated_payments.none()
-        elif selected_category not in {"", "reservations"}:
+        if selected_category not in {"", "reservations"}:
             return HttpResponseBadRequest("Transaction category is not supported.")
         if selected_method:
             dated_payments = dated_payments.filter(method=selected_method)
@@ -545,9 +477,7 @@ class FinancialReportView(View):
             for payment in dated_payments
         ]
         if (
-            selected_category not in {"expenses"}
-            and not selected_expense_category
-            and not selected_method
+            not selected_method
             and not selected_status
         ):
             for reservation in balance_reservations.select_related(
@@ -609,33 +539,6 @@ class FinancialReportView(View):
                         "status": payment_status,
                     }
                 )
-        display_expenses = expenses
-        if selected_expense_category:
-            display_expenses = display_expenses.filter(
-                category=selected_expense_category
-            )
-        if (
-            selected_category != "reservations"
-            and not selected_method
-            and not selected_status
-        ):
-            transaction_rows.extend(
-                {
-                    "date": expense.expense_date,
-                    "reference": expense.reference or f"EXP-{expense.pk}",
-                    "category": expense.get_category_display(),
-                    "related": expense.description,
-                    "gross": expense.amount,
-                    "discount": Decimal("0.00"),
-                    "refund": Decimal("0.00"),
-                    "amount": expense.amount,
-                    "is_expense": True,
-                    "balance": None,
-                    "method": "—",
-                    "status": "Recorded",
-                }
-                for expense in display_expenses
-            )
         transaction_rows.sort(
             key=lambda row: (
                 timezone.localtime(row["date"]).date()
@@ -800,8 +703,6 @@ class FinancialReportView(View):
                 "payments_collected": payments_collected,
                 "refunds_total": refunds_total,
                 "outstanding_balances": outstanding_balances,
-                "operating_expenses": operating_expenses,
-                "expense_breakdown": expense_breakdown,
                 "revenue_by_category": revenue_by_category,
                 "revenue_by_date": revenue_by_date,
                 "unpriced_reservations": unpriced_reservations,
@@ -814,7 +715,6 @@ class FinancialReportView(View):
                 "transaction_status": selected_status,
                 "payment_methods": payment_methods,
                 "payment_statuses": Payment.Status.choices,
-                "expense_categories": Expense.Category.choices,
                 "inventory_movement_rows": [
                     {"name": name, **values}
                     for name, values in sorted(inventory_movement_rows.items())

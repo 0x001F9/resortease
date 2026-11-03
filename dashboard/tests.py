@@ -10,7 +10,6 @@ from account.models import User
 from dashboard.models import (
     Branch,
     Calendar,
-    Expense,
     Facility,
     Inventory,
     InventoryAsset,
@@ -4559,14 +4558,6 @@ class DashboardAndFinancialReportTests(TestCase):
         )
         unpaid.raw_amount = Decimal("50.00")
         unpaid.save(update_fields=["raw_amount"])
-        Expense.objects.create(
-            branch=self.branch,
-            category=Expense.Category.UTILITIES,
-            description="Water bill",
-            amount=Decimal("15.00"),
-            expense_date=timezone.localdate(),
-            recorded_by=self.user,
-        )
         today = timezone.localdate()
         response = self.client.get(
             reverse("financial-reports", kwargs={"branch": self.branch.slug}),
@@ -4584,8 +4575,6 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertEqual(response.context["payments_collected"], Decimal("50.00"))
         self.assertEqual(response.context["outstanding_balances"], Decimal("95.00"))
         self.assertEqual(response.context["refunds_total"], Decimal("505.00"))
-        self.assertEqual(response.context["operating_expenses"], Decimal("15.00"))
-        self.assertContains(response, "₱15.00")
         self.assertEqual(
             response.context["revenue_chart_data"]["recognized_values"][0],
             85.0,
@@ -4593,7 +4582,7 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertFalse(response.context["profit_loss_complete"])
         self.assertEqual(
             response.context["transaction_page"].paginator.count,
-            8,
+            7,
         )
 
         filtered_response = self.client.get(
@@ -4624,67 +4613,6 @@ class DashboardAndFinancialReportTests(TestCase):
             filtered_response,
             'name="payment_status"',
         )
-
-        expense_response = self.client.get(
-            reverse("financial-reports", kwargs={"branch": self.branch.slug}),
-            {
-                "period": "custom",
-                "start_date": today.isoformat(),
-                "end_date": today.isoformat(),
-                "transaction_category": "expense:utilities",
-            },
-        )
-        self.assertEqual(expense_response.status_code, 200)
-        self.assertEqual(
-            expense_response.context["transaction_page"].paginator.count,
-            1,
-        )
-        self.assertEqual(
-            expense_response.context["transaction_page"].object_list[0]["amount"],
-            Decimal("15.00"),
-        )
-
-    def test_financial_report_records_expenses_for_the_current_branch(self):
-        today = timezone.localdate()
-        report_url = reverse(
-            "financial-reports",
-            kwargs={"branch": self.branch.slug},
-        )
-        response = self.client.post(
-            report_url,
-            {
-                "period": "custom",
-                "start_date": today.isoformat(),
-                "end_date": today.isoformat(),
-                "category": Expense.Category.MAINTENANCE,
-                "description": "Pump repair",
-                "amount": "1250.50",
-                "expense_date": today.isoformat(),
-                "reference": "INV-100",
-            },
-        )
-        self.assertRedirects(
-            response,
-            report_url,
-            fetch_redirect_response=False,
-        )
-        expense = Expense.objects.get(reference="INV-100")
-        self.assertEqual(expense.branch, self.branch)
-        self.assertEqual(expense.recorded_by, self.user)
-        self.assertEqual(expense.amount, Decimal("1250.50"))
-
-        invalid_response = self.client.post(
-            report_url,
-            {
-                "category": Expense.Category.MAINTENANCE,
-                "description": "Invalid expense",
-                "amount": "0",
-                "expense_date": today.isoformat(),
-            },
-        )
-        self.assertEqual(invalid_response.status_code, 200)
-        self.assertContains(invalid_response, "Enter an amount greater than zero.")
-        self.assertFalse(Expense.objects.filter(description="Invalid expense").exists())
 
     def test_financial_report_date_presets_override_custom_dates(self):
         today = timezone.localdate()

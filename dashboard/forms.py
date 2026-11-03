@@ -8,7 +8,6 @@ from django.utils.dateparse import parse_datetime
 from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
 from dashboard.models import (
     Calendar,
-    Expense,
     Inventory,
     InventoryAsset,
     InventoryAssetHistory,
@@ -16,42 +15,6 @@ from dashboard.models import (
     Reservation,
 )
 from dashboard.models.inventory import InventoryTransaction
-
-
-class ExpenseForm(forms.ModelForm):
-    class Meta:
-        model = Expense
-        fields = ("category", "description", "amount", "expense_date", "reference")
-        widgets = {
-            "category": forms.Select(attrs={"class": "select select-bordered w-full"}),
-            "description": forms.TextInput(
-                attrs={"class": "input input-bordered w-full"}
-            ),
-            "amount": forms.NumberInput(
-                attrs={
-                    "class": "input input-bordered w-full",
-                    "min": "0.01",
-                    "step": "0.01",
-                }
-            ),
-            "expense_date": forms.DateInput(
-                attrs={"class": "input input-bordered w-full", "type": "date"}
-            ),
-            "reference": forms.TextInput(
-                attrs={"class": "input input-bordered w-full"}
-            ),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if not self.is_bound:
-            self.initial.setdefault("expense_date", timezone.localdate())
-
-    def clean_amount(self):
-        amount = self.cleaned_data["amount"]
-        if amount <= 0:
-            raise forms.ValidationError("Enter an amount greater than zero.")
-        return amount
 
 
 class PaymentForm(forms.ModelForm):
