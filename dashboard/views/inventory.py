@@ -193,6 +193,7 @@ class RecordInventoryMovementView(View):
                 inventory_form.fields["inventory"].queryset.values(
                     "id",
                     "quantity_on_hand",
+                    "unit_cost",
                 )
             ),
             "asset_form": asset_form
@@ -380,10 +381,25 @@ class InventoryItemDetailView(View):
         transactions = item.transactions.select_related("performed_by").order_by(
             "-created_at"
         )
+        today = timezone.localdate()
+        current_month_start = today.replace(day=1)
+        total_sold_amount = sum(
+            (
+                transaction.unit_cost * abs(transaction.quantity_change)
+                for transaction in transactions.filter(
+                    transaction_type=InventoryTransaction.Type.CONSUMED
+                ).filter(
+                    created_at__date__gte=current_month_start
+                )
+                if transaction.unit_cost is not None
+            ),
+            Decimal("0"),
+        )
         return {
             "title": item.name,
             "item": item,
             "transactions": transactions,
+            "total_sold_amount": total_sold_amount,
             "edit_form": edit_form or InventoryItemDetailsForm(instance=item),
             "open_edit_modal": open_edit_modal,
             "hide_aside": True,

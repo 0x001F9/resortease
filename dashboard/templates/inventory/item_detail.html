@@ -26,9 +26,9 @@
         </div>
         <div class="card border border-base-content/10 bg-base-100 shadow-sm">
             <div class="card-body p-4">
-                <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">Reorder level</p>
-                <div class="mt-2 text-3xl font-bold">{{ item.reorder_level }}</div>
-                <div class="mt-1 text-sm text-base-content/60">Minimum stock threshold</div>
+                <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">Total sold amount</p>
+                <div class="mt-2 text-3xl font-bold">₱ {{ total_sold_amount|floatformat:2 }}</div>
+                <div class="mt-1 text-sm text-base-content/60">From consumed transactions this month</div>
             </div>
         </div>
         <div class="card border border-base-content/10 bg-base-100 shadow-sm">

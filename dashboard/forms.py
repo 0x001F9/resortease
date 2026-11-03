@@ -658,7 +658,7 @@ class InventoryMovementForm(forms.Form):
         min_value=0,
         max_digits=10,
         decimal_places=2,
-        label="Unit cost (₱)",
+        label="Purchase cost per unit (₱)",
         widget=forms.NumberInput(
             attrs={
                 "class": "input input-bordered w-full",

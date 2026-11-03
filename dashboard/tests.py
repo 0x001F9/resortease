@@ -3408,6 +3408,50 @@ class InventoryViewTests(TestCase):
         self.assertContains(response, "Edit item details")
         self.assertContains(response, 'id="edit-inventory-details"')
 
+    def test_inventory_item_detail_sums_consumed_transaction_costs(self):
+        InventoryTransaction.objects.create(
+            inventory=self.inventory_item,
+            transaction_type=InventoryTransaction.Type.CONSUMED,
+            quantity_change=-2,
+            balance_before=12,
+            balance_after=10,
+            unit_cost=Decimal("5.00"),
+            performed_by=self.user,
+        )
+        InventoryTransaction.objects.create(
+            inventory=self.inventory_item,
+            transaction_type=InventoryTransaction.Type.CONSUMED,
+            quantity_change=-3,
+            balance_before=10,
+            balance_after=7,
+            unit_cost=Decimal("10.00"),
+            performed_by=self.user,
+        )
+        previous_month_transaction = InventoryTransaction.objects.create(
+            inventory=self.inventory_item,
+            transaction_type=InventoryTransaction.Type.CONSUMED,
+            quantity_change=-5,
+            balance_before=7,
+            balance_after=2,
+            unit_cost=Decimal("20.00"),
+            performed_by=self.user,
+        )
+        InventoryTransaction.objects.filter(pk=previous_month_transaction.pk).update(
+            created_at=timezone.now() - timedelta(days=32)
+        )
+
+        response = self.client.get(
+            reverse(
+                "inventory-item-detail",
+                kwargs={"branch": self.branch.slug, "item_id": self.inventory_item.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["total_sold_amount"], Decimal("40.00"))
+        self.assertContains(response, "Total sold amount")
+        self.assertContains(response, "₱ 40.00")
+
     def test_inventory_item_details_can_be_updated_from_modal(self):
         response = self.client.post(
             reverse(
