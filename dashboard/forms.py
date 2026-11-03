@@ -231,14 +231,48 @@ class ReservationEditForm(forms.ModelForm):
                     for choice in Reservation.Status.choices
                     if choice[0] != Reservation.Status.CONFIRMED
                 ]
-        if (
-            self.instance.pk
-            and not self.is_bound
-            and self.instance.status == Reservation.Status.CONFIRMED
-        ):
-            calendar_entry = getattr(self.instance, "calendar_entry", None)
-            if calendar_entry is not None:
-                self.initial["status"] = calendar_entry.status
+
+        if self.instance.pk:
+            current_status = self.instance.current_status
+
+            choices = list(self.fields["status"].choices)
+            choice_values = {value for value, _label in choices}
+            if (
+                current_status != Calendar.Status.UNAVAILABLE
+                and current_status not in choice_values
+            ):
+                current_label = dict(Calendar.Status.choices).get(
+                    current_status
+                )
+                if current_label is None:
+                    current_label = dict(Reservation.Status.choices).get(
+                        current_status
+                    )
+                if current_label is not None:
+                    choices.append((current_status, current_label))
+
+            self.fields["status"].choices = [
+                (
+                    value,
+                    (
+                        f"{label} (Current)"
+                        if value == current_status
+                        else label
+                    ),
+                )
+                for value, label in choices
+            ]
+
+        if self.instance.pk and not self.is_bound:
+            current_status = self.instance.current_status
+            choice_values = {
+                value for value, _label in self.fields["status"].choices
+            }
+            if (
+                current_status != Calendar.Status.UNAVAILABLE
+                and current_status in choice_values
+            ):
+                self.initial["status"] = current_status
         if facility is not None and facility.capacity > 0:
             self.fields["party_size"].help_text = (
                 f"Facility capacity: {facility.capacity} guests. "
@@ -311,9 +345,18 @@ class ReservationEditForm(forms.ModelForm):
                 if value != Calendar.Status.UNAVAILABLE
             }
             ends_at = self.cleaned_data.get("ends_at", self.instance.ends_at)
+            calendar_entry = getattr(self.instance, "calendar_entry", None)
             if ends_at >= timezone.now():
                 valid_statuses.discard(Calendar.Status.CONFIRMED)
                 valid_statuses.discard(Calendar.Status.COMPLETED)
+                if (
+                    calendar_entry is not None
+                    and calendar_entry.status in {
+                        Calendar.Status.CONFIRMED,
+                        Calendar.Status.COMPLETED,
+                    }
+                ):
+                    valid_statuses.add(calendar_entry.status)
             if status not in valid_statuses:
                 raise forms.ValidationError(
                     "Select a valid status for this booking."

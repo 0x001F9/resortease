@@ -260,24 +260,27 @@ class FinancialReportView(View):
             refunds.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
         )
 
-        completed_reservations = Reservation.objects.filter(
+        recognized_reservations = Reservation.objects.filter(
             facility__branch__in=request.branches,
-            calendar_entry__status=Calendar.Status.COMPLETED,
+            calendar_entry__status__in=(
+                Calendar.Status.CONFIRMED,
+                Calendar.Status.CANCELLED,
+                Calendar.Status.COMPLETED,
+            ),
             calendar_entry__ends_at__gte=start_at,
             calendar_entry__ends_at__lt=end_at,
         )
         if selected_branch is not None:
-            completed_reservations = completed_reservations.filter(
+            recognized_reservations = recognized_reservations.filter(
                 facility__branch=selected_branch
             )
 
-        gross_revenue = Decimal("0.00")
         discounts = Decimal("0.00")
         net_revenue = Decimal("0.00")
         unpriced_reservations = 0
-        completed_refunds = (
+        recognized_refunds = (
             Payment.objects.filter(
-                reservation_id__in=completed_reservations,
+                reservation_id__in=recognized_reservations,
                 status=Payment.Status.REFUNDED,
             )
             .values("reservation_id")
@@ -285,7 +288,7 @@ class FinancialReportView(View):
         )
         refunds_by_reservation = {
             row["reservation_id"]: row["total"] or Decimal("0.00")
-            for row in completed_refunds
+            for row in recognized_refunds
         }
         revenue_categories = defaultdict(
             lambda: {
@@ -306,7 +309,7 @@ class FinancialReportView(View):
             }
         )
         branch_revenue_totals = defaultdict(lambda: Decimal("0.00"))
-        for reservation in completed_reservations.select_related(
+        for reservation in recognized_reservations.select_related(
             "facility__branch",
             "calendar_entry",
         ).iterator():
@@ -319,7 +322,6 @@ class FinancialReportView(View):
                 reservation.pk, Decimal("0.00")
             )
             net = max(gross - discount - refund, Decimal("0.00"))
-            gross_revenue += gross
             discounts += discount
             net_revenue += net
             category = reservation.facility.facility_type
@@ -400,29 +402,6 @@ class FinancialReportView(View):
             - (row["refunded"] or Decimal("0.00"))
             for row in reservation_payments
         }
-        outstanding_balances = Decimal("0.00")
-        for reservation in balance_reservations.only(
-            "id", "raw_amount", "discount"
-        ).iterator():
-            charge = max(
-                reservation.raw_amount
-                - min(
-                    max(reservation.discount, Decimal("0.00")),
-                    reservation.raw_amount,
-                ),
-                Decimal("0.00"),
-            )
-            paid_amount = max(
-                net_paid_by_reservation.get(
-                    reservation.pk, Decimal("0.00")
-                ),
-                Decimal("0.00"),
-            )
-            outstanding_balances += max(
-                charge - paid_amount,
-                Decimal("0.00"),
-            )
-
         transaction_at = Case(
             When(status=Payment.Status.REFUNDED, then=F("updated_at")),
             When(status=Payment.Status.SUCCEEDED, then=F("paid_at")),
@@ -584,11 +563,19 @@ class FinancialReportView(View):
             lambda: {"received": 0, "consumed": 0, "adjustment": 0}
         )
         inventory_purchase_cost = Decimal("0.00")
+        inventory_sold_amount = Decimal("0.00")
         for movement in inventory_transactions.iterator():
             key = movement.inventory.name
             inventory_movement_rows[key][movement.transaction_type] += (
                 movement.quantity_change
             )
+            if (
+                movement.transaction_type == InventoryTransaction.Type.CONSUMED
+                and movement.unit_cost is not None
+            ):
+                inventory_sold_amount += (
+                    movement.unit_cost * abs(movement.quantity_change)
+                )
             if (
                 movement.transaction_type == InventoryTransaction.Type.RECEIVED
                 and movement.unit_cost is not None
@@ -637,6 +624,7 @@ class FinancialReportView(View):
                     filter=Q(
                         reservation_id__calendar_entry__status__in=(
                             Calendar.Status.CONFIRMED,
+                            Calendar.Status.CANCELLED,
                             Calendar.Status.COMPLETED,
                         )
                     ),
@@ -698,11 +686,10 @@ class FinancialReportView(View):
                 "chart_period": chart_period,
                 "revenue_chart_data": revenue_chart_data,
                 "total_revenue": net_revenue,
-                "gross_revenue": gross_revenue,
                 "discounts": discounts,
                 "payments_collected": payments_collected,
                 "refunds_total": refunds_total,
-                "outstanding_balances": outstanding_balances,
+                "inventory_sold_amount": inventory_sold_amount,
                 "revenue_by_category": revenue_by_category,
                 "revenue_by_date": revenue_by_date,
                 "unpriced_reservations": unpriced_reservations,

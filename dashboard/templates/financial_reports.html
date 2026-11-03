@@ -1,4 +1,5 @@
 {% extends "partials/layout.html" %}
+{% load compact_numbers %}
 
 {% block extra_head %}
 {% load static %}
@@ -68,38 +69,34 @@
 		<article class="card border border-base-300 bg-base-100">
 			<div class="card-body gap-1">
 				<p class="text-sm font-semibold text-base-content/60">Net recognized revenue</p>
-				<p class="text-2xl font-bold">₱{{ total_revenue|floatformat:2 }}</p>
-				<p class="text-xs text-base-content/60">Completed reservations, less discounts and recorded refunds</p>
+				<p class="text-2xl font-bold">₱{{ total_revenue|compact_number }}</p>
+				<p class="text-xs text-base-content/60">Confirmed, cancelled, and completed reservations, less discounts and recorded refunds</p>
 			</div>
 		</article>
 		<article class="card border border-base-300 bg-base-100">
 			<div class="card-body gap-1">
 				<p class="text-sm font-semibold text-base-content/60">Payments collected</p>
-				<p class="text-2xl font-bold">₱{{ payments_collected|floatformat:2 }}</p>
+				<p class="text-2xl font-bold">₱{{ payments_collected|compact_number }}</p>
 				<p class="text-xs text-base-content/60">Successful payments recorded in this period</p>
 			</div>
 		</article>
 		<article class="card border border-base-300 bg-base-100">
 			<div class="card-body gap-1">
-				<p class="text-sm font-semibold text-base-content/60">Outstanding balances</p>
-				<p class="text-2xl font-bold">₱{{ outstanding_balances|floatformat:2 }}</p>
-				<p class="text-xs text-base-content/60">Uncancelled stays ending in this period</p>
+				<p class="text-sm font-semibold text-base-content/60">Total sold inventory</p>
+				<p class="text-2xl font-bold">₱{{ inventory_sold_amount|compact_number }}</p>
+				<p class="text-xs text-base-content/60">Consumed inventory quantity × recorded unit cost in this period</p>
 			</div>
 		</article>
 	</section>
 
-	<section class="grid gap-4 md:grid-cols-3">
-		<article class="stat rounded-box border border-base-300 bg-base-100">
-			<div class="stat-title">Gross recognized charges</div>
-			<div class="stat-value text-xl">₱{{ gross_revenue|floatformat:2 }}</div>
-		</article>
+	<section class="grid gap-4 md:grid-cols-2">
 		<article class="stat rounded-box border border-base-300 bg-base-100">
 			<div class="stat-title">Discounts applied</div>
-			<div class="stat-value text-xl">₱{{ discounts|floatformat:2 }}</div>
+			<div class="stat-value text-xl">₱{{ discounts|compact_number }}</div>
 		</article>
 		<article class="stat rounded-box border border-base-300 bg-base-100">
 			<div class="stat-title">Refunds recorded</div>
-			<div class="stat-value text-xl">₱{{ refunds_total|floatformat:2 }}</div>
+			<div class="stat-value text-xl">₱{{ refunds_total|compact_number }}</div>
 			<p class="stat-desc">Refund records use their latest status-update date.</p>
 		</article>
 	</section>
@@ -108,15 +105,15 @@
 	<article class="card border border-base-300 bg-base-100">
 		<div class="card-body">
 			<h2 class="card-title">Recognized revenue by facility category</h2>
-				<p class="text-sm text-base-content/65">Completed reservation charges are recognized on the booking end date.</p>
+				<p class="text-sm text-base-content/65">Confirmed, cancelled, and completed reservation charges are recognized on the booking end date.</p>
 				<div class="overflow-x-auto">
 					<table class="table">
 						<thead><tr><th>Category</th><th class="text-right">Reservations</th><th class="text-right">Gross</th><th class="text-right">Discounts</th><th class="text-right">Refunds</th><th class="text-right">Net</th></tr></thead>
 						<tbody>
 							{% for row in revenue_by_category %}
-								<tr><td>{{ row.category }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.gross|floatformat:2 }}</td><td class="text-right">₱{{ row.discounts|floatformat:2 }}</td><td class="text-right">₱{{ row.refunds|floatformat:2 }}</td><td class="text-right">₱{{ row.net|floatformat:2 }}</td></tr>
+								<tr><td>{{ row.category }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.gross|compact_number }}</td><td class="text-right">₱{{ row.discounts|compact_number }}</td><td class="text-right">₱{{ row.refunds|compact_number }}</td><td class="text-right">₱{{ row.net|compact_number }}</td></tr>
 							{% empty %}
-								<tr><td colspan="6" class="py-6 text-center text-base-content/65">No completed, priced reservations in this period.</td></tr>
+								<tr><td colspan="6" class="py-6 text-center text-base-content/65">No priced reservations in recognized Calendar statuses for this period.</td></tr>
 							{% endfor %}
 						</tbody>
 					</table>
@@ -130,12 +127,12 @@
 			<h2 class="card-title">Recognized revenue by service date</h2>
 			<div class="overflow-x-auto">
 				<table class="table">
-					<thead><tr><th>Service date</th><th class="text-right">Completed stays</th><th class="text-right">Gross</th><th class="text-right">Discounts</th><th class="text-right">Refunds</th><th class="text-right">Net revenue</th></tr></thead>
+					<thead><tr><th>Service date</th><th class="text-right">Reservations</th><th class="text-right">Gross</th><th class="text-right">Discounts</th><th class="text-right">Refunds</th><th class="text-right">Net revenue</th></tr></thead>
 					<tbody>
 						{% for row in revenue_by_date %}
-							<tr><td>{{ row.date|date:"M j, Y" }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.gross|floatformat:2 }}</td><td class="text-right">₱{{ row.discounts|floatformat:2 }}</td><td class="text-right">₱{{ row.refunds|floatformat:2 }}</td><td class="text-right">₱{{ row.net|floatformat:2 }}</td></tr>
+							<tr><td>{{ row.date|date:"M j, Y" }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.gross|compact_number }}</td><td class="text-right">₱{{ row.discounts|compact_number }}</td><td class="text-right">₱{{ row.refunds|compact_number }}</td><td class="text-right">₱{{ row.net|compact_number }}</td></tr>
 						{% empty %}
-							<tr><td colspan="6" class="py-6 text-center text-base-content/65">No completed, priced reservations in this period.</td></tr>
+							<tr><td colspan="6" class="py-6 text-center text-base-content/65">No priced reservations in recognized Calendar statuses for this period.</td></tr>
 						{% endfor %}
 					</tbody>
 				</table>
@@ -165,7 +162,7 @@
 					<thead><tr><th>Month</th><th class="text-right">Payments collected</th></tr></thead>
 					<tbody>
 						{% for row in monthly_revenue %}
-							<tr><td>{{ row.month|date:"F Y" }}</td><td class="text-right">₱{{ row.total|floatformat:2 }}</td></tr>
+							<tr><td>{{ row.month|date:"F Y" }}</td><td class="text-right">₱{{ row.total|compact_number }}</td></tr>
 						{% empty %}
 							<tr><td colspan="2" class="py-8 text-center text-base-content/65">No successful payments in this date range.</td></tr>
 						{% endfor %}
@@ -179,7 +176,7 @@
 						<thead><tr><th>Branch</th><th class="text-right">Net recognized revenue</th></tr></thead>
 						<tbody>
 							{% for row in branch_revenue %}
-								<tr><td>{{ row.branch_name }}</td><td class="text-right">₱{{ row.total|floatformat:2 }}</td></tr>
+								<tr><td>{{ row.branch_name }}</td><td class="text-right">₱{{ row.total|compact_number }}</td></tr>
 							{% empty %}
 								<tr><td colspan="2" class="py-6 text-center text-base-content/65">No recognized revenue in this period.</td></tr>
 							{% endfor %}
@@ -195,9 +192,9 @@
 		<div class="card-body">
 			<h2 class="card-title">Store and inventory data</h2>
 				<p class="text-sm text-base-content/65">
-					There are no POS sales or product-price records in the current data model, so best-selling products, sales totals, discounts, and sales margins cannot be calculated. Inventory movements are shown below and are not treated as sales or cost of goods sold.
+					There are no POS sales or product selling-price records in the current data model, so best-selling products, discounts, and sales margins cannot be calculated. The total sold inventory card uses the recorded unit cost of consumed inventory transactions; it is not POS revenue.
 				</p>
-				<p class="font-semibold">Known received-stock cost: ₱{{ inventory_purchase_cost|floatformat:2 }} <span class="font-normal text-base-content/60">(movements without a recorded unit cost are omitted)</span></p>
+				<p class="font-semibold">Known received-stock cost: ₱{{ inventory_purchase_cost|compact_number }} <span class="font-normal text-base-content/60">(movements without a recorded unit cost are omitted)</span></p>
 				<div class="overflow-x-auto">
 					<table class="table table-sm">
 						<thead><tr><th>Inventory item</th><th class="text-right">Received</th><th class="text-right">Consumed</th><th class="text-right">Adjustments</th></tr></thead>
@@ -263,11 +260,11 @@
 								<td>{{ row.reference }}</td>
 								<td>{{ row.category }}</td>
 								<td>{{ row.related }}</td>
-								<td class="text-right">{% if row.gross is not None %}₱{{ row.gross|floatformat:2 }}{% else %}—{% endif %}</td>
-								<td class="text-right">₱{{ row.discount|floatformat:2 }}</td>
-								<td class="text-right">₱{{ row.refund|floatformat:2 }}</td>
-								<td class="text-right">₱{{ row.amount|floatformat:2 }}</td>
-								<td class="text-right">{% if row.balance is not None %}₱{{ row.balance|floatformat:2 }}{% else %}—{% endif %}</td>
+								<td class="text-right">{% if row.gross is not None %}₱{{ row.gross|compact_number }}{% else %}—{% endif %}</td>
+								<td class="text-right">₱{{ row.discount|compact_number }}</td>
+								<td class="text-right">₱{{ row.refund|compact_number }}</td>
+								<td class="text-right">₱{{ row.amount|compact_number }}</td>
+								<td class="text-right">{% if row.balance is not None %}₱{{ row.balance|compact_number }}{% else %}—{% endif %}</td>
 								<td>{{ row.method }}</td>
 								<td>{{ row.status }}</td>
 							</tr>
@@ -297,6 +294,23 @@
 		const chartData = JSON.parse(
 			document.getElementById("reservation-revenue-chart-data").textContent,
 		)
+		const formatCompactNumber = (value) => {
+			const number = Number(value)
+			if (!Number.isFinite(number)) return String(value)
+			const absolute = Math.abs(number)
+			const suffixes = [
+				[1e12, "T"],
+				[1e9, "B"],
+				[1e6, "M"],
+				[1e3, "K"],
+			]
+			for (const [threshold, suffix] of suffixes) {
+				if (absolute >= threshold) {
+					return `${(number / threshold).toFixed(2).replace(/\.?0+$/, "")}${suffix}`
+				}
+			}
+			return number.toFixed(2)
+		}
 		const chartScroll = chartElement.parentElement
 		const chartParent = chartScroll.parentElement
 		const revenueChart = window.echarts.init(chartElement)
@@ -313,16 +327,10 @@
 				trigger: "axis",
 				formatter: (params) => {
 					const index = params[0].dataIndex
-					const payments = Number(chartData.values[index]).toLocaleString(
-						undefined,
-						{ minimumFractionDigits: 2, maximumFractionDigits: 2 },
-					)
-					const recognized = Number(
+					const payments = formatCompactNumber(chartData.values[index])
+					const recognized = formatCompactNumber(
 						chartData.recognized_values[index],
-					).toLocaleString(undefined, {
-						minimumFractionDigits: 2,
-						maximumFractionDigits: 2,
-					})
+					)
 					return [
 						params[0].axisValue,
 						`Recognized revenue: ₱${recognized}`,
@@ -351,7 +359,7 @@
 			yAxis: {
 				type: "value",
 				name: "Revenue",
-				axisLabel: { formatter: (value) => Number(value).toLocaleString() },
+				axisLabel: { formatter: formatCompactNumber },
 			},
 			series: [
 				{

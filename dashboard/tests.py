@@ -91,9 +91,13 @@ class CalendarEntryViewTests(TestCase):
         form = ReservationEditForm(instance=reservation)
         choices = {value for value, _label in form.fields["status"].choices}
 
-        self.assertNotIn(Calendar.Status.CONFIRMED, choices)
-        self.assertNotIn(Calendar.Status.COMPLETED, choices)
+        self.assertIn(Calendar.Status.CONFIRMED, choices)
         self.assertIn(Calendar.Status.CANCELLED, choices)
+        self.assertEqual(form.initial["status"], Calendar.Status.CONFIRMED)
+        self.assertIn(
+            (Calendar.Status.CONFIRMED, "Confirmed (Current)"),
+            list(form.fields["status"].choices),
+        )
 
         reservation.status = Reservation.Status.PENDING
         reservation.save(update_fields=["status", "updated_at"])
@@ -107,6 +111,71 @@ class CalendarEntryViewTests(TestCase):
                 Reservation.Status.PENDING,
                 Reservation.Status.DECLINED,
             },
+        )
+        self.assertEqual(form.initial["status"], Reservation.Status.PENDING)
+        self.assertIn(
+            (Reservation.Status.PENDING, "Pending (Current)"),
+            list(form.fields["status"].choices),
+        )
+
+        reservation.status = Reservation.Status.DECLINED
+        reservation.save(update_fields=["status", "updated_at"])
+
+        form = ReservationEditForm(instance=reservation)
+
+        self.assertEqual(form.initial["status"], Reservation.Status.DECLINED)
+        self.assertIn(
+            (Reservation.Status.DECLINED, "Declined (Current)"),
+            list(form.fields["status"].choices),
+        )
+
+    def test_confirmed_booking_defaults_to_its_current_calendar_status(self):
+        starts_at = timezone.now() - timedelta(days=2)
+        reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        entry.status = Calendar.Status.COMPLETED
+        entry.save(update_fields=["status", "updated_at"])
+
+        form = ReservationEditForm(instance=reservation)
+
+        self.assertEqual(form.initial["status"], Calendar.Status.COMPLETED)
+        self.assertIn(
+            (Calendar.Status.COMPLETED, "Completed (Current)"),
+            list(form.fields["status"].choices),
+        )
+
+    def test_edit_reservation_endpoint_defaults_to_current_calendar_status(self):
+        starts_at = timezone.now() - timedelta(days=2)
+        reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        entry.status = Calendar.Status.CANCELLED
+        entry.save(update_fields=["status", "updated_at"])
+
+        response = self.client.get(
+            reverse(
+                "edit-reservation",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        form = response.context["form"]
+        self.assertEqual(form.initial["status"], Calendar.Status.CANCELLED)
+        self.assertEqual(
+            str(form["status"].value()),
+            Calendar.Status.CANCELLED,
+        )
+        self.assertContains(
+            response,
+            '<option value="cancelled" selected>Cancelled (Current)</option>',
+            html=True,
         )
 
     def get_calendar_day(self, response, selected_day):
@@ -4569,11 +4638,10 @@ class DashboardAndFinancialReportTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["gross_revenue"], Decimal("100.00"))
         self.assertEqual(response.context["discounts"], Decimal("10.00"))
         self.assertEqual(response.context["total_revenue"], Decimal("85.00"))
         self.assertEqual(response.context["payments_collected"], Decimal("50.00"))
-        self.assertEqual(response.context["outstanding_balances"], Decimal("95.00"))
+        self.assertEqual(response.context["inventory_sold_amount"], Decimal("0.00"))
         self.assertEqual(response.context["refunds_total"], Decimal("505.00"))
         self.assertEqual(
             response.context["revenue_chart_data"]["recognized_values"][0],
@@ -4701,7 +4769,7 @@ class DashboardAndFinancialReportTests(TestCase):
                     expected_total,
                 )
 
-    def test_financial_report_includes_inventory_movements_without_calling_them_sales(self):
+    def test_financial_report_includes_inventory_movements_and_sold_value(self):
         inventory = Inventory.objects.create(
             branch=self.branch,
             name="Report beverage stock",
@@ -4716,6 +4784,13 @@ class DashboardAndFinancialReportTests(TestCase):
             performed_by=self.user,
             reference="PUR-001",
         )
+        inventory.record_transaction(
+            transaction_type=InventoryTransaction.Type.CONSUMED,
+            quantity_change=-2,
+            unit_cost=Decimal("10.50"),
+            performed_by=self.user,
+            reference="SALE-001",
+        )
 
         response = self.client.get(
             reverse("financial-reports", kwargs={"branch": self.branch.slug}),
@@ -4728,12 +4803,16 @@ class DashboardAndFinancialReportTests(TestCase):
             Decimal("31.50"),
         )
         self.assertEqual(
+            response.context["inventory_sold_amount"],
+            Decimal("21.00"),
+        )
+        self.assertEqual(
             response.context["inventory_movement_rows"],
             [
                 {
                     "name": inventory.name,
                     "received": 3,
-                    "consumed": 0,
+                    "consumed": -2,
                     "adjustment": 0,
                 }
             ],
