@@ -1,10 +1,12 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
+from dashboard.billing import reservation_completion_payment_error
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.forms import ReservationEditForm
 from dashboard.models import Calendar, Maintenance, Reservation
@@ -75,6 +77,17 @@ class EditReservationView(View):
                 reservation_id=reservation_id,
             )
         form = ReservationEditForm(instance=reservation)
+        if (
+            request.GET.get("status") == Calendar.Status.COMPLETED
+            and reservation.status == Reservation.Status.CONFIRMED
+            and reservation.ends_at < timezone.now()
+            and Calendar.Status.COMPLETED
+            in {
+                value
+                for value, _label in form.fields["status"].choices
+            }
+        ):
+            form.initial["status"] = Calendar.Status.COMPLETED
         return render(
             request,
             self.template_name,
@@ -95,6 +108,7 @@ class EditReservationView(View):
                     reservation_id=reservation_id,
                 )
 
+            original_status = reservation.status
             form = ReservationEditForm(request.POST, instance=reservation)
             if form.is_valid():
                 status = form.cleaned_data["status"]
@@ -107,11 +121,21 @@ class EditReservationView(View):
                     ends_at,
                 ):
                     form.add_error(
-                        "starts_at",
+                        "ends_at",
                         "This facility already has a calendar entry during that time.",
                     )
-                else:
-                    original_status = reservation.status
+                if (
+                    original_status == Reservation.Status.CONFIRMED
+                    and status == Calendar.Status.COMPLETED
+                ):
+                    completion_error = reservation_completion_payment_error(
+                        reservation,
+                        raw_amount=form.calculated_raw_amount,
+                        discount=form.cleaned_data["discount"],
+                    )
+                    if completion_error:
+                        form.add_error("status", completion_error)
+                if not form.errors:
                     reservation = form.save(commit=False)
                     if original_status == Reservation.Status.CONFIRMED:
                         reservation.status = Reservation.Status.CONFIRMED
@@ -158,6 +182,7 @@ class EditReservationView(View):
                         )
                     )
 
+        reservation.status = original_status
         return render(
             request,
             self.template_name,

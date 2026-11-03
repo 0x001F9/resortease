@@ -3,7 +3,6 @@ from decimal import Decimal
 from django import forms
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
 
 from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
 from dashboard.models import (
@@ -178,25 +177,23 @@ class ReservationEditForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         facility = self.instance.facility
-        ends_at = self.instance.ends_at
-        if self.is_bound:
-            ends_at_value = self.data.get(self.add_prefix("ends_at"))
-            if ends_at_value:
-                try:
-                    parsed_ends_at = parse_datetime(ends_at_value)
-                    if parsed_ends_at is not None:
-                        if timezone.is_naive(parsed_ends_at):
-                            parsed_ends_at = timezone.make_aware(parsed_ends_at)
-                        ends_at = parsed_ends_at
-                except (TypeError, ValueError):
-                    pass
+        is_past_confirmed = (
+            self.instance.pk
+            and self.instance.status == Reservation.Status.CONFIRMED
+            and self.instance.ends_at < timezone.now()
+        )
+        if is_past_confirmed:
+            self.fields["starts_at"].disabled = True
+            self.fields["starts_at"].help_text = (
+                "The start time cannot be changed after the booking has ended."
+            )
         if (
             self.instance.pk
             and (
                 self.instance.status == Reservation.Status.PENDING
                 or (
                     self.instance.status == Reservation.Status.CONFIRMED
-                    and ends_at >= timezone.now()
+                    and self.instance.ends_at >= timezone.now()
                 )
             )
         ):
@@ -290,6 +287,12 @@ class ReservationEditForm(forms.ModelForm):
                 self.instance.ends_at
             ).strftime("%Y-%m-%dT%H:%M")
 
+    def _get_validation_exclusions(self):
+        exclude = super()._get_validation_exclusions()
+        if self.instance.status == Reservation.Status.CONFIRMED:
+            exclude.add("status")
+        return exclude
+
     class Meta:
         model = Reservation
         fields = (
@@ -375,13 +378,31 @@ class ReservationEditForm(forms.ModelForm):
 
         if starts_at is None or ends_at is None:
             return cleaned_data
-        if timezone.localtime(starts_at).date() < timezone.localdate():
+        is_past_confirmed = (
+            self.instance.pk
+            and self.instance.status == Reservation.Status.CONFIRMED
+            and self.instance.ends_at < timezone.now()
+        )
+        if (
+            not is_past_confirmed
+            and timezone.localtime(starts_at).date() < timezone.localdate()
+        ):
             self.add_error(
                 "starts_at",
                 "Reservations cannot be moved to a past date.",
             )
         if ends_at <= starts_at:
             self.add_error("ends_at", "End time must be after start time.")
+            return cleaned_data
+        if (
+            is_past_confirmed
+            and ends_at != self.instance.ends_at
+            and ends_at < self.instance.ends_at
+        ):
+            self.add_error(
+                "ends_at",
+                "The end time must be later than the booking's current end time.",
+            )
             return cleaned_data
 
         schedule_changed = (

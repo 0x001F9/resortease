@@ -152,6 +152,7 @@ class CalendarDayEntriesView(View):
                 "selected_facility": selected_facility,
                 "is_unavailable": is_unavailable,
                 "is_past_date": is_past_date(selected_day),
+                "now": timezone.now(),
             },
         )
 

@@ -15,6 +15,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
+from dashboard.billing import reservation_completion_payment_error
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.models import Calendar, Facility, Payment, Reservation
 from dashboard.views.calendar_entries import is_day_fully_unavailable
@@ -252,28 +253,9 @@ class MarkBookingCompletedView(View):
                 pk=entry.reservation_id
             )
             reservation_id = reservation.pk
-            total_amount = reservation.total_amount
-            if total_amount is None:
-                completion_blocked = True
-            else:
-                paid_total = (
-                    reservation.payments.filter(
-                        status=Payment.Status.SUCCEEDED,
-                    ).aggregate(total=Sum("amount"))["total"]
-                    or Decimal("0.00")
-                )
-                pending_total = (
-                    reservation.payments.filter(
-                        status=Payment.Status.PENDING,
-                    ).aggregate(total=Sum("amount"))["total"]
-                    or Decimal("0.00")
-                )
-                remaining_balance = max(
-                    total_amount - paid_total + pending_total,
-                    Decimal("0.00"),
-                )
-                if remaining_balance != 0:
-                    completion_blocked = True
+            completion_blocked = bool(
+                reservation_completion_payment_error(reservation)
+            )
 
             if not completion_blocked:
                 entry.status = Calendar.Status.COMPLETED

@@ -16,7 +16,16 @@
                             <p class="font-semibold text-error">Unavailable</p>
                         {% else %}
                             <p class="font-semibold">
-                                {% include "partials/account_link.html" with account_user=entry.reservation.guest account_link_class="link link-hover" %}
+                                <a
+                                    class="link link-hover"
+                                    href="{% url 'reservation-detail' request.branch.slug entry.reservation_id %}"
+                                >
+                                    {% if entry.reservation.guest.first_name or entry.reservation.guest.last_name %}
+                                        {{ entry.reservation.guest.first_name }} {{ entry.reservation.guest.last_name }}
+                                    {% else %}
+                                        {{ entry.reservation.guest.username }}
+                                    {% endif %}
+                                </a>
                             </p>
                             <p class="text-sm text-base-content/70">
                                 {{ entry.get_status_display }} booking
@@ -43,16 +52,23 @@
                             href="{% url 'edit-reservation' request.branch.slug entry.reservation_id %}"
                         {% endif %}
                     >Edit</a>
-                    <form
-                        method="post"
-                        action="{% url 'remove-calendar-entry' request.branch.slug entry.pk %}"
-                        onsubmit="return confirm('{% if entry.is_unavailable %}Remove this unavailable time?{% else %}Cancel this reservation and remove it from the calendar?{% endif %}')"
-                    >
-                        {% csrf_token %}
-                        <button class="btn btn-sm btn-error btn-outline" type="submit">
-                            {% if entry.is_unavailable %}Remove{% else %}Cancel booking{% endif %}
-                        </button>
-                    </form>
+                    {% if not entry.is_unavailable and entry.status == "confirmed" and entry.ends_at <= now %}
+                        <a
+                            class="btn btn-sm btn-success"
+                            href="{% url 'edit-reservation' request.branch.slug entry.reservation_id %}?status=completed"
+                        >Mark completed</a>
+                    {% else %}
+                        <form
+                            method="post"
+                            action="{% url 'remove-calendar-entry' request.branch.slug entry.pk %}"
+                            onsubmit="return confirm('{% if entry.is_unavailable %}Remove this unavailable time?{% else %}Cancel this reservation and remove it from the calendar?{% endif %}')"
+                        >
+                            {% csrf_token %}
+                            <button class="btn btn-sm btn-error btn-outline" type="submit">
+                                {% if entry.is_unavailable %}Remove{% else %}Cancel booking{% endif %}
+                            </button>
+                        </form>
+                    {% endif %}
                 </div>
             </li>
         {% endfor %}

@@ -178,6 +178,348 @@ class CalendarEntryViewTests(TestCase):
             html=True,
         )
 
+    def test_past_confirmed_reservation_locks_start_time_and_requires_later_end(self):
+        self.facility.rate_24hours = Decimal("100.00")
+        self.facility.save(update_fields=["rate_24hours", "updated_at"])
+        starts_at = timezone.localtime(timezone.now()).replace(
+            second=0,
+            microsecond=0,
+        ) - timedelta(days=3)
+        ends_at = starts_at + timedelta(hours=24)
+        reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            ends_at,
+        )
+        edit_url = reverse(
+            "edit-reservation",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        get_response = self.client.get(edit_url)
+        self.assertTrue(
+            get_response.context["form"].fields["starts_at"].disabled
+        )
+        self.assertContains(get_response, 'name="starts_at"')
+        self.assertContains(get_response, "disabled")
+
+        response = self.client.post(
+            edit_url,
+            {
+                "starts_at": timezone.localtime(
+                    starts_at + timedelta(days=2)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "ends_at": timezone.localtime(
+                    ends_at - timedelta(hours=1)
+                ).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Calendar.Status.CONFIRMED,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "The end time must be later than the booking&#x27;s current end time.",
+        )
+        reservation.refresh_from_db()
+        entry.refresh_from_db()
+        self.assertEqual(reservation.starts_at, starts_at)
+        self.assertEqual(entry.starts_at, starts_at)
+        self.assertEqual(entry.ends_at, ends_at)
+
+    def test_past_confirmed_reservation_end_extension_checks_facility_conflicts(self):
+        self.facility.rate_24hours = Decimal("100.00")
+        self.facility.save(update_fields=["rate_24hours", "updated_at"])
+        starts_at = timezone.localtime(timezone.now()).replace(
+            second=0,
+            microsecond=0,
+        ) - timedelta(days=3)
+        ends_at = starts_at + timedelta(hours=24)
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            ends_at,
+        )
+        Calendar.objects.create(
+            facility=self.facility,
+            starts_at=ends_at + timedelta(hours=1),
+            ends_at=ends_at + timedelta(hours=2),
+        )
+        response = self.client.post(
+            reverse(
+                "edit-reservation",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+            {
+                "ends_at": timezone.localtime(
+                    ends_at + timedelta(hours=24)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Calendar.Status.CONFIRMED,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "This facility already has a calendar entry during that time.",
+        )
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.ends_at, ends_at)
+
+    def test_past_confirmed_reservation_can_extend_end_when_schedule_is_available(self):
+        self.facility.rate_24hours = Decimal("100.00")
+        self.facility.save(update_fields=["rate_24hours", "updated_at"])
+        starts_at = timezone.localtime(timezone.now()).replace(
+            second=0,
+            microsecond=0,
+        ) - timedelta(days=3)
+        ends_at = starts_at + timedelta(hours=24)
+        new_ends_at = ends_at + timedelta(hours=24)
+        reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            ends_at,
+        )
+        response = self.client.post(
+            reverse(
+                "edit-reservation",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+            {
+                "ends_at": timezone.localtime(new_ends_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Calendar.Status.CONFIRMED,
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+        )
+        reservation.refresh_from_db()
+        entry.refresh_from_db()
+        self.assertEqual(reservation.starts_at, starts_at)
+        self.assertEqual(reservation.ends_at, new_ends_at)
+        self.assertEqual(entry.starts_at, starts_at)
+        self.assertEqual(entry.ends_at, new_ends_at)
+
+    def test_calendar_modal_offers_edit_form_to_complete_past_confirmed_booking(self):
+        ends_at = timezone.localtime(timezone.now()).replace(
+            second=0,
+            microsecond=0,
+        ) - timedelta(minutes=10)
+        starts_at = ends_at - timedelta(hours=1)
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            ends_at,
+        )
+        selected_day = timezone.localdate(ends_at)
+        response = self.client.get(
+            reverse(
+                "calendar-day-entries",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {"date": selected_day.isoformat()},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Mark completed")
+        self.assertContains(
+            response,
+            f'{reverse("edit-reservation", kwargs={"branch": self.branch.slug, "reservation_id": reservation.pk})}?status=completed',
+        )
+        self.assertNotContains(response, "Cancel booking")
+
+    def test_editing_past_confirmed_booking_requires_payment_before_completion(self):
+        starts_at = timezone.localtime(timezone.now()).replace(
+            second=0,
+            microsecond=0,
+        ) - timedelta(days=2)
+        ends_at = starts_at + timedelta(hours=24)
+        self.assertLess(ends_at, timezone.now())
+        reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            ends_at,
+        )
+        reservation.raw_amount = Decimal("100.00")
+        reservation.save(update_fields=["raw_amount"])
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Deposit",
+            amount=Decimal("50.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+        )
+        edit_url = reverse(
+            "edit-reservation",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+        get_response = self.client.get(f"{edit_url}?status=completed")
+        self.assertEqual(
+            get_response.context["form"].initial["status"],
+            Calendar.Status.COMPLETED,
+        )
+
+        response = self.client.post(
+            edit_url,
+            {
+                "ends_at": timezone.localtime(ends_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Calendar.Status.COMPLETED,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("status", response.context["form"].errors)
+        self.assertEqual(
+            response.context["form"].errors["status"][0],
+            "The booking cannot be completed until its balance is paid. "
+            "Remaining balance: ₱50.00.",
+        )
+        self.assertContains(
+            response,
+            "The booking cannot be completed until its balance is paid.",
+        )
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
+
+    def test_editing_past_confirmed_booking_completes_when_fully_paid(self):
+        starts_at = timezone.localtime(timezone.now()).replace(
+            second=0,
+            microsecond=0,
+        ) - timedelta(days=2)
+        ends_at = starts_at + timedelta(hours=24)
+        reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            ends_at,
+        )
+        reservation.raw_amount = Decimal("100.00")
+        reservation.save(update_fields=["raw_amount"])
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Full payment",
+            amount=Decimal("100.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+        )
+
+        response = self.client.post(
+            reverse(
+                "edit-reservation",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+            {
+                "ends_at": timezone.localtime(ends_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Calendar.Status.COMPLETED,
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+        )
+        reservation.refresh_from_db()
+        entry.refresh_from_db()
+        self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
+        self.assertEqual(entry.status, Calendar.Status.COMPLETED)
+
+    def test_completion_checks_payment_balance_after_end_time_reprices_booking(self):
+        self.facility.rate_24hours = Decimal("100.00")
+        self.facility.save(update_fields=["rate_24hours", "updated_at"])
+        starts_at = timezone.localtime(timezone.now()).replace(
+            second=0,
+            microsecond=0,
+        ) - timedelta(days=3)
+        ends_at = starts_at + timedelta(hours=24)
+        reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            ends_at,
+        )
+        reservation.raw_amount = Decimal("100.00")
+        reservation.save(update_fields=["raw_amount"])
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Original payment",
+            amount=Decimal("100.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+        )
+
+        response = self.client.post(
+            reverse(
+                "edit-reservation",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+            {
+                "ends_at": timezone.localtime(
+                    ends_at + timedelta(hours=24)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Calendar.Status.COMPLETED,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.context["form"].errors["status"][0],
+            "The booking cannot be completed until its balance is paid. "
+            "Remaining balance: ₱100.00.",
+        )
+        reservation.refresh_from_db()
+        entry.refresh_from_db()
+        self.assertEqual(reservation.ends_at, ends_at)
+        self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
+
     def get_calendar_day(self, response, selected_day):
         return next(
             day
@@ -485,6 +827,47 @@ class CalendarEntryViewTests(TestCase):
         self.assertContains(response, "Test Pool")
         self.assertNotContains(response, "No entries are scheduled")
         self.assertContains(response, "Create booking")
+
+    def test_calendar_reservation_links_open_reservation_details_not_guest_profile(self):
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=9),
+            )
+        )
+        reservation, _entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=24),
+        )
+        details_url = reverse(
+            "reservation-detail",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+        profile_url = reverse(
+            "user-profile",
+            kwargs={"username": reservation.guest.username},
+        )
+        calendar_response = self.client.get(
+            reverse("reservations", kwargs={"branch": self.branch.slug}),
+            {"month": timezone.localdate().strftime("%Y-%m")},
+        )
+        dialog_response = self.client.get(
+            reverse(
+                "calendar-day-entries",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {"date": timezone.localdate(starts_at).isoformat()},
+        )
+
+        self.assertEqual(calendar_response.status_code, 200)
+        self.assertContains(calendar_response, f'href="{details_url}"')
+        self.assertNotContains(calendar_response, f'href="{profile_url}"')
+        self.assertEqual(dialog_response.status_code, 200)
+        self.assertContains(dialog_response, f'href="{details_url}"')
+        self.assertNotContains(dialog_response, f'href="{profile_url}"')
 
     def test_calendar_day_dialog_shows_empty_state(self):
         selected_day = timezone.localdate() + timedelta(days=1)

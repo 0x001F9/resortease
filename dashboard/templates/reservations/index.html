@@ -150,7 +150,17 @@
                                                     {% if entry.is_unavailable %}
                                                         Unavailable: {{ entry.facility.name }}
                                                     {% else %}
-                                                        {% include "partials/account_link.html" with account_user=entry.reservation.guest account_link_class="link link-hover" %}
+                                                        <a
+                                                            class="link link-hover"
+                                                            href="{% url 'reservation-detail' request.branch.slug entry.reservation_id %}"
+                                                            title="View reservation details"
+                                                        >
+                                                            {% if entry.reservation.guest.first_name or entry.reservation.guest.last_name %}
+                                                                {{ entry.reservation.guest.first_name }} {{ entry.reservation.guest.last_name }}
+                                                            {% else %}
+                                                                {{ entry.reservation.guest.username }}
+                                                            {% endif %}
+                                                        </a>
                                                     {% endif %}
                                                 </div>
                                             {% endfor %}
