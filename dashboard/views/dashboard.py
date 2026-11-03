@@ -277,23 +277,37 @@ class FinancialReportView(View):
 
         discounts = Decimal("0.00")
         net_revenue = Decimal("0.00")
-        unpriced_reservations = 0
-        recognized_refunds = (
+        recognized_payment_totals = (
             Payment.objects.filter(
                 reservation_id__in=recognized_reservations,
-                status=Payment.Status.REFUNDED,
+                status__in=(
+                    Payment.Status.SUCCEEDED,
+                    Payment.Status.REFUNDED,
+                ),
             )
             .values("reservation_id")
-            .annotate(total=Sum("amount"))
+            .annotate(
+                paid=Sum(
+                    "amount",
+                    filter=Q(status=Payment.Status.SUCCEEDED),
+                ),
+                refunded=Sum(
+                    "amount",
+                    filter=Q(status=Payment.Status.REFUNDED),
+                ),
+            )
         )
-        refunds_by_reservation = {
-            row["reservation_id"]: row["total"] or Decimal("0.00")
-            for row in recognized_refunds
+        payments_by_reservation = {
+            row["reservation_id"]: (
+                row["paid"] or Decimal("0.00"),
+                row["refunded"] or Decimal("0.00"),
+            )
+            for row in recognized_payment_totals
         }
         revenue_categories = defaultdict(
             lambda: {
                 "count": 0,
-                "gross": Decimal("0.00"),
+                "payments": Decimal("0.00"),
                 "discounts": Decimal("0.00"),
                 "refunds": Decimal("0.00"),
                 "net": Decimal("0.00"),
@@ -302,7 +316,7 @@ class FinancialReportView(View):
         revenue_dates = defaultdict(
             lambda: {
                 "count": 0,
-                "gross": Decimal("0.00"),
+                "payments": Decimal("0.00"),
                 "discounts": Decimal("0.00"),
                 "refunds": Decimal("0.00"),
                 "net": Decimal("0.00"),
@@ -313,21 +327,21 @@ class FinancialReportView(View):
             "facility__branch",
             "calendar_entry",
         ).iterator():
-            if reservation.raw_amount is None or reservation.raw_amount < 0:
-                unpriced_reservations += 1
-                continue
-            gross = reservation.raw_amount
-            discount = min(max(reservation.discount, Decimal("0.00")), gross)
-            refund = refunds_by_reservation.get(
-                reservation.pk, Decimal("0.00")
+            successful_total, refund = payments_by_reservation.get(
+                reservation.pk,
+                (Decimal("0.00"), Decimal("0.00")),
             )
-            net = max(gross - discount - refund, Decimal("0.00"))
+            discount = min(
+                max(reservation.discount, Decimal("0.00")),
+                max(reservation.raw_amount or Decimal("0.00"), Decimal("0.00")),
+            )
+            net = max(successful_total - refund, Decimal("0.00"))
             discounts += discount
             net_revenue += net
             category = reservation.facility.facility_type
             category_totals = revenue_categories[category]
             category_totals["count"] += 1
-            category_totals["gross"] += gross
+            category_totals["payments"] += successful_total
             category_totals["discounts"] += discount
             category_totals["refunds"] += refund
             category_totals["net"] += net
@@ -336,7 +350,7 @@ class FinancialReportView(View):
             ).date()
             date_totals = revenue_dates[service_date]
             date_totals["count"] += 1
-            date_totals["gross"] += gross
+            date_totals["payments"] += successful_total
             date_totals["discounts"] += discount
             date_totals["refunds"] += refund
             date_totals["net"] += net
@@ -692,7 +706,6 @@ class FinancialReportView(View):
                 "inventory_sold_amount": inventory_sold_amount,
                 "revenue_by_category": revenue_by_category,
                 "revenue_by_date": revenue_by_date,
-                "unpriced_reservations": unpriced_reservations,
                 "profit_loss_complete": False,
                 "cogs_available": False,
                 "transaction_page": transaction_page,

@@ -4330,13 +4330,22 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
 
     def test_financial_report_combines_branch_revenue_and_filters_dates(self):
+        today = timezone.localdate()
+        service_start = timezone.make_aware(
+            datetime.combine(today, time(hour=9))
+        )
+        service_end = service_start + timedelta(hours=1)
         reservation, _payment = self.create_reservation_with_payment(
             self.branch,
             amount="25.00",
             username="dashboard_report_guest",
         )
+        reservation.starts_at = service_start
+        reservation.ends_at = service_end
         reservation.raw_amount = Decimal("25.00")
-        reservation.save(update_fields=["raw_amount"])
+        reservation.save(
+            update_fields=["starts_at", "ends_at", "raw_amount"]
+        )
         Calendar.objects.create(
             reservation=reservation,
             facility=self.facility,
@@ -4355,8 +4364,12 @@ class DashboardAndFinancialReportTests(TestCase):
             amount="75.00",
             username="other_dashboard_report_guest",
         )
+        other_reservation.starts_at = service_start
+        other_reservation.ends_at = service_end
         other_reservation.raw_amount = Decimal("75.00")
-        other_reservation.save(update_fields=["raw_amount"])
+        other_reservation.save(
+            update_fields=["starts_at", "ends_at", "raw_amount"]
+        )
         Calendar.objects.create(
             reservation=other_reservation,
             facility=other_reservation.facility,
@@ -4364,8 +4377,6 @@ class DashboardAndFinancialReportTests(TestCase):
             ends_at=other_reservation.ends_at,
             status=Calendar.Status.COMPLETED,
         )
-        today = timezone.localdate()
-
         response = self.client.get(
             reverse("financial-reports", kwargs={"branch": self.branch.slug}),
             {
@@ -4571,15 +4582,24 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertEqual(report_response.status_code, 200)
         self.assertTrue(report_response.context["show_all_branches"])
 
-    def test_financial_report_separates_revenue_cash_and_balances(self):
+    def test_financial_report_calculates_net_revenue_from_retained_payments(self):
+        today = timezone.localdate()
+        service_start = timezone.make_aware(
+            datetime.combine(today, time(hour=9))
+        )
+        service_end = service_start + timedelta(hours=1)
         reservation, first_payment = self.create_reservation_with_payment(
             self.branch,
             amount="20.00",
             username="financial_summary_guest",
         )
+        reservation.starts_at = service_start
+        reservation.ends_at = service_end
         reservation.raw_amount = Decimal("100.00")
         reservation.discount = Decimal("10.00")
-        reservation.save(update_fields=["raw_amount", "discount"])
+        reservation.save(
+            update_fields=["starts_at", "ends_at", "raw_amount", "discount"]
+        )
         Calendar.objects.create(
             reservation=reservation,
             facility=self.facility,
@@ -4604,14 +4624,15 @@ class DashboardAndFinancialReportTests(TestCase):
             paid_at=timezone.now(),
         )
 
-        cancelled, _cancelled_payment = self.create_reservation_with_payment(
+        cancelled, cancelled_payment = self.create_reservation_with_payment(
             self.branch,
             amount="500.00",
-            status=Payment.Status.REFUNDED,
             username="financial_cancelled_guest",
         )
+        cancelled.starts_at = service_start
+        cancelled.ends_at = service_end
         cancelled.raw_amount = Decimal("500.00")
-        cancelled.save(update_fields=["raw_amount"])
+        cancelled.save(update_fields=["starts_at", "ends_at", "raw_amount"])
         Calendar.objects.create(
             reservation=cancelled,
             facility=self.facility,
@@ -4619,15 +4640,24 @@ class DashboardAndFinancialReportTests(TestCase):
             ends_at=cancelled.ends_at,
             status=Calendar.Status.CANCELLED,
         )
+        Payment.objects.create(
+            reservation_id=cancelled,
+            name="50% cancellation refund",
+            amount=Decimal("250.00"),
+            method="cash",
+            status=Payment.Status.REFUNDED,
+            paid_at=timezone.now(),
+        )
         unpaid, _pending_payment = self.create_reservation_with_payment(
             self.branch,
             amount="50.00",
             status=Payment.Status.PENDING,
             username="financial_unpaid_guest",
         )
+        unpaid.starts_at = service_start
+        unpaid.ends_at = service_end
         unpaid.raw_amount = Decimal("50.00")
-        unpaid.save(update_fields=["raw_amount"])
-        today = timezone.localdate()
+        unpaid.save(update_fields=["starts_at", "ends_at", "raw_amount"])
         response = self.client.get(
             reverse("financial-reports", kwargs={"branch": self.branch.slug}),
             {
@@ -4639,18 +4669,26 @@ class DashboardAndFinancialReportTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["discounts"], Decimal("10.00"))
-        self.assertEqual(response.context["total_revenue"], Decimal("85.00"))
-        self.assertEqual(response.context["payments_collected"], Decimal("50.00"))
+        self.assertEqual(response.context["total_revenue"], Decimal("295.00"))
+        self.assertEqual(response.context["payments_collected"], Decimal("550.00"))
         self.assertEqual(response.context["inventory_sold_amount"], Decimal("0.00"))
-        self.assertEqual(response.context["refunds_total"], Decimal("505.00"))
+        self.assertEqual(response.context["refunds_total"], Decimal("255.00"))
+        self.assertEqual(
+            response.context["revenue_by_category"][0]["payments"],
+            Decimal("550.00"),
+        )
+        self.assertEqual(
+            response.context["revenue_by_category"][0]["net"],
+            Decimal("295.00"),
+        )
         self.assertEqual(
             response.context["revenue_chart_data"]["recognized_values"][0],
-            85.0,
+            295.0,
         )
         self.assertFalse(response.context["profit_loss_complete"])
         self.assertEqual(
             response.context["transaction_page"].paginator.count,
-            7,
+            8,
         )
 
         filtered_response = self.client.get(
@@ -4667,11 +4705,17 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertEqual(filtered_response.status_code, 200)
         self.assertEqual(
             filtered_response.context["transaction_page"].paginator.count,
-            1,
+            2,
         )
+        filtered_payment_amounts = {
+            row["amount"]
+            for row in filtered_response.context[
+                "transaction_page"
+            ].object_list
+        }
         self.assertEqual(
-            filtered_response.context["transaction_page"].object_list[0]["amount"],
-            first_payment.amount,
+            filtered_payment_amounts,
+            {first_payment.amount, cancelled_payment.amount},
         )
         self.assertContains(
             filtered_response,

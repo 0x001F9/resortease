@@ -70,7 +70,7 @@
 			<div class="card-body gap-1">
 				<p class="text-sm font-semibold text-base-content/60">Net recognized revenue</p>
 				<p class="text-2xl font-bold">₱{{ total_revenue|compact_number }}</p>
-				<p class="text-xs text-base-content/60">Confirmed, cancelled, and completed reservations, less discounts and recorded refunds</p>
+				<p class="text-xs text-base-content/60">Successful reservation payments less recorded refunds, attributed to the booking end date; discounts are already reflected in payments</p>
 			</div>
 		</article>
 		<article class="card border border-base-300 bg-base-100">
@@ -104,38 +104,41 @@
 	<section class="grid gap-6 xl:grid-cols-1">
 	<article class="card border border-base-300 bg-base-100">
 		<div class="card-body">
-			<h2 class="card-title">Recognized revenue by facility category</h2>
-				<p class="text-sm text-base-content/65">Confirmed, cancelled, and completed reservation charges are recognized on the booking end date.</p>
+			<h2 class="card-title">Net reservation revenue by facility category</h2>
+				<p class="text-sm text-base-content/65">Successful reservation payments less recorded refunds, grouped by the booking end date. Discounts are shown for reference and are not deducted again.</p>
 				<div class="overflow-x-auto">
 					<table class="table">
-						<thead><tr><th>Category</th><th class="text-right">Reservations</th><th class="text-right">Gross</th><th class="text-right">Discounts</th><th class="text-right">Refunds</th><th class="text-right">Net</th></tr></thead>
+						<thead><tr><th>Category</th><th class="text-right">Reservations</th><th class="text-right">Successful payments</th><th class="text-right">Discounts*</th><th class="text-right">Refunds</th><th class="text-right">Net retained</th></tr></thead>
 						<tbody>
 							{% for row in revenue_by_category %}
-								<tr><td>{{ row.category }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.gross|compact_number }}</td><td class="text-right">₱{{ row.discounts|compact_number }}</td><td class="text-right">₱{{ row.refunds|compact_number }}</td><td class="text-right">₱{{ row.net|compact_number }}</td></tr>
+								<tr><td>{{ row.category }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.payments|compact_number }}</td><td class="text-right">₱{{ row.discounts|compact_number }}</td><td class="text-right">₱{{ row.refunds|compact_number }}</td><td class="text-right">₱{{ row.net|compact_number }}</td></tr>
 							{% empty %}
-								<tr><td colspan="6" class="py-6 text-center text-base-content/65">No priced reservations in recognized Calendar statuses for this period.</td></tr>
+								<tr><td colspan="6" class="py-6 text-center text-base-content/65">No reservations in recognized Calendar statuses for this period.</td></tr>
 							{% endfor %}
 						</tbody>
 					</table>
 				</div>
+				<p class="text-xs text-base-content/60">*Discounts are reported separately; they are already reflected in amounts actually paid.</p>
 		</div>
 	</article>
 	</section>
 
 	<section class="card border border-base-300 bg-base-100">
 		<div class="card-body">
-			<h2 class="card-title">Recognized revenue by service date</h2>
+			<h2 class="card-title">Net reservation revenue by service date</h2>
+			<p class="text-sm text-base-content/65">Successful reservation payments less recorded refunds, grouped by Calendar end date. Discounts are shown for reference and are not deducted again.</p>
 			<div class="overflow-x-auto">
 				<table class="table">
-					<thead><tr><th>Service date</th><th class="text-right">Reservations</th><th class="text-right">Gross</th><th class="text-right">Discounts</th><th class="text-right">Refunds</th><th class="text-right">Net revenue</th></tr></thead>
+					<thead><tr><th>Service date</th><th class="text-right">Reservations</th><th class="text-right">Successful payments</th><th class="text-right">Discounts*</th><th class="text-right">Refunds</th><th class="text-right">Net retained</th></tr></thead>
 					<tbody>
 						{% for row in revenue_by_date %}
-							<tr><td>{{ row.date|date:"M j, Y" }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.gross|compact_number }}</td><td class="text-right">₱{{ row.discounts|compact_number }}</td><td class="text-right">₱{{ row.refunds|compact_number }}</td><td class="text-right">₱{{ row.net|compact_number }}</td></tr>
+							<tr><td>{{ row.date|date:"M j, Y" }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">₱{{ row.payments|compact_number }}</td><td class="text-right">₱{{ row.discounts|compact_number }}</td><td class="text-right">₱{{ row.refunds|compact_number }}</td><td class="text-right">₱{{ row.net|compact_number }}</td></tr>
 						{% empty %}
-							<tr><td colspan="6" class="py-6 text-center text-base-content/65">No priced reservations in recognized Calendar statuses for this period.</td></tr>
+							<tr><td colspan="6" class="py-6 text-center text-base-content/65">No reservations in recognized Calendar statuses for this period.</td></tr>
 						{% endfor %}
 					</tbody>
 				</table>
+				<p class="text-xs text-base-content/60">*Discounts are reported separately; they are already reflected in amounts actually paid.</p>
 			</div>
 		</div>
 	</section>
@@ -144,10 +147,10 @@
 		<div class="card-body">
 			<div>
 				<h2 class="card-title">Revenue and payment trend</h2>
-				<p class="text-sm text-base-content/65">Net recognized revenue by service date and successful payments by payment date, for the selected date range.</p>
+				<p class="text-sm text-base-content/65">Net reservation revenue by service date and successful payments by payment date, for the selected date range.</p>
 			</div>
 			<div class="line-chart-scroll" data-chart-points="{{ revenue_chart_data.labels|length }}">
-				<div id="reservation-revenue-chart" class="line-chart-canvas" style="height: 20rem" role="img" aria-label="Line chart comparing recognized revenue and payments collected"></div>
+				<div id="reservation-revenue-chart" class="line-chart-canvas" style="height: 20rem" role="img" aria-label="Line chart comparing net reservation revenue and payments collected"></div>
 			</div>
 			<p id="reservation-revenue-chart-error" class="hidden text-sm text-error">The financial trend chart could not be loaded.</p>
 			{{ revenue_chart_data|json_script:"reservation-revenue-chart-data" }}
@@ -333,7 +336,7 @@
 					)
 					return [
 						params[0].axisValue,
-						`Recognized revenue: ₱${recognized}`,
+						`Net reservation revenue: ₱${recognized}`,
 						`Payments collected: ₱${payments}`,
 						`Reservations with payments: ${chartData.reservations[index]}`,
 					].join("<br/>")
@@ -341,7 +344,7 @@
 			},
 			grid: { left: 64, right: 24, top: 42, bottom: 58 },
 			xAxis: { type: "category", boundaryGap: false, data: chartData.labels },
-			legend: { data: ["Recognized revenue", "Payments collected"] },
+			legend: { data: ["Net reservation revenue", "Payments collected"] },
 			dataZoom: [
 				{
 					type: "inside",
@@ -363,7 +366,7 @@
 			},
 			series: [
 				{
-					name: "Recognized revenue",
+					name: "Net reservation revenue",
 					type: "line",
 					smooth: true,
 					showSymbol: false,
