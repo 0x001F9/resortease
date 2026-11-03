@@ -678,7 +678,7 @@ class FinancialReportView(View):
                 inventory__branch=selected_branch
             )
         inventory_movement_rows = defaultdict(
-            lambda: {"received": 0, "consumed": 0, "returned": 0, "adjustment": 0}
+            lambda: {"received": 0, "consumed": 0, "adjustment": 0}
         )
         inventory_purchase_cost = Decimal("0.00")
         for movement in inventory_transactions.iterator():

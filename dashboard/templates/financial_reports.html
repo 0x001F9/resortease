@@ -236,10 +236,10 @@
 				<p class="font-semibold">Known received-stock cost: ₱{{ inventory_purchase_cost|floatformat:2 }} <span class="font-normal text-base-content/60">(movements without a recorded unit cost are omitted)</span></p>
 				<div class="overflow-x-auto">
 					<table class="table table-sm">
-						<thead><tr><th>Inventory item</th><th class="text-right">Received</th><th class="text-right">Consumed</th><th class="text-right">Returned</th><th class="text-right">Adjustments</th></tr></thead>
+						<thead><tr><th>Inventory item</th><th class="text-right">Received</th><th class="text-right">Consumed</th><th class="text-right">Adjustments</th></tr></thead>
 						<tbody>
 							{% for row in inventory_movement_rows %}
-								<tr><td>{{ row.name }}</td><td class="text-right">{{ row.received }}</td><td class="text-right">{{ row.consumed }}</td><td class="text-right">{{ row.returned }}</td><td class="text-right">{{ row.adjustment }}</td></tr>
+								<tr><td>{{ row.name }}</td><td class="text-right">{{ row.received }}</td><td class="text-right">{{ row.consumed }}</td><td class="text-right">{{ row.adjustment }}</td></tr>
 							{% empty %}
 								<tr><td colspan="5" class="py-6 text-center text-base-content/65">No inventory movements recorded in this period.</td></tr>
 							{% endfor %}

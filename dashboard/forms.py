@@ -686,14 +686,11 @@ class InventoryMovementForm(forms.Form):
         transaction_type = cleaned_data.get("transaction_type")
         quantity = cleaned_data.get("quantity")
 
-        if transaction_type in {
-            InventoryTransaction.Type.ADJUSTMENT,
-            InventoryTransaction.Type.RETURNED,
-        }:
+        if transaction_type == InventoryTransaction.Type.ADJUSTMENT:
             if not cleaned_data.get("notes", "").strip():
                 self.add_error(
                     "notes",
-                    "A note is required for adjustments and returns.",
+                    "A note is required for adjustments.",
                 )
 
         if transaction_type == InventoryTransaction.Type.ADJUSTMENT:
@@ -702,10 +699,7 @@ class InventoryMovementForm(forms.Form):
         elif transaction_type == InventoryTransaction.Type.CONSUMED:
             if quantity is not None and quantity > 0:
                 cleaned_data["quantity_change"] = -quantity
-        elif transaction_type in {
-            InventoryTransaction.Type.RECEIVED,
-            InventoryTransaction.Type.RETURNED,
-        }:
+        elif transaction_type == InventoryTransaction.Type.RECEIVED:
             if quantity is not None and quantity > 0:
                 cleaned_data["quantity_change"] = quantity
         if (

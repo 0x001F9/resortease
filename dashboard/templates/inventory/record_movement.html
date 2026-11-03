@@ -46,7 +46,7 @@
                 <div>
                     <h2 class="text-lg font-semibold">Stock transaction</h2>
                     <p class="mt-1 text-sm text-base-content/70">
-                        Received and returned amounts add stock; consumed amounts subtract stock. Adjustments can increase or decrease the balance.
+                        Received amounts add stock; consumed amounts subtract stock. Adjustments can increase or decrease the balance.
                     </p>
                 </div>
                 <form method="post" class="space-y-5" id="inventory-movement-form">
@@ -79,7 +79,7 @@
                                     {% else %}
                                     {{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}
                                     {% endif %}
-                                    {% if field.name == "notes" %}<span id="movement-notes-required-marker" class="text-error" {% if inventory_form.data.transaction_type != "adjustment" and inventory_form.data.transaction_type != "returned" %}hidden{% endif %}>*</span>{% endif %}
+                                    {% if field.name == "notes" %}<span id="movement-notes-required-marker" class="text-error" {% if inventory_form.data.transaction_type != "adjustment" %}hidden{% endif %}>*</span>{% endif %}
                                 </span>
                             </span>
                             {{ field }}
@@ -259,7 +259,7 @@
         );
         const updateInventoryFields = () => {
             const adjusting = transactionType.value === "adjustment";
-            const notesRequired = adjusting || transactionType.value === "returned";
+            const notesRequired = adjusting;
             const stock = quantityByInventory.get(inventorySelect.value);
             quantityLabel.textContent = adjusting ? "New stock level" : "Quantity";
             quantityField.min = adjusting ? "0" : "1";

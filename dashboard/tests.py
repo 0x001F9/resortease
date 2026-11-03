@@ -3006,14 +3006,13 @@ class InventoryViewTests(TestCase):
         self.assertEqual(self.inventory_item.transactions.count(), 1)
         self.assertContains(response, "would make stock negative")
 
-    def test_adjustments_and_returns_require_notes(self):
+    def test_adjustments_require_notes(self):
         url = reverse(
             "record-inventory-movement",
             kwargs={"branch": self.branch.slug},
         )
         for transaction_type in (
             InventoryTransaction.Type.ADJUSTMENT,
-            InventoryTransaction.Type.RETURNED,
         ):
             with self.subTest(transaction_type=transaction_type):
                 response = self.client.post(
@@ -3029,7 +3028,7 @@ class InventoryViewTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(
                     response,
-                    "A note is required for adjustments and returns.",
+                    "A note is required for adjustments.",
                 )
                 self.assertEqual(self.inventory_item.transactions.count(), 1)
 
@@ -4763,7 +4762,6 @@ class DashboardAndFinancialReportTests(TestCase):
                     "name": inventory.name,
                     "received": 3,
                     "consumed": 0,
-                    "returned": 0,
                     "adjustment": 0,
                 }
             ],

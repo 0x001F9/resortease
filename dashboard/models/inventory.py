@@ -74,11 +74,7 @@ class Inventory(models.Model):
             raise ValueError("Inventory transaction quantity_change cannot be zero.")
         if quantity_change is not None and (
             (
-                transaction_type
-                in {
-                    InventoryTransaction.Type.RECEIVED,
-                    InventoryTransaction.Type.RETURNED,
-                }
+                transaction_type == InventoryTransaction.Type.RECEIVED
                 and quantity_change < 0
             )
             or (
@@ -87,7 +83,7 @@ class Inventory(models.Model):
             )
         ):
             raise ValueError(
-                "Received and returned quantities must be positive; consumed quantities must be negative."
+                "Received quantities must be positive; consumed quantities must be negative."
             )
         if target_quantity is not None and target_quantity < 0:
             raise ValueError("Inventory adjustment target cannot be negative.")
@@ -132,7 +128,6 @@ class InventoryTransaction(models.Model):
     class Type(models.TextChoices):
         RECEIVED = "received", "Received"
         CONSUMED = "consumed", "Consumed"
-        RETURNED = "returned", "Returned"
         ADJUSTMENT = "adjustment", "Adjustment"
 
     inventory = models.ForeignKey(
@@ -181,7 +176,6 @@ class InventoryTransaction(models.Model):
                     Q(transaction_type="adjustment")
                     | Q(transaction_type="received", quantity_change__gt=0)
                     | Q(transaction_type="consumed", quantity_change__lt=0)
-                    | Q(transaction_type="returned", quantity_change__gt=0)
                 ),
                 name="inventory_transaction_type_quantity_sign",
             ),
