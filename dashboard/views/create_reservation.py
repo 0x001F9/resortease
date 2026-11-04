@@ -271,25 +271,39 @@ class CreateReservationView(View):
             )
 
         with transaction.atomic():
-            reservation = Reservation.objects.create(
-                guest=guest,
-                facility=facility,
-                starts_at=starts_at,
-                ends_at=ends_at,
-                party_size=party_size,
-                discount=discount,
-                status=status,
-                special_requests=special_requests,
-            )
-            if status == Reservation.Status.CONFIRMED:
-                Calendar.objects.create(
-                    reservation=reservation,
+            User.object.select_for_update().get(pk=guest.pk)
+            if Reservation.objects.has_guest_time_conflict(
+                guest, starts_at, ends_at
+            ):
+                errors["starts_at"] = (
+                    "This guest already has a reservation that overlaps this time."
+                )
+            else:
+                reservation = Reservation.objects.create(
+                    guest=guest,
                     facility=facility,
                     starts_at=starts_at,
                     ends_at=ends_at,
-                    status=Calendar.Status.CONFIRMED,
+                    party_size=party_size,
+                    discount=discount,
+                    status=status,
+                    special_requests=special_requests,
                 )
-                Reservation.objects.decline_conflicts(reservation)
+                if status == Reservation.Status.CONFIRMED:
+                    Calendar.objects.create(
+                        reservation=reservation,
+                        facility=facility,
+                        starts_at=starts_at,
+                        ends_at=ends_at,
+                        status=Calendar.Status.CONFIRMED,
+                    )
+                    Reservation.objects.decline_conflicts(reservation)
+        if errors:
+            return render(
+                request,
+                self.template_name,
+                self.get_form_context(request, form_data, errors),
+            )
         reservations_url = reverse(
             "reservations",
             kwargs={"branch": request.branch.slug},

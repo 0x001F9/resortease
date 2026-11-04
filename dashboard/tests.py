@@ -2782,6 +2782,70 @@ class CalendarEntryViewTests(TestCase):
         )
         self.assertEqual(Calendar.objects.count(), 1)
 
+    def test_staff_creation_rejects_guest_overlap_across_facilities(self):
+        self.facility.rate_24hours = 100
+        self.facility.save(update_fields=["rate_24hours", "updated_at"])
+        other_facility = Facility.objects.create(
+            branch=self.branch,
+            name="Second Pool",
+            slug="second-pool",
+            rate_24hours=200,
+        )
+        selected_day = timezone.localdate() + timedelta(days=1)
+
+        for index, route_name in enumerate(
+            ("create-reservation", "create-booking")
+        ):
+            with self.subTest(route=route_name):
+                guest = User.object.create(
+                    username=f"overlapping_guest_{index}",
+                    role=User.Role.User,
+                    phone_number_code="+1",
+                    phone_number=f"55512347{index:02}",
+                    email=f"overlapping_guest_{index}@example.com",
+                    first_name="Overlapping",
+                    last_name="Guest",
+                )
+                starts_at = timezone.make_aware(
+                    datetime.combine(selected_day, time(hour=11))
+                )
+                Reservation.objects.create(
+                    guest=guest,
+                    facility=other_facility,
+                    starts_at=starts_at,
+                    ends_at=starts_at + timedelta(hours=2),
+                    status=(
+                        Reservation.Status.PENDING
+                        if index == 0
+                        else Reservation.Status.CONFIRMED
+                    ),
+                )
+
+                response = self.client.post(
+                    reverse(
+                        route_name,
+                        kwargs={"branch": self.branch.slug},
+                    ),
+                    {
+                        "facility": str(self.facility.pk),
+                        "guest": str(guest.pk),
+                        "starts_at": f"{selected_day.isoformat()}T09:00",
+                        "rate_package": "24hours",
+                        "days": "1",
+                        "party_size": "1",
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    response.context["errors"]["starts_at"],
+                    "This guest already has a reservation that overlaps this time.",
+                )
+                self.assertEqual(
+                    Reservation.objects.filter(guest=guest).count(),
+                    1,
+                )
+
     def test_back_to_back_calendar_entries_do_not_conflict(self):
         starts_at = timezone.localdate() + timedelta(days=1)
         self.create_unavailable(

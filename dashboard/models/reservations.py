@@ -8,6 +8,17 @@ from django.utils import timezone
 
 
 class ReservationManager(models.Manager):
+    def has_guest_time_conflict(self, guest, starts_at, ends_at):
+        return self.filter(
+            guest=guest,
+            status__in=(
+                Reservation.Status.PENDING,
+                Reservation.Status.CONFIRMED,
+            ),
+            starts_at__lt=ends_at,
+            ends_at__gt=starts_at,
+        ).exists()
+
     def cancel_pending_payments(self, reservation):
         return reservation.payments.filter(
             status=Payment.Status.PENDING,

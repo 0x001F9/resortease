@@ -153,6 +153,28 @@ class AgentToolTests(TestCase):
         self.assertEqual(reservation.special_requests, "Near the shallow end.")
         self.assertFalse(context.requires_auth_actions)
 
+    def test_authenticated_reservation_rejects_existing_account_overlap(self):
+        Reservation.objects.create(
+            guest=self.guest,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(hours=9),
+            status=Reservation.Status.CONFIRMED,
+        )
+        context = AgentContext(
+            user_id=self.guest.pk,
+            first_name=self.guest.first_name,
+            session=self.session,
+        )
+
+        result = add_pending_reservation.func(
+            **self.reservation_args(),
+            runtime=self.runtime(context),
+        )
+
+        self.assertIn("already have a reservation", result)
+        self.assertEqual(Reservation.objects.filter(guest=self.guest).count(), 1)
+
     def test_latest_reservation_is_private_and_includes_payments(self):
         reservation = Reservation.objects.create(
             guest=self.guest,

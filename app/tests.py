@@ -361,6 +361,75 @@ class PublicReservationFlowTests(TestCase):
         self.assertEqual(reservation.discount, 0)
         self.assertFalse(Calendar.objects.filter(reservation=reservation).exists())
 
+    def test_authenticated_request_rejects_overlap_with_own_reservation(self):
+        other_facility = Facility.objects.create(
+            branch=self.branch,
+            name="Harbor Lounge",
+            slug="harbor-lounge",
+            rate_24hours=500,
+            capacity=4,
+        )
+        Reservation.objects.create(
+            guest=self.user,
+            facility=other_facility,
+            starts_at=self.starts_at + timedelta(hours=1),
+            ends_at=self.starts_at + timedelta(days=1, hours=1),
+            status=Reservation.Status.CONFIRMED,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, self.payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "You already have a reservation that overlaps this time.",
+        )
+        self.assertEqual(Reservation.objects.filter(guest=self.user).count(), 1)
+
+    def test_resuming_public_reservation_rejects_new_account_overlap(self):
+        Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+            status=Reservation.Status.PENDING,
+        )
+        response = self.client.post(self.url, self.payload)
+        self.assertEqual(response.status_code, 200)
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("resume-public-reservation"))
+
+        self.assertRedirects(
+            response,
+            self.url,
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(Reservation.objects.filter(guest=self.user).count(), 1)
+
+    def test_declined_reservation_does_not_block_new_request(self):
+        Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+            status=Reservation.Status.DECLINED,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, self.payload)
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "public-reservation-detail",
+                kwargs={"reservation_id": Reservation.objects.latest("pk").pk},
+            ),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(Reservation.objects.filter(guest=self.user).count(), 2)
+
     def test_public_reservation_rejects_party_size_above_facility_capacity(self):
         response = self.client.post(
             self.url,

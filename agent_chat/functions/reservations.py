@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.db.models import QuerySet
 from django.urls import reverse
 from django.utils.http import urlencode
@@ -151,15 +152,26 @@ def add_pending_reservation(
         guest = User.objects.filter(pk=runtime.context.user_id).first()
         if guest is None:
             raise RuntimeError("The authenticated chat user could not be found.")
-        Reservation.objects.create(
-            guest=guest,
-            facility=facility,
-            starts_at=reservation_data["starts_at"],
-            ends_at=reservation_data["ends_at"],
-            party_size=reservation_data["party_size"],
-            special_requests=reservation_data["special_requests"],
-            status=Reservation.Status.PENDING,
-        )
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=guest.pk)
+            if Reservation.objects.has_guest_time_conflict(
+                guest,
+                reservation_data["starts_at"],
+                reservation_data["ends_at"],
+            ):
+                return (
+                    "I couldn't create that reservation request. You already have "
+                    "a reservation that overlaps this time."
+                )
+            Reservation.objects.create(
+                guest=guest,
+                facility=facility,
+                starts_at=reservation_data["starts_at"],
+                ends_at=reservation_data["ends_at"],
+                party_size=reservation_data["party_size"],
+                special_requests=reservation_data["special_requests"],
+                status=Reservation.Status.PENDING,
+            )
         return "Your reservation request was saved to your account and is pending confirmation."
 
     runtime.context.session[PENDING_RESERVATION_SESSION_KEY] = {

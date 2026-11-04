@@ -11,6 +11,7 @@ from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.views import View
 
+from account.models import User
 from app.forms import PublicReservationForm
 from dashboard.billing import (
     RATE_REQUIRED_ERROR,
@@ -121,6 +122,14 @@ def resume_pending_public_reservation(request):
             branch,
             "The selected rate is no longer available. Please choose another time.",
         )
+    if Reservation.objects.has_guest_time_conflict(
+        request.user, starts_at, ends_at
+    ):
+        return (
+            None,
+            branch,
+            "You already have a reservation that overlaps this time.",
+        )
     if has_calendar_conflict(facility, starts_at, ends_at):
         return (
             None,
@@ -128,15 +137,25 @@ def resume_pending_public_reservation(request):
             "Availability has changed. Please choose another time.",
         )
 
-    reservation = Reservation.objects.create(
-        guest=request.user,
-        facility=facility,
-        starts_at=starts_at,
-        ends_at=ends_at,
-        party_size=form.cleaned_data["party_size"],
-        status=Reservation.Status.PENDING,
-        special_requests=form.cleaned_data["special_requests"],
-    )
+    with transaction.atomic():
+        User.object.select_for_update().get(pk=request.user.pk)
+        if Reservation.objects.has_guest_time_conflict(
+            request.user, starts_at, ends_at
+        ):
+            return (
+                None,
+                branch,
+                "You already have a reservation that overlaps this time.",
+            )
+        reservation = Reservation.objects.create(
+            guest=request.user,
+            facility=facility,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            party_size=form.cleaned_data["party_size"],
+            status=Reservation.Status.PENDING,
+            special_requests=form.cleaned_data["special_requests"],
+        )
     request.session.pop(PENDING_RESERVATION_SESSION_KEY, None)
     return reservation, branch, None
 
@@ -188,29 +207,50 @@ class PublicReservationView(View):
             raw_amount = calculate_total_amount(facility, starts_at, ends_at)
             if raw_amount is None:
                 form.add_error("rate_package", RATE_REQUIRED_ERROR)
+            elif (
+                request.user.is_authenticated
+                and Reservation.objects.has_guest_time_conflict(
+                    request.user, starts_at, ends_at
+                )
+            ):
+                form.add_error(
+                    "starts_at",
+                    "You already have a reservation that overlaps this time.",
+                )
             elif has_calendar_conflict(facility, starts_at, ends_at):
                 form.add_error(
                     "starts_at",
                     "This facility is not available during the selected time.",
                 )
             elif request.user.is_authenticated:
-                reservation = Reservation.objects.create(
-                    guest=request.user,
-                    facility=facility,
-                    starts_at=starts_at,
-                    ends_at=ends_at,
-                    party_size=form.cleaned_data["party_size"],
-                    status=Reservation.Status.PENDING,
-                    special_requests=form.cleaned_data["special_requests"],
-                )
-                messages.success(
-                    request,
-                    "Your reservation request was submitted and is pending confirmation.",
-                )
-                return redirect(
-                    "public-reservation-detail",
-                    reservation_id=reservation.pk,
-                )
+                with transaction.atomic():
+                    User.object.select_for_update().get(pk=request.user.pk)
+                    if Reservation.objects.has_guest_time_conflict(
+                        request.user, starts_at, ends_at
+                    ):
+                        form.add_error(
+                            "starts_at",
+                            "You already have a reservation that overlaps this time.",
+                        )
+                    else:
+                        reservation = Reservation.objects.create(
+                            guest=request.user,
+                            facility=facility,
+                            starts_at=starts_at,
+                            ends_at=ends_at,
+                            party_size=form.cleaned_data["party_size"],
+                            status=Reservation.Status.PENDING,
+                            special_requests=form.cleaned_data["special_requests"],
+                        )
+                if "starts_at" not in form.errors:
+                    messages.success(
+                        request,
+                        "Your reservation request was submitted and is pending confirmation.",
+                    )
+                    return redirect(
+                        "public-reservation-detail",
+                        reservation_id=reservation.pk,
+                    )
             else:
                 request.session[PENDING_RESERVATION_SESSION_KEY] = {
                     "branch_id": branch.pk,
