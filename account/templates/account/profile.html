@@ -24,7 +24,7 @@
                         </div>
                     </div>
                     <div class="pb-1">
-                        <h1 class="flex flex-wrap items-center gap-2 font-serif text-2xl font-medium sm:text-3xl">
+                        <h1 class="flex flex-wrap items-center gap-2 text-2xl font-medium sm:text-3xl">
                             <span>{{ full_name }}</span>
                             {% if profile_user.is_superuser %}
                                 <span class="profile-superuser-badge">Superuser</span>
@@ -65,7 +65,7 @@
             <section class="mt-10" aria-labelledby="reservation-history-heading">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <h2 id="reservation-history-heading" class="font-serif text-xl font-medium">Reservation &amp; booking history</h2>
+                        <h2 id="reservation-history-heading" class=" text-xl font-medium">Reservation &amp; booking history</h2>
                         <p class="mt-1 text-sm text-base-content/60">A record of this guest's reservations and bookings.</p>
                     </div>
                     <span class="badge badge-ghost">{{ reservations|length }} total</span>

@@ -4,8 +4,7 @@
 @source not "./daisyui{,*}.mjs";
 
 @theme {
-  --font-sans: "DM Sans", sans-serif;
-  --font-serif: "Fraunces", Georgia, serif;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 @plugin "./daisyui-theme.mjs" {

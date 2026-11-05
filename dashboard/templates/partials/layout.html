@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title|default:"ResortEase Dashboard" }}</title>
     {% load static %}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="{% static 'dist/output.css' %}" rel="stylesheet" type="text/css" />
     <script src="{% static 'js/title-case-inputs.js' %}" defer></script>
     {% block extra_head %}{% endblock %}
@@ -21,13 +18,10 @@
             <header class="navbar sticky top-0 z-30 border-b border-base-300 bg-base-100/95 px-3 backdrop-blur sm:px-5">
                 <div class="navbar-start min-w-0 gap-2">
                     {% if not hide_aside %}
-                        <label for="dashboard-drawer" class="btn btn-ghost btn-sm lg:hidden" aria-label="Open dashboard navigation">
-                            <img 
-                                src="{% static 'icon/hamburger-md-svgrepo-com.svg' %}"
-                                alt="Open dashboard navigation" 
-                                class="h-5 w-5"
-                                style="filter: invert()" 
-                            />
+                        <label for="dashboard-drawer" class="btn btn-ghost btn-sm text-base-content lg:hidden" aria-label="Open dashboard navigation">
+                            <svg aria-hidden="true" class="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M5 7H19M5 12H19M5 17H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
                         </label>
                     {% endif %}
                     <a href="/" class="text-lg font-black tracking-tight text-primary sm:text-xl">ResortEase</a>
