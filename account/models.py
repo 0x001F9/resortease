@@ -15,6 +15,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 
 from app.util.get_info_ip import get_address_ip
+from app.fields import TitleCaseCharField
 
 
 UsernameValidator = RegexValidator(
@@ -164,14 +165,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     otp_code = models.CharField(max_length=6, blank=True, default="")
     otp_expires_at = models.DateTimeField(null=True, blank=True)
     avatar_url = models.URLField(max_length=255, blank=True, null=True)
-    first_name = models.CharField(max_length=100, validators=[NameValidator])
-    middle_name = models.CharField(
+    first_name = TitleCaseCharField(max_length=100, validators=[NameValidator])
+    middle_name = TitleCaseCharField(
         max_length=100,
         null=True,
         blank=True,
         validators=[NameValidator],
     )
-    last_name = models.CharField(max_length=100, validators=[NameValidator])
+    last_name = TitleCaseCharField(max_length=100, validators=[NameValidator])
     address = models.TextField(blank=True, null=True)
 
     updated_at = models.DateTimeField(auto_now=True)

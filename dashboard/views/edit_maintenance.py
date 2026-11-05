@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 
+from app.fields import normalize_title_case
 from account.models import User
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.models.branches_facilities import Facility, Maintenance
@@ -85,7 +86,7 @@ class EditFacilitiesMaintenanceView(View):
         if context["can_edit_details"]:
             form_data.update({
                 "facility": request.POST.get("facility", "").strip(),
-                "title": request.POST.get("title", "").strip(),
+                "title": normalize_title_case(request.POST.get("title", "")),
                 "issue_type": request.POST.get("issue_type", "").strip(),
                 "description": request.POST.get("description", "").strip(),
             })

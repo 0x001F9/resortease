@@ -19,7 +19,64 @@ from dashboard.models import (
     Reservation,
 )
 from dashboard.models.inventory_assets import InventoryAssetHistory
-from dashboard.forms import ReservationEditForm
+from dashboard.forms import (
+    InventoryAssetCreateForm,
+    InventoryItemCreateForm,
+    PaymentForm,
+    ReservationEditForm,
+)
+
+
+class NameAndTitleFormattingTests(TestCase):
+    def test_form_fields_normalize_names_and_titles_before_save(self):
+        test_values = (
+            (InventoryItemCreateForm(), "name"),
+            (InventoryAssetCreateForm(), "name"),
+            (PaymentForm(), "name"),
+        )
+
+        for form, field_name in test_values:
+            with self.subTest(form=form.__class__.__name__):
+                self.assertEqual(
+                    form.fields[field_name].clean("  nEW  iTEM "),
+                    "New  Item",
+                )
+
+    def test_name_and_title_values_are_formatted_when_saved(self):
+        branch = Branch.objects.create(
+            name="  nORTh  bRAnch ",
+            slug="north-branch-formatting",
+            city="Test City",
+            address="1 Test Street",
+        )
+        facility = Facility.objects.create(
+            branch=branch,
+            name="  oUTdoor  pOOL ",
+            slug="outdoor-pool-formatting",
+        )
+        maintenance = Maintenance.objects.create(
+            facility=facility,
+            title="  rEPAIR  pOOL pUMP ",
+            description="",
+            issue_type="repair",
+        )
+
+        self.assertEqual(branch.name, "North  Branch")
+        self.assertEqual(facility.name, "Outdoor  Pool")
+        self.assertEqual(maintenance.title, "Repair  Pool Pump")
+
+    def test_queryset_updates_format_name_values_before_storage(self):
+        branch = Branch.objects.create(
+            name="Existing Branch",
+            slug="existing-branch-formatting",
+            city="Test City",
+            address="1 Test Street",
+        )
+
+        Branch.objects.filter(pk=branch.pk).update(name="  sOUTH  bRAnch ")
+
+        branch.refresh_from_db()
+        self.assertEqual(branch.name, "South  Branch")
 
 
 class CalendarEntryViewTests(TestCase):

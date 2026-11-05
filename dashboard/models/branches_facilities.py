@@ -5,9 +5,10 @@ from django.db import models
 from django.db.models import Q
 
 from account.models import User
+from app.fields import TitleCaseCharField
 
 class Branch(models.Model):
-    name = models.CharField(max_length=150, unique=True)
+    name = TitleCaseCharField(max_length=150, unique=True)
     slug = models.CharField(max_length=255, unique=True)
     city = models.CharField(max_length=100)
     address = models.TextField()
@@ -51,7 +52,7 @@ class Facility(models.Model):
         EVENT_HALL = "event_hall", "Event Hall"
 
     branch = models.ForeignKey("Branch", related_name="facilities", on_delete=models.CASCADE)
-    name = models.CharField(max_length=150)
+    name = TitleCaseCharField(max_length=150)
     slug = models.CharField(max_length=255, unique=True)
     facility_type = models.CharField(
         max_length=100,
@@ -115,7 +116,7 @@ class Maintenance(models.Model):
         related_name="maintenance_requests", 
         on_delete=models.CASCADE
     )
-    title = models.CharField(max_length=200)
+    title = TitleCaseCharField(max_length=200)
     description = models.TextField()
     issue_type = models.CharField(max_length=80)
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)

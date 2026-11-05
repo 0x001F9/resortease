@@ -6,6 +6,8 @@ from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
 
+from app.fields import TitleCaseCharField
+
 
 class ReservationManager(models.Manager):
     def has_guest_time_conflict(self, guest, starts_at, ends_at):
@@ -254,7 +256,7 @@ class Payment(models.Model):
         on_delete=models.PROTECT,
         related_name="payments",
     )
-    name = models.CharField(max_length=100)
+    name = TitleCaseCharField(max_length=100)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     method = models.CharField(max_length=50)
     status = models.CharField(

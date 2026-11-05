@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
 
+from app.fields import normalize_title_case
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.models.branches_facilities import Facility
@@ -54,7 +55,7 @@ class EditFacilityView(View):
     def post(self, request, facility_slug):
         facility = self.get_facility(request, facility_slug)
         form_data = {
-            "name": request.POST.get("name", "").strip(),
+            "name": normalize_title_case(request.POST.get("name", "")),
             "facility_type": request.POST.get("facility_type", "").strip(),
             "description": request.POST.get("description", "").strip(),
             "status": request.POST.get("status", "").strip(),

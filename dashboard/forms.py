@@ -4,6 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from app.fields import TitleCaseFormField
 from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
 from dashboard.models import (
     Calendar,
@@ -17,7 +18,7 @@ from dashboard.models.inventory import InventoryTransaction
 
 
 class PaymentForm(forms.ModelForm):
-    name = forms.CharField(
+    name = TitleCaseFormField(
         max_length=100,
         widget=forms.TextInput(
             attrs={

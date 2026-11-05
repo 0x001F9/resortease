@@ -5,6 +5,7 @@ from django.utils.decorators import method_decorator
 from django.utils.text import slugify
 from django.views import View
 
+from app.fields import normalize_title_case
 from account.decoration.role_required import role_required
 from account.models import User
 from dashboard.decorations.branch_check import check_branch_dashboard
@@ -68,7 +69,7 @@ class CreateFacilityView(View):
 
     def post(self, request):
         form_data = {
-            "name": request.POST.get("name", "").strip(),
+            "name": normalize_title_case(request.POST.get("name", "")),
             "facility_type": request.POST.get("facility_type", "").strip(),
             "image_url": request.POST.get("image_url", "").strip(),
             "description": request.POST.get("description", "").strip(),

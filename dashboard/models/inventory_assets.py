@@ -1,5 +1,7 @@
 from django.db import models, transaction
 
+from app.fields import TitleCaseCharField
+
 
 class InventoryAsset(models.Model):
     class Status(models.TextChoices):
@@ -14,7 +16,7 @@ class InventoryAsset(models.Model):
         on_delete=models.CASCADE,
         related_name="inventory_assets",
     )
-    name = models.CharField(max_length=150)
+    name = TitleCaseCharField(max_length=150)
     asset_tag = models.CharField(max_length=100, unique=True)
     category = models.CharField(max_length=100)
     brand = models.CharField(max_length=100, blank=True)

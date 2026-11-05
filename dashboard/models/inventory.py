@@ -1,6 +1,8 @@
 from django.db import models, transaction
 from django.db.models import F, Q
 
+from app.fields import TitleCaseCharField
+
 
 class Inventory(models.Model):
     class Unit(models.TextChoices):
@@ -22,7 +24,7 @@ class Inventory(models.Model):
         on_delete=models.CASCADE,
         related_name="inventory_items",
     )
-    name = models.CharField(max_length=150, unique=True)
+    name = TitleCaseCharField(max_length=150, unique=True)
     sku = models.CharField(max_length=64, blank=True, null=True, unique=True)
     unit = models.CharField(max_length=20, choices=Unit.choices)
     quantity_on_hand = models.PositiveIntegerField(default=0)

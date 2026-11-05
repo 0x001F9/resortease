@@ -8,12 +8,36 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import AdminUserChangeForm, AdminUserCreationForm
+from .forms import AdminUserChangeForm, AdminUserCreationForm, ProfileForm
 from .admin import CustomUserAdmin
 from .models import OTP_EXPIRY_DURATION, User
 from .views.security import mask_email
 from dashboard.models import Branch, Calendar, Facility, Reservation
 from app.admin_site import admin_site
+
+
+class UserNameFormattingTests(TestCase):
+    def test_profile_form_normalizes_personal_names(self):
+        form = ProfileForm()
+
+        self.assertEqual(form.fields["first_name"].clean("  jANE "), "Jane")
+        self.assertEqual(form.fields["middle_name"].clean(" mARIE "), "Marie")
+        self.assertEqual(form.fields["last_name"].clean(" dOE  "), "Doe")
+
+    def test_personal_name_fields_are_formatted_when_saved(self):
+        user = User.object.create(
+            username="formatted_names",
+            email="formatted_names@example.com",
+            phone_number_code="+1",
+            phone_number="5555550310",
+            first_name="  jANE ",
+            middle_name=" mARIE ",
+            last_name=" dOE  ",
+        )
+
+        self.assertEqual(user.first_name, "Jane")
+        self.assertEqual(user.middle_name, "Marie")
+        self.assertEqual(user.last_name, "Doe")
 
 
 class LoginPasswordVisibilityTests(TestCase):

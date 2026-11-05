@@ -1,6 +1,7 @@
 from django.shortcuts import redirect, render
 from django.views import View
 from django.utils.decorators import method_decorator
+from app.fields import normalize_title_case
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.models.branches_facilities import Branch, Facility, Maintenance
 from dashboard.decorations.branch_check import check_branch_dashboard
@@ -37,7 +38,7 @@ class AddFacilitiesMaintenanceView(View):
 
         form_data = {
             "facility": facility_id,
-            "title": request.POST.get("title", "").strip(),
+            "title": normalize_title_case(request.POST.get("title", "")),
             "issue_type": request.POST.get("issue_type", "").strip(),
             "priority": request.POST.get("priority", Maintenance.Priority.MEDIUM),
             "description": request.POST.get("description", "").strip(),
