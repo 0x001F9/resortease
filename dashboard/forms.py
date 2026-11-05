@@ -701,12 +701,22 @@ class InventoryMovementForm(forms.Form):
         ),
     )
 
-    def __init__(self, *args, branch, **kwargs):
+    def __init__(self, *args, branch, can_manage=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["inventory"].queryset = Inventory.objects.filter(
             branch=branch
         ).order_by("name")
         self.fields["inventory"].label_from_instance = lambda item: item.name
+        if not can_manage:
+            self.fields["transaction_type"].choices = (
+                (
+                    InventoryTransaction.Type.CONSUMED,
+                    InventoryTransaction.Type.CONSUMED.label,
+                ),
+            )
+            self.fields["transaction_type"].initial = (
+                InventoryTransaction.Type.CONSUMED
+            )
 
     def clean(self):
         cleaned_data = super().clean()
@@ -786,11 +796,21 @@ class InventoryAssetMovementForm(forms.Form):
         ),
     )
 
-    def __init__(self, *args, branch, **kwargs):
+    def __init__(self, *args, branch, can_manage=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["asset"].queryset = InventoryAsset.objects.filter(
             branch=branch
         ).order_by("name")
+        if not can_manage:
+            self.fields["event_type"].choices = tuple(
+                choice
+                for choice in self.ASSET_EVENT_CHOICES
+                if choice[0]
+                not in {
+                    InventoryAssetHistory.Event.RETIRED,
+                    InventoryAssetHistory.Event.DISPOSED,
+                }
+            )
         self.fields["borrower"].queryset = (
             get_user_model().objects.filter(is_active=True)
             .order_by("first_name", "last_name", "username")

@@ -46,7 +46,11 @@
                 <div>
                     <h2 class="text-lg font-semibold">Stock transaction</h2>
                     <p class="mt-1 text-sm text-base-content/70">
-                        Received amounts add stock; consumed amounts subtract stock. Adjustments can increase or decrease the balance.
+                        {% if can_manage_stock_movements %}
+                            Received amounts add stock; consumed amounts subtract stock. Adjustments can increase or decrease the balance.
+                        {% else %}
+                            Consumed amounts subtract stock.
+                        {% endif %}
                     </p>
                 </div>
                 <form method="post" class="space-y-5" id="inventory-movement-form">

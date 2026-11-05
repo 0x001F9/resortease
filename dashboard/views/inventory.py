@@ -9,7 +9,8 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from account.decoration.role_required import normal_user_not_allowed
+from account.models import User
+from account.decoration.role_required import normal_user_not_allowed, role_required
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.forms import (
     InventoryAssetMovementForm,
@@ -92,6 +93,14 @@ class InventoryView(View):
                         if item.quantity_on_hand == 0
                     ),
                 },
+                "can_create_inventory_items": request.user.role
+                in (User.Role.GeneralManager, User.Role.OperationManager),
+                "can_record_inventory_movement": request.user.role
+                in (
+                    User.Role.GeneralManager,
+                    User.Role.OperationManager,
+                    User.Role.FrontDeskAgent,
+                ),
             },
         )
 
@@ -173,17 +182,32 @@ class InventoryTransactionsView(View):
         )
 
 
-@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(
+    role_required(
+        User.Role.GeneralManager,
+        User.Role.OperationManager,
+        User.Role.FrontDeskAgent,
+    ),
+    name="dispatch",
+)
 @method_decorator(check_branch_dashboard, name="dispatch")
 class RecordInventoryMovementView(View):
     template_name = "inventory/record_movement.html"
 
+    def can_manage_stock_movements(self, request):
+        return request.user.role in (
+            User.Role.GeneralManager,
+            User.Role.OperationManager,
+        )
+
     def get_context(self, request, selected_type, inventory_form=None, asset_form=None):
+        can_manage_stock_movements = self.can_manage_stock_movements(request)
         branch_assets = InventoryAsset.objects.filter(branch=request.branch).order_by(
             "name"
         )
         inventory_form = inventory_form or InventoryMovementForm(
-            branch=request.branch
+            branch=request.branch,
+            can_manage=can_manage_stock_movements,
         )
         return {
             "title": "Record inventory movement",
@@ -197,7 +221,10 @@ class RecordInventoryMovementView(View):
                 )
             ),
             "asset_form": asset_form
-            or InventoryAssetMovementForm(branch=request.branch),
+            or InventoryAssetMovementForm(
+                branch=request.branch,
+                can_manage=can_manage_stock_movements,
+            ),
             "asset_status_events": {
                 status.value: list(
                     InventoryAssetMovementForm.events_for_status(status.value)
@@ -205,6 +232,7 @@ class RecordInventoryMovementView(View):
                 for status in InventoryAsset.Status
             },
             "asset_statuses": list(branch_assets.values("id", "status")),
+            "can_manage_stock_movements": can_manage_stock_movements,
             "hide_aside": True,
         }
 
@@ -221,7 +249,11 @@ class RecordInventoryMovementView(View):
     def post(self, request):
         selected_type = request.POST.get("item_type")
         if selected_type == "inventory":
-            form = InventoryMovementForm(request.POST, branch=request.branch)
+            form = InventoryMovementForm(
+                request.POST,
+                branch=request.branch,
+                can_manage=self.can_manage_stock_movements(request),
+            )
             if form.is_valid():
                 item = form.cleaned_data["inventory"]
                 if (
@@ -281,7 +313,12 @@ class RecordInventoryMovementView(View):
             )
 
         if selected_type == "asset":
-            form = InventoryAssetMovementForm(request.POST, branch=request.branch)
+            can_manage = self.can_manage_stock_movements(request)
+            form = InventoryAssetMovementForm(
+                request.POST,
+                branch=request.branch,
+                can_manage=can_manage,
+            )
             if form.is_valid():
                 asset = form.cleaned_data["asset"]
                 try:
@@ -297,6 +334,7 @@ class RecordInventoryMovementView(View):
                     form = InventoryAssetMovementForm(
                         request.POST,
                         branch=request.branch,
+                        can_manage=can_manage,
                     )
                     form.add_error(None, str(error))
                 else:

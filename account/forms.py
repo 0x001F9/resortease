@@ -38,6 +38,7 @@ class AdminUserCreationForm(UserCreationForm):
             "phone_number",
             "address",
             "role",
+            "assigned_branch",
             "is_active",
             "is_staff",
             "is_superuser",

@@ -2,7 +2,7 @@
     <span class="label">
         <span class="label-text font-medium">Status <span class="text-error">*</span></span>
     </span>
-    <select name="status" class="select select-bordered w-full {% if errors.status %}select-error{% endif %}" required>
+    <select name="status" class="select select-bordered w-full {% if errors.status %}select-error{% endif %}" {% if not can_manage_status %}disabled{% else %}required{% endif %}>
         <option value="pending" {% if form_data.status == "pending" %}selected{% endif %}>Pending</option>
         <option value="in_progress" {% if form_data.status == "in_progress" %}selected{% endif %}>In progress</option>
         <option value="completed" {% if form_data.status == "completed" %}selected{% endif %}>Completed</option>

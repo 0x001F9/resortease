@@ -5,14 +5,18 @@ from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from account.decoration.role_required import normal_user_not_allowed
+from account.decoration.role_required import role_required
+from account.models import User
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.forms import InventoryAssetCreateForm, InventoryItemCreateForm
 from dashboard.models.inventory import InventoryTransaction
 from dashboard.models.inventory_assets import InventoryAssetHistory
 
 
-@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(
+    role_required(User.Role.GeneralManager, User.Role.OperationManager),
+    name="dispatch",
+)
 @method_decorator(check_branch_dashboard, name="dispatch")
 class AddInventoryItemView(View):
     template_name = "inventory/add_item.html"

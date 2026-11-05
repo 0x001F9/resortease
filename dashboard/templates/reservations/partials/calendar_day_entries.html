@@ -103,11 +103,13 @@
         >
             Add unavailable time
         </a>
-        <a
-            class="btn btn-primary"
-            href="{% url 'create-booking' request.branch.slug %}?date={{ selected_day|date:'Y-m-d' }}{% if selected_facility %}&amp;facility={{ selected_facility.pk }}{% endif %}"
-        >
-            Create booking
-        </a>
+        {% if request.user.role == "gen-m" or request.user.role == "op-m" or request.user.role == "fda" %}
+            <a
+                class="btn btn-primary"
+                href="{% url 'create-booking' request.branch.slug %}?date={{ selected_day|date:'Y-m-d' }}{% if selected_facility %}&amp;facility={{ selected_facility.pk }}{% endif %}"
+            >
+                Create booking
+            </a>
+        {% endif %}
     </div>
 {% endif %}

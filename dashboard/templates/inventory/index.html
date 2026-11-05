@@ -1,4 +1,5 @@
 {% extends "../partials/layout.html" %}
+{% load compact_numbers %}
 
 {% block content %}
 <main class="mx-auto max-w-[100rem] p-4 pb-10 sm:p-5 lg:p-7">
@@ -9,12 +10,16 @@
         </div>
 
         <div class="flex flex-wrap gap-3">
-            <a href="/dashboard/{{ request.branch.slug }}/inventory/add/" class="btn btn-primary btn-sm md:btn-md">
-                Create item
-            </a>
-            <a href="{% url 'record-inventory-movement' branch=request.branch.slug %}" class="btn btn-outline btn-sm md:btn-md">
-                Record movement
-            </a>
+            {% if can_create_inventory_items %}
+                <a href="/dashboard/{{ request.branch.slug }}/inventory/add/" class="btn btn-primary btn-sm md:btn-md">
+                    Create item
+                </a>
+            {% endif %}
+            {% if can_record_inventory_movement %}
+                <a href="{% url 'record-inventory-movement' branch=request.branch.slug %}" class="btn btn-outline btn-sm md:btn-md">
+                    Record movement
+                </a>
+            {% endif %}
         </div>
     </div>
 
@@ -51,7 +56,7 @@
             <div class="card-body p-4">
                 <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">Inventory value</p>
                 <div class="mt-2 flex items-end justify-between">
-                    <span class="text-3xl font-bold">₱ {{ total_stock_value|floatformat:2 }}</span>
+                    <span class="text-3xl font-bold">₱ {{ total_stock_value|compact_number }}</span>
                     <span class="badge badge-accent badge-soft">Stock</span>
                 </div>
             </div>

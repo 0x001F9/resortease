@@ -19,7 +19,7 @@
                     </p>
                     <h1 class="card-title mt-1 text-2xl font-semibold sm:text-3xl">Edit maintenance request</h1>
                     <p class="mt-2 text-sm text-base-content/70">
-                        Update the request details or, if you are this branch's manager, its priority and status.
+                        Update request details if you created it, or change its status if you manage this branch.
                     </p>
                 </header>
 
@@ -34,7 +34,7 @@
 
                     {% if can_edit_details %}
                         <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                            <label class="form-control w-full {% if not can_manage %}sm:col-span-2{% endif %}">
+                            <label class="form-control w-full {% if not can_manage_status %}sm:col-span-2{% endif %}">
                                 <span class="label">
                                     <span class="label-text font-medium">Facility <span class="text-error">*</span></span>
                                 </span>
@@ -54,9 +54,7 @@
                                 {% endif %}
                             </label>
 
-                            {% if can_manage %}
-                                {% include "facilities-maintenance/partials/maintenance_status_field.html" %}
-                            {% endif %}
+                            {% include "facilities-maintenance/partials/maintenance_status_field.html" %}
                         </div>
 
                         <label class="form-control w-full">
@@ -109,36 +107,36 @@
                                 <span class="mt-1 text-sm text-error">{{ errors.description }}</span>
                             {% endif %}
                         </label>
+
+                        <label class="form-control w-full">
+                            <span class="label">
+                                <span class="label-text font-medium">Priority <span class="text-error">*</span></span>
+                            </span>
+                            <select
+                                name="priority"
+                                class="select select-bordered w-full {% if errors.priority %}select-error{% endif %}"
+                                required
+                            >
+                                {% for value, label in priority_choices %}
+                                    <option value="{{ value }}" {% if form_data.priority == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if errors.priority %}
+                                <span class="mt-1 text-sm text-error">{{ errors.priority }}</span>
+                            {% endif %}
+                        </label>
                     {% else %}
                         <div class="rounded-box bg-base-200 p-4">
                             <h2 class="font-semibold">{{ maintenance.title }}</h2>
                             <p class="mt-1 text-sm text-base-content/70">
-                                {{ maintenance.facility.name }} &middot; {{ maintenance.issue_type }}
+                                {{ maintenance.facility.name }} &middot; {{ maintenance.issue_type }} &middot; {{ maintenance.get_priority_display }} priority
                             </p>
                             <p class="mt-3 whitespace-pre-line text-sm">{{ maintenance.description }}</p>
-                        </div>
-                    {% endif %}
-
-                    {% if can_manage %}
-                        <div class="grid grid-cols-1 gap-5 border-t border-base-300 pt-4 sm:grid-cols-2">
-                            {% if not can_edit_details %}
-                                {% include "facilities-maintenance/partials/maintenance_status_field.html" %}
+                            {% if can_manage_status %}
+                                <div class="mt-4">
+                                    {% include "facilities-maintenance/partials/maintenance_status_field.html" %}
+                                </div>
                             {% endif %}
-                            <label class="form-control w-full sm:col-span-2">
-                                <span class="label">
-                                    <span class="label-text font-medium">Priority <span class="text-error">*</span></span>
-                                </span>
-                                <select name="priority" class="select select-bordered w-full {% if errors.priority %}select-error{% endif %}" required>
-                                    <option value="low" {% if form_data.priority == "low" %}selected{% endif %}>Low</option>
-                                    <option value="medium" {% if form_data.priority == "medium" %}selected{% endif %}>Medium</option>
-                                    <option value="high" {% if form_data.priority == "high" %}selected{% endif %}>High</option>
-                                    <option value="urgent" {% if form_data.priority == "urgent" %}selected{% endif %}>Urgent</option>
-                                </select>
-                                {% if errors.priority %}
-                                    <span class="mt-1 text-sm text-error">{{ errors.priority }}</span>
-                                {% endif %}
-                            </label>
-
                         </div>
                     {% endif %}
 
@@ -146,9 +144,11 @@
                         <a href="/dashboard/{{ branch.slug }}/facilities-and-maintenance/" class="btn btn-ghost w-full sm:w-auto">
                             Cancel
                         </a>
-                        <button type="submit" class="btn btn-primary w-full sm:w-auto">
+                        {% if can_edit %}
+                            <button type="submit" class="btn btn-primary w-full sm:w-auto">
                             Save changes
-                        </button>
+                            </button>
+                        {% endif %}
                     </div>
                 </form>
             </div>

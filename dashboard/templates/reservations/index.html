@@ -6,9 +6,11 @@
         <p class="text-sm text-base-content/60">{{ request.branch.name }}</p>
         <h1 class="text-2xl font-semibold sm:text-3xl">Reservations &amp; Calendar</h1>
         <p class="mt-1 text-base-content/70">Review guest reservations and facility availability.</p>
-        <a href="{% url 'create-reservation' request.branch.slug %}" class="btn btn-primary mt-4">
-            Create reservation
-        </a>
+        {% if request.user.role == "gen-m" or request.user.role == "op-m" or request.user.role == "fda" %}
+            <a href="{% url 'create-reservation' request.branch.slug %}" class="btn btn-primary mt-4">
+                Create reservation
+            </a>
+        {% endif %}
     </div>
 
     <section class="stats stats-vertical mb-6 w-full border border-base-300 bg-base-100 shadow-sm sm:stats-horizontal" aria-label="Reservation summary">

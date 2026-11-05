@@ -41,7 +41,9 @@
                 </div>
                 <div class="navbar-end gap-1 sm:gap-3">
                     {% include "partials/theme_picker.html" %}
-                    <a class="btn btn-primary btn-sm" href="/dashboard/{{ request.branch.slug }}/reservations/booking/new/">Create booking</a>
+                    {% if request.user.role == "gen-m" or request.user.role == "op-m" or request.user.role == "fda" %}
+                        <a class="btn btn-primary btn-sm" href="/dashboard/{{ request.branch.slug }}/reservations/booking/new/">Create booking</a>
+                    {% endif %}
                     <details class="dropdown dropdown-end">
                         <summary class="btn btn-ghost btn-circle avatar" aria-label="Open account menu">
                             <div class="w-9 rounded-full bg-primary text-primary-content">
@@ -97,7 +99,7 @@
                             <li><a href="/dashboard/{{ request.branch.slug }}/reservations/" data-dashboard-section="reservations">Reservations &amp; calendar</a></li>
                             <li><a href="/dashboard/{{ request.branch.slug }}/inventory/" data-dashboard-section="inventory">Inventory</a></li>
                             <li><a href="/dashboard/{{ request.branch.slug }}/facilities-and-maintenance/" data-dashboard-section="facilities-and-maintenance">Facilities &amp; maintenance</a></li>
-                            <li><a href="{% url 'financial-reports' request.branch.slug %}" data-dashboard-section="financial-reports">Financial reports</a></li>
+                            {% if request.user.can_view_financial_reports %}<li><a href="{% url 'financial-reports' request.branch.slug %}" data-dashboard-section="financial-reports">Financial reports</a></li>{% endif %}
                         </ul>
                     </nav>
                 </aside>

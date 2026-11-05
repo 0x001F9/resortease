@@ -5,12 +5,16 @@ from django.utils.decorators import method_decorator
 from django.utils.text import slugify
 from django.views import View
 
-from account.decoration.role_required import normal_user_not_allowed
+from account.decoration.role_required import role_required
+from account.models import User
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.models.branches_facilities import Facility
 
 
-@method_decorator(normal_user_not_allowed, name="dispatch")
+@method_decorator(
+    role_required(User.Role.GeneralManager, User.Role.OperationManager),
+    name="dispatch",
+)
 @method_decorator(check_branch_dashboard, name="dispatch")
 class CreateFacilityView(View):
     template_name = "facilities-maintenance/create_facility.html"

@@ -26,7 +26,7 @@ class CalendarEntryViewTests(TestCase):
     def setUp(self):
         self.user = User.object.create(
             username="calendarstaff",
-            role=User.Role.Employee,
+            role=User.Role.FrontDeskAgent,
             phone_number_code="+1",
             phone_number="5551234567",
             email="calendarstaff@example.com",
@@ -42,11 +42,141 @@ class CalendarEntryViewTests(TestCase):
             city="Test City",
             address="1 Test Street",
         )
+        self.user.assigned_branch = self.branch
+        self.user.save(update_fields=["assigned_branch"])
         self.facility = Facility.objects.create(
             branch=self.branch,
             name="Test Pool",
             slug="test-pool",
         )
+
+    def test_only_managers_and_front_desk_agents_can_create_reservations_or_bookings(self):
+        employee = User.object.create(
+            username="reservation_employee_admin",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5551234596",
+            email="reservation_employee_admin@example.com",
+            first_name="Reservation",
+            last_name="Employee",
+            assigned_branch=self.branch,
+            is_superuser=True,
+        )
+        self.client.force_login(employee)
+
+        for route_name in ("create-reservation", "create-booking"):
+            with self.subTest(route_name=route_name):
+                url = reverse(route_name, kwargs={"branch": self.branch.slug})
+                self.assertEqual(self.client.get(url).status_code, 403)
+                self.assertEqual(self.client.post(url, {}).status_code, 403)
+
+        self.assertFalse(Reservation.objects.exists())
+
+    def test_front_desk_agent_can_create_reservations_and_bookings_in_assigned_branch(self):
+        front_desk_agent = User.object.create(
+            username="reservation_front_desk",
+            role=User.Role.FrontDeskAgent,
+            phone_number_code="+1",
+            phone_number="5551234597",
+            email="reservation_front_desk@example.com",
+            first_name="Reservation",
+            last_name="Front Desk",
+            assigned_branch=self.branch,
+        )
+        self.client.force_login(front_desk_agent)
+
+        for route_name in ("create-reservation", "create-booking"):
+            with self.subTest(route_name=route_name):
+                response = self.client.get(
+                    reverse(route_name, kwargs={"branch": self.branch.slug})
+                )
+                self.assertEqual(response.status_code, 200)
+
+    def test_managers_can_create_reservations_and_bookings_in_allowed_branches(self):
+        manager = User.object.create(
+            username="reservation_general_manager",
+            role=User.Role.GeneralManager,
+            phone_number_code="+1",
+            phone_number="5551234593",
+            email="reservation_general_manager@example.com",
+            first_name="Reservation",
+            last_name="Manager",
+        )
+        self.client.force_login(manager)
+        for route_name in ("create-reservation", "create-booking"):
+            with self.subTest(role=manager.role, route_name=route_name):
+                response = self.client.get(
+                    reverse(route_name, kwargs={"branch": self.branch.slug})
+                )
+                self.assertEqual(response.status_code, 200)
+
+        operation_manager = User.object.create(
+            username="reservation_operation_manager",
+            role=User.Role.OperationManager,
+            phone_number_code="+1",
+            phone_number="5551234594",
+            email="reservation_operation_manager@example.com",
+            first_name="Reservation",
+            last_name="Operation Manager",
+        )
+        self.branch.manager_id = operation_manager
+        self.branch.save(update_fields=["manager_id"])
+        self.client.force_login(operation_manager)
+        other_branch = Branch.objects.create(
+            name="Other Reservation Branch",
+            slug="other-reservation-branch",
+            city="Other City",
+            address="2 Other Street",
+        )
+        for route_name in ("create-reservation", "create-booking"):
+            with self.subTest(role=operation_manager.role, route_name=route_name):
+                self.assertEqual(
+                    self.client.get(
+                        reverse(route_name, kwargs={"branch": self.branch.slug})
+                    ).status_code,
+                    200,
+                )
+                self.assertEqual(
+                    self.client.get(
+                        reverse(route_name, kwargs={"branch": other_branch.slug})
+                    ).status_code,
+                    404,
+                )
+
+    def test_creation_buttons_are_hidden_for_other_roles(self):
+        employee = User.object.create(
+            username="reservation_ui_employee",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5551234598",
+            email="reservation_ui_employee@example.com",
+            first_name="Reservation",
+            last_name="Employee",
+            assigned_branch=self.branch,
+            is_superuser=True,
+        )
+        self.client.force_login(employee)
+        urls = (
+            reverse("dashboard", kwargs={"branch": self.branch.slug}),
+            reverse("reservations", kwargs={"branch": self.branch.slug}),
+        )
+
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, "Create booking")
+                self.assertNotContains(response, "Create reservation")
+
+        day_response = self.client.get(
+            reverse(
+                "calendar-day-entries",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {"date": (timezone.localdate() + timedelta(days=1)).isoformat()},
+        )
+        self.assertEqual(day_response.status_code, 200)
+        self.assertNotContains(day_response, "Create booking")
 
     def create_unavailable(self, facility, selected_day, starts_at, ends_at):
         day_start = datetime.combine(selected_day, time.min)
@@ -657,6 +787,16 @@ class CalendarEntryViewTests(TestCase):
                 "maintenance_id": maintenance.pk,
             },
         )
+        general_manager = User.object.create(
+            username="maintenance_general_manager",
+            role=User.Role.GeneralManager,
+            phone_number_code="+1",
+            phone_number="5551234599",
+            email="maintenance_general_manager@example.com",
+            first_name="Maintenance",
+            last_name="Manager",
+        )
+        self.client.force_login(general_manager)
         edit_form_response = self.client.get(edit_url)
         self.assertContains(edit_form_response, 'name="status"')
         self.assertNotContains(edit_form_response, "Current status")
@@ -683,8 +823,7 @@ class CalendarEntryViewTests(TestCase):
         self.assertIsNotNone(maintenance.completed_at)
 
         edit_completed_response = self.client.get(edit_url)
-        self.assertContains(edit_completed_response, 'name="status"')
-        self.assertNotContains(edit_completed_response, "Current status")
+        self.assertEqual(edit_completed_response.status_code, 403)
 
         detail_response = self.client.get(
             reverse(
@@ -3301,7 +3440,7 @@ class InventoryViewTests(TestCase):
     def setUp(self):
         self.user = User.object.create(
             username="inventory_staff",
-            role=User.Role.Employee,
+            role=User.Role.FrontDeskAgent,
             phone_number_code="+1",
             phone_number="5551234599",
             email="inventory_staff@example.com",
@@ -3317,6 +3456,8 @@ class InventoryViewTests(TestCase):
             city="Test City",
             address="1 Inventory Street",
         )
+        self.user.assigned_branch = self.branch
+        self.user.save(update_fields=["assigned_branch"])
         self.inventory_item = Inventory.objects.create(
             branch=self.branch,
             name="Pool Towels",
@@ -3388,8 +3529,29 @@ class InventoryViewTests(TestCase):
         self.assertContains(response, "Low stock")
         self.assertContains(
             response,
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+        )
+        self.assertContains(
+            response,
             reverse("user-profile", kwargs={"username": self.user.username}),
         )
+
+    def test_inventory_value_uses_compact_number_format(self):
+        self.inventory_item.quantity_on_hand = 2000
+        self.inventory_item.unit_cost = Decimal("1.50")
+        self.inventory_item.save(update_fields=["quantity_on_hand", "unit_cost"])
+        url = reverse("inventory", kwargs={"branch": self.branch.slug})
+
+        thousand_response = self.client.get(url)
+        self.assertContains(thousand_response, "₱ 3K")
+
+        self.inventory_item.unit_cost = Decimal("1500.00")
+        self.inventory_item.save(update_fields=["unit_cost"])
+        million_response = self.client.get(url)
+        self.assertContains(million_response, "₱ 3M")
 
     def test_inventory_page_shows_overdue_assets_card_linking_to_asset_activity(self):
         self.asset.due_date = timezone.now() - timedelta(minutes=1)
@@ -3461,7 +3623,100 @@ class InventoryViewTests(TestCase):
             html=True,
         )
 
+    def test_operation_manager_can_record_movement_in_managed_branch_only(self):
+        manager = User.object.create(
+            username="inventory_operation_manager",
+            role=User.Role.OperationManager,
+            phone_number_code="+1",
+            phone_number="5551234593",
+            email="inventory_operation_manager@example.com",
+            first_name="Inventory",
+            last_name="Manager",
+        )
+        self.branch.manager_id = manager
+        self.branch.save(update_fields=["manager_id"])
+        other_branch = Branch.objects.create(
+            name="Other Inventory Branch",
+            slug="other-inventory-branch",
+            city="Other City",
+            address="2 Other Street",
+        )
+        self.client.force_login(manager)
+        movement_url = reverse(
+            "record-inventory-movement",
+            kwargs={"branch": self.branch.slug},
+        )
+        other_movement_url = reverse(
+            "record-inventory-movement",
+            kwargs={"branch": other_branch.slug},
+        )
+
+        self.assertEqual(self.client.get(movement_url).status_code, 200)
+        self.assertEqual(self.client.get(other_movement_url).status_code, 404)
+
+    def test_employee_cannot_record_inventory_movement_even_when_superuser(self):
+        employee = User.object.create(
+            username="inventory_employee",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5551234595",
+            email="inventory_employee@example.com",
+            first_name="Inventory",
+            last_name="Employee",
+            assigned_branch=self.branch,
+            is_superuser=True,
+        )
+        self.client.force_login(employee)
+
+        response = self.client.post(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {
+                "item_type": "inventory",
+                "inventory": str(self.inventory_item.pk),
+                "transaction_type": InventoryTransaction.Type.RECEIVED,
+                "quantity": "4",
+                "unit_cost": "7.25",
+                "notes": "Unauthorized stock movement.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.inventory_item.refresh_from_db()
+        self.assertEqual(self.inventory_item.quantity_on_hand, 12)
+        self.assertEqual(self.inventory_item.transactions.count(), 1)
+
+    def test_inventory_page_hides_record_movement_from_other_roles(self):
+        employee = User.object.create(
+            username="inventory_page_employee",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5551234594",
+            email="inventory_page_employee@example.com",
+            first_name="Inventory",
+            last_name="Employee",
+            assigned_branch=self.branch,
+        )
+        self.client.force_login(employee)
+
+        response = self.client.get(
+            reverse("inventory", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(
+            response,
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+        )
+
     def test_record_inventory_movement_updates_stock_and_records_transaction(self):
+        self.user.role = User.Role.GeneralManager
+        self.user.save(update_fields=["role"])
         response = self.client.post(
             reverse(
                 "record-inventory-movement",
@@ -3522,6 +3777,8 @@ class InventoryViewTests(TestCase):
         self.assertContains(response, "would make stock negative")
 
     def test_adjustments_require_notes(self):
+        self.user.role = User.Role.GeneralManager
+        self.user.save(update_fields=["role"])
         url = reverse(
             "record-inventory-movement",
             kwargs={"branch": self.branch.slug},
@@ -3548,6 +3805,8 @@ class InventoryViewTests(TestCase):
                 self.assertEqual(self.inventory_item.transactions.count(), 1)
 
     def test_adjustment_sets_target_stock_and_prepends_server_generated_note(self):
+        self.user.role = User.Role.GeneralManager
+        self.user.save(update_fields=["role"])
         url = reverse(
             "record-inventory-movement",
             kwargs={"branch": self.branch.slug},
@@ -3611,6 +3870,8 @@ class InventoryViewTests(TestCase):
         self.assertEqual(decrease.notes, "Decrease stock to 4: Damaged stock removed.")
 
     def test_adjustment_rejects_target_matching_current_stock(self):
+        self.user.role = User.Role.GeneralManager
+        self.user.save(update_fields=["role"])
         response = self.client.post(
             reverse(
                 "record-inventory-movement",
@@ -3630,6 +3891,90 @@ class InventoryViewTests(TestCase):
         self.assertEqual(self.inventory_item.quantity_on_hand, 12)
         self.assertEqual(self.inventory_item.transactions.count(), 1)
         self.assertContains(response, "already matches the current stock")
+
+    def test_front_desk_agent_can_only_select_consumed_stock_movement(self):
+        response = self.client.get(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            '<option value="consumed" selected>Consumed</option>',
+            html=True,
+        )
+        self.assertNotContains(response, '<option value="received">Received</option>')
+        self.assertNotContains(
+            response,
+            '<option value="adjustment">Adjustment</option>',
+        )
+
+    def test_manager_can_select_received_consumed_and_adjustment(self):
+        manager = User.object.create(
+            username="inventory_movement_manager",
+            role=User.Role.GeneralManager,
+            phone_number_code="+1",
+            phone_number="5551234592",
+            email="inventory_movement_manager@example.com",
+            first_name="Inventory",
+            last_name="Manager",
+        )
+        self.client.force_login(manager)
+
+        response = self.client.get(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            '<option value="received" selected>Received</option>',
+            html=True,
+        )
+        self.assertContains(
+            response,
+            '<option value="consumed">Consumed</option>',
+            html=True,
+        )
+        self.assertContains(
+            response,
+            '<option value="adjustment">Adjustment</option>',
+            html=True,
+        )
+
+    def test_front_desk_agent_cannot_submit_received_or_adjustment(self):
+        url = reverse(
+            "record-inventory-movement",
+            kwargs={"branch": self.branch.slug},
+        )
+        for transaction_type in (
+            InventoryTransaction.Type.RECEIVED,
+            InventoryTransaction.Type.ADJUSTMENT,
+        ):
+            with self.subTest(transaction_type=transaction_type):
+                response = self.client.post(
+                    url,
+                    {
+                        "item_type": "inventory",
+                        "inventory": str(self.inventory_item.pk),
+                        "transaction_type": transaction_type,
+                        "quantity": "15",
+                        "unit_cost": "7.25",
+                        "notes": "Unauthorized stock change.",
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.inventory_item.refresh_from_db()
+                self.assertEqual(self.inventory_item.quantity_on_hand, 12)
+                self.assertEqual(self.inventory_item.transactions.count(), 1)
+                self.assertContains(response, "Select a valid choice")
 
     def test_record_asset_return_updates_status_and_history(self):
         response = self.client.post(
@@ -3686,6 +4031,125 @@ class InventoryViewTests(TestCase):
         self.assertContains(response, 'type="hidden"')
         self.assertContains(response, 'name="due_date"')
         self.assertContains(response, 'type="datetime-local"')
+
+    def test_front_desk_agent_cannot_choose_retire_or_dispose_asset_events(self):
+        response = self.client.get(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {"type": "asset"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '<option value="retired">Retired</option>')
+        self.assertNotContains(response, '<option value="disposed">Disposed</option>')
+        self.assertContains(response, '<option value="borrowed">Borrowed</option>')
+
+    def test_front_desk_agent_cannot_submit_retire_or_dispose_asset_events(self):
+        url = reverse(
+            "record-inventory-movement",
+            kwargs={"branch": self.branch.slug},
+        )
+        for event_type in (
+            InventoryAssetHistory.Event.RETIRED,
+            InventoryAssetHistory.Event.DISPOSED,
+        ):
+            with self.subTest(event_type=event_type):
+                response = self.client.post(
+                    url,
+                    {
+                        "item_type": "asset",
+                        "asset": str(self.asset.pk),
+                        "event_type": event_type,
+                        "notes": "Unauthorized lifecycle event.",
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.asset.refresh_from_db()
+                self.assertEqual(self.asset.status, InventoryAsset.Status.BORROWED)
+                self.assertEqual(self.asset.history.count(), 1)
+                self.assertContains(response, "Select a valid choice")
+
+    def test_manager_can_retire_asset(self):
+        manager = User.object.create(
+            username="asset_retirement_manager",
+            role=User.Role.GeneralManager,
+            phone_number_code="+1",
+            phone_number="5551234591",
+            email="asset_retirement_manager@example.com",
+            first_name="Asset",
+            last_name="Manager",
+        )
+        asset = InventoryAsset.objects.create(
+            branch=self.branch,
+            name="Retireable asset",
+            asset_tag="ASSET-RETIREABLE",
+            category="Equipment",
+        )
+        self.client.force_login(manager)
+
+        response = self.client.post(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {
+                "item_type": "asset",
+                "asset": str(asset.pk),
+                "event_type": InventoryAssetHistory.Event.RETIRED,
+                "notes": "End of service life.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        asset.refresh_from_db()
+        self.assertEqual(asset.status, InventoryAsset.Status.RETIRED)
+        self.assertEqual(
+            asset.history.get().event_type,
+            InventoryAssetHistory.Event.RETIRED,
+        )
+
+    def test_manager_can_dispose_retired_asset(self):
+        manager = User.object.create(
+            username="asset_disposal_manager",
+            role=User.Role.GeneralManager,
+            phone_number_code="+1",
+            phone_number="5551234590",
+            email="asset_disposal_manager@example.com",
+            first_name="Asset",
+            last_name="Manager",
+        )
+        asset = InventoryAsset.objects.create(
+            branch=self.branch,
+            name="Disposal asset",
+            asset_tag="ASSET-DISPOSAL",
+            category="Equipment",
+            status=InventoryAsset.Status.RETIRED,
+        )
+        self.client.force_login(manager)
+
+        response = self.client.post(
+            reverse(
+                "record-inventory-movement",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {
+                "item_type": "asset",
+                "asset": str(asset.pk),
+                "event_type": InventoryAssetHistory.Event.DISPOSED,
+                "notes": "Disposed at end of service life.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        asset.refresh_from_db()
+        self.assertEqual(asset.status, InventoryAsset.Status.DISPOSED)
+        self.assertEqual(
+            asset.history.get().event_type,
+            InventoryAssetHistory.Event.DISPOSED,
+        )
 
     def test_record_asset_borrow_requires_borrower_and_updates_asset(self):
         asset = InventoryAsset.objects.create(
@@ -4226,6 +4690,8 @@ class InventoryViewTests(TestCase):
         )
 
     def test_add_inventory_page_renders_both_item_type_tabs(self):
+        self.user.role = User.Role.GeneralManager
+        self.user.save(update_fields=["role"])
         stock_response = self.client.get(
             reverse(
                 "add-inventory-item",
@@ -4256,6 +4722,8 @@ class InventoryViewTests(TestCase):
         self.assertNotContains(asset_response, "Facility")
 
     def test_add_inventory_page_can_create_stock_with_opening_transaction(self):
+        self.user.role = User.Role.GeneralManager
+        self.user.save(update_fields=["role"])
         response = self.client.post(
             reverse(
                 "add-inventory-item",
@@ -4290,6 +4758,8 @@ class InventoryViewTests(TestCase):
         self.assertEqual(transaction_record.performed_by, self.user)
 
     def test_add_inventory_page_can_create_asset_with_acquired_history(self):
+        self.user.role = User.Role.GeneralManager
+        self.user.save(update_fields=["role"])
         response = self.client.post(
             reverse(
                 "add-inventory-item",
@@ -4339,13 +4809,13 @@ class DashboardAndFinancialReportTests(TestCase):
     def setUp(self):
         self.user = User.object.create(
             username="dashboard_manager",
-            role=User.Role.Employee,
+            role=User.Role.GeneralManager,
             phone_number_code="+1",
             phone_number="5559000001",
             email="dashboard_manager@example.com",
             first_name="Dashboard",
             last_name="Manager",
-            is_superuser=True,
+            is_superuser=False,
             is_active=True,
         )
         self.client.force_login(self.user)
@@ -4983,6 +5453,9 @@ class DashboardAndFinancialReportTests(TestCase):
         other_dashboard = self.client.get(
             reverse("dashboard", kwargs={"branch": other_branch.slug})
         )
+        own_report = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug})
+        )
         all_branches_report = self.client.get(
             reverse("financial-reports", kwargs={"branch": self.branch.slug}),
             {"branch": "all"},
@@ -4994,8 +5467,199 @@ class DashboardAndFinancialReportTests(TestCase):
 
         self.assertEqual(own_dashboard.status_code, 200)
         self.assertEqual(other_dashboard.status_code, 404)
+        self.assertEqual(own_report.status_code, 200)
         self.assertEqual(all_branches_report.status_code, 404)
         self.assertEqual(other_branch_report.status_code, 404)
+
+    def test_operation_manager_without_managed_branch_sees_access_notice(self):
+        manager = User.object.create(
+            username="unassigned_operation_manager",
+            role=User.Role.OperationManager,
+            phone_number_code="+1",
+            phone_number="5559000015",
+            email="unassigned_operation_manager@example.com",
+            first_name="Unassigned",
+            last_name="Manager",
+            is_superuser=False,
+            is_active=True,
+        )
+        self.client.force_login(manager)
+
+        dashboard_response = self.client.get(reverse("dashboard-redirect"))
+        branch_response = self.client.get(
+            reverse("dashboard", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertTemplateUsed(
+            dashboard_response,
+            "employee_branch_unassigned.html",
+        )
+        self.assertContains(dashboard_response, "contact an administrator")
+        self.assertEqual(branch_response.status_code, 200)
+        self.assertTemplateUsed(
+            branch_response,
+            "employee_branch_unassigned.html",
+        )
+
+    def test_employee_can_access_only_the_assigned_branch(self):
+        employee = User.object.create(
+            username="assigned_branch_employee",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5559000012",
+            email="assigned_branch_employee@example.com",
+            first_name="Assigned",
+            last_name="Employee",
+            assigned_branch=self.branch,
+            is_superuser=False,
+            is_active=True,
+        )
+        other_branch = Branch.objects.create(
+            name="Employee Other Branch",
+            slug="employee-other-branch",
+            city="Test City",
+            address="5 Employee Street",
+        )
+        self.client.force_login(employee)
+
+        own_dashboard = self.client.get(
+            reverse("dashboard", kwargs={"branch": self.branch.slug})
+        )
+        other_dashboard = self.client.get(
+            reverse("dashboard", kwargs={"branch": other_branch.slug})
+        )
+        own_inventory = self.client.get(
+            reverse("inventory", kwargs={"branch": self.branch.slug})
+        )
+        other_inventory = self.client.get(
+            reverse("inventory", kwargs={"branch": other_branch.slug})
+        )
+
+        self.assertEqual(own_dashboard.status_code, 200)
+        self.assertEqual(other_dashboard.status_code, 404)
+        self.assertEqual(own_inventory.status_code, 200)
+        self.assertEqual(other_inventory.status_code, 404)
+
+    def test_unassigned_employee_sees_access_notice_instead_of_dashboard(self):
+        employee = User.object.create(
+            username="unassigned_branch_employee",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5559000013",
+            email="unassigned_branch_employee@example.com",
+            first_name="Unassigned",
+            last_name="Employee",
+            is_superuser=False,
+            is_active=True,
+        )
+        self.client.force_login(employee)
+
+        dashboard_response = self.client.get(reverse("dashboard-redirect"))
+        branch_response = self.client.get(
+            reverse("dashboard", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertTemplateUsed(
+            dashboard_response,
+            "employee_branch_unassigned.html",
+        )
+        self.assertContains(dashboard_response, "contact an administrator")
+        self.assertEqual(branch_response.status_code, 200)
+        self.assertTemplateUsed(branch_response, "employee_branch_unassigned.html")
+
+    def test_employee_dashboard_redirect_uses_assigned_branch(self):
+        employee = User.object.create(
+            username="redirect_branch_employee",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5559000014",
+            email="redirect_branch_employee@example.com",
+            first_name="Redirect",
+            last_name="Employee",
+            assigned_branch=self.branch,
+            is_superuser=False,
+            is_active=True,
+        )
+        self.client.force_login(employee)
+
+        response = self.client.get(reverse("dashboard-redirect"))
+
+        self.assertRedirects(
+            response,
+            reverse("dashboard", kwargs={"branch": self.branch.slug}),
+        )
+
+    def test_front_desk_agent_can_access_only_the_assigned_branch(self):
+        agent = User.object.create(
+            username="assigned_branch_front_desk",
+            role=User.Role.FrontDeskAgent,
+            phone_number_code="+1",
+            phone_number="5559000016",
+            email="assigned_branch_front_desk@example.com",
+            first_name="Assigned",
+            last_name="Agent",
+            assigned_branch=self.branch,
+            is_superuser=False,
+            is_active=True,
+        )
+        other_branch = Branch.objects.create(
+            name="Front Desk Other Branch",
+            slug="front-desk-other-branch",
+            city="Test City",
+            address="6 Front Desk Street",
+        )
+        self.client.force_login(agent)
+
+        own_dashboard = self.client.get(
+            reverse("dashboard", kwargs={"branch": self.branch.slug})
+        )
+        other_dashboard = self.client.get(
+            reverse("dashboard", kwargs={"branch": other_branch.slug})
+        )
+        redirect_response = self.client.get(reverse("dashboard-redirect"))
+        report_response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(own_dashboard.status_code, 200)
+        self.assertContains(own_dashboard, "dashboard-bookings-card col-span-full w-full")
+        self.assertNotContains(own_dashboard, "Reservation revenue")
+        self.assertNotContains(own_dashboard, "Financial reports")
+        self.assertEqual(report_response.status_code, 403)
+        self.assertEqual(other_dashboard.status_code, 404)
+        self.assertRedirects(
+            redirect_response,
+            reverse("dashboard", kwargs={"branch": self.branch.slug}),
+        )
+
+    def test_unassigned_front_desk_agent_sees_access_notice(self):
+        agent = User.object.create(
+            username="unassigned_branch_front_desk",
+            role=User.Role.FrontDeskAgent,
+            phone_number_code="+1",
+            phone_number="5559000017",
+            email="unassigned_branch_front_desk@example.com",
+            first_name="Unassigned",
+            last_name="Agent",
+            is_superuser=False,
+            is_active=True,
+        )
+        self.client.force_login(agent)
+
+        dashboard_response = self.client.get(reverse("dashboard-redirect"))
+        branch_response = self.client.get(
+            reverse("dashboard", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertTemplateUsed(
+            dashboard_response,
+            "employee_branch_unassigned.html",
+        )
+        self.assertEqual(branch_response.status_code, 200)
+        self.assertTemplateUsed(branch_response, "employee_branch_unassigned.html")
 
     def test_general_manager_can_view_all_branch_reports(self):
         other_branch = Branch.objects.create(
@@ -5028,6 +5692,67 @@ class DashboardAndFinancialReportTests(TestCase):
         self.assertEqual(dashboard_response.status_code, 200)
         self.assertEqual(report_response.status_code, 200)
         self.assertTrue(report_response.context["show_all_branches"])
+
+    def test_operation_manager_can_view_reports_for_managed_branch_only(self):
+        manager = User.object.create(
+            username="financial_operation_manager",
+            role=User.Role.OperationManager,
+            phone_number_code="+1",
+            phone_number="5559000004",
+            email="financial_operation_manager@example.com",
+            first_name="Financial",
+            last_name="Manager",
+            is_superuser=False,
+            is_active=True,
+        )
+        self.branch.manager_id = manager
+        self.branch.save(update_fields=["manager_id"])
+        other_branch = Branch.objects.create(
+            name="Other Financial Branch",
+            slug="other-financial-branch",
+            city="Test City",
+            address="5 Financial Street",
+        )
+        self.client.force_login(manager)
+
+        self.assertEqual(
+            self.client.get(
+                reverse("financial-reports", kwargs={"branch": self.branch.slug})
+            ).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.get(
+                reverse("financial-reports", kwargs={"branch": other_branch.slug})
+            ).status_code,
+            404,
+        )
+
+    def test_non_manager_superuser_cannot_view_financial_reports(self):
+        employee_admin = User.object.create(
+            username="financial_employee_admin",
+            role=User.Role.Employee,
+            phone_number_code="+1",
+            phone_number="5559000005",
+            email="financial_employee_admin@example.com",
+            first_name="Financial",
+            last_name="Admin",
+            is_superuser=True,
+            is_active=True,
+        )
+        self.client.force_login(employee_admin)
+
+        report_response = self.client.get(
+            reverse("financial-reports", kwargs={"branch": self.branch.slug})
+        )
+        dashboard_response = self.client.get(
+            reverse("dashboard", kwargs={"branch": self.branch.slug})
+        )
+
+        self.assertEqual(report_response.status_code, 403)
+        self.assertEqual(dashboard_response.status_code, 200)
+        self.assertNotContains(dashboard_response, "Financial reports")
+        self.assertNotContains(dashboard_response, "Reservation revenue")
 
     def test_financial_report_calculates_net_revenue_from_retained_payments(self):
         today = timezone.localdate()

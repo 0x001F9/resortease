@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import Group, Permission
 
 from account.forms import AdminUserChangeForm, AdminUserCreationForm
 from account.models import User
@@ -10,12 +11,17 @@ class CustomUserAdmin(UserAdmin):
     form = AdminUserChangeForm
     add_form = AdminUserCreationForm
     model = User
-    list_display = ("username", "email", "role", "is_staff", "is_active")
-    list_filter = ("role", "is_staff", "is_superuser", "is_active")
+    list_display = (
+        "username",
+        "email",
+        "role",
+        "assigned_branch",
+        "is_staff",
+        "is_active",
+    )
+    list_filter = ("role", "assigned_branch", "is_staff", "is_superuser", "is_active")
     search_fields = ("username", "email", "first_name", "last_name")
     ordering = ("username",)
-    filter_horizontal = ("groups", "user_permissions")
-
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         (
@@ -30,6 +36,7 @@ class CustomUserAdmin(UserAdmin):
                     "phone_number",
                     "avatar_url",
                     "role",
+                    "assigned_branch",
                 )
             },
         ),
@@ -40,8 +47,6 @@ class CustomUserAdmin(UserAdmin):
                     "is_active",
                     "is_staff",
                     "is_superuser",
-                    "groups",
-                    "user_permissions",
                 )
             },
         ),
@@ -65,6 +70,7 @@ class CustomUserAdmin(UserAdmin):
                     "phone_number_code",
                     "phone_number",
                     "role",
+                    "assigned_branch",
                     "is_active",
                     "is_staff",
                     "is_superuser",
@@ -74,3 +80,8 @@ class CustomUserAdmin(UserAdmin):
     )
 
     readonly_fields = ("last_login", "created_at", "updated_at")
+
+
+for auth_model in (Group, Permission):
+    if admin.site.is_registered(auth_model):
+        admin.site.unregister(auth_model)

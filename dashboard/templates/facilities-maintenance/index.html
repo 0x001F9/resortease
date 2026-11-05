@@ -8,7 +8,9 @@
             <p class="mt-1 text-sm text-base-content/65">Facility status and open maintenance work.</p>
         </div>
         <div class="flex flex-wrap gap-2">
-            <a href="{% url 'add-facility' branch=request.branch.slug %}" class="btn btn-outline btn-sm">Add facility</a>
+            {% if can_create_facility %}
+                <a href="{% url 'add-facility' branch=request.branch.slug %}" class="btn btn-outline btn-sm">Add facility</a>
+            {% endif %}
             <a href="/dashboard/{{ request.branch.slug }}/add-maintenance/" class="btn btn-primary btn-sm">Add maintenance</a>
         </div>
     </header>

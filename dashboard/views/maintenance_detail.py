@@ -23,15 +23,18 @@ class MaintenanceDetailView(View):
             pk=maintenance_id,
             facility__branch=branch_model,
         )
-        is_manager = (
-            request.user.role
-            in (User.Role.OperationManager, User.Role.GeneralManager)
-            and branch_model.manager_id_id == request.user.pk
+        can_manage_status = (
+            request.user.role == User.Role.GeneralManager
+            or (
+                request.user.role == User.Role.OperationManager
+                and branch_model.manager_id_id == request.user.pk
+            )
         )
-        can_manage = is_manager or request.user.is_user_superuser
         is_issuer = maintenance.issued_by_id == request.user.pk
-        can_edit_details = is_issuer and maintenance.status == Maintenance.Status.PENDING
-        if not can_manage and not is_issuer:
+        can_edit_details = (
+            is_issuer and maintenance.status != Maintenance.Status.COMPLETED
+        )
+        if not can_manage_status and not is_issuer:
             return HttpResponseForbidden(
                 "You are not allowed to view this maintenance request."
             )
@@ -44,8 +47,12 @@ class MaintenanceDetailView(View):
             {
                 "branch": branch_model,
                 "maintenance": maintenance,
-                "can_manage": can_manage,
+                "can_manage_status": can_manage_status,
                 "can_edit_details": can_edit_details,
+                "can_edit": (
+                    maintenance.status != Maintenance.Status.COMPLETED
+                    and (can_manage_status or can_edit_details)
+                ),
                 "hide_aside": True
             },
         )

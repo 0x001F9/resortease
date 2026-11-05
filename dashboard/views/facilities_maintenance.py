@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.views import View
 from django.utils.decorators import method_decorator
+from account.models import User
 from account.decoration.role_required import normal_user_not_allowed
 from dashboard.models.branches_facilities import Branch, Facility, Maintenance
 from dashboard.decorations.branch_check import check_branch_dashboard
@@ -30,6 +31,10 @@ class FacilitiesMaintenanceView(View):
                 "maintenance_in_progress_count": all_maintenance.filter(
                     status=Maintenance.Status.IN_PROGRESS
                 ).count(),
+                "can_create_facility": request.user.role in (
+                    User.Role.GeneralManager,
+                    User.Role.OperationManager,
+                ),
             }
         )
 

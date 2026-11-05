@@ -11,7 +11,7 @@ from django.utils.dateparse import parse_datetime
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from account.decoration.role_required import normal_user_not_allowed
+from account.decoration.role_required import normal_user_not_allowed, role_required
 from account.models import User
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
@@ -53,6 +53,14 @@ def get_package_end(rate_package, starts_at, days):
     return end_utc.astimezone(starts_at.tzinfo)
 
 
+@method_decorator(
+    role_required(
+        User.Role.GeneralManager,
+        User.Role.OperationManager,
+        User.Role.FrontDeskAgent,
+    ),
+    name="dispatch",
+)
 @method_decorator(normal_user_not_allowed, name="dispatch")
 @method_decorator(check_branch_dashboard, name="dispatch")
 class CreateReservationView(View):

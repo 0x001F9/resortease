@@ -9,9 +9,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .forms import AdminUserChangeForm, AdminUserCreationForm
+from .admin import CustomUserAdmin
 from .models import OTP_EXPIRY_DURATION, User
 from .views.security import mask_email
 from dashboard.models import Branch, Calendar, Facility, Reservation
+from app.admin_site import admin_site
 
 
 class LoginPasswordVisibilityTests(TestCase):
@@ -105,8 +107,46 @@ class EmailVerificationLoginTests(TestCase):
 
 
 class AdminUserPasswordFormTests(TestCase):
+    def test_group_and_permission_models_are_not_exposed_in_admin(self):
+        from django.contrib.auth.models import Group, Permission
+
+        self.assertFalse(admin_site.is_registered(Group))
+        self.assertFalse(admin_site.is_registered(Permission))
+
+        user_fields = {
+            field
+            for _title, options in CustomUserAdmin.fieldsets
+            for field in options.get("fields", ())
+        }
+        self.assertNotIn("groups", user_fields)
+        self.assertNotIn("user_permissions", user_fields)
+
+        admin_user = User.object.create(
+            username="auth_admin_visibility",
+            email="auth_admin_visibility@example.com",
+            phone_number_code="+1",
+            phone_number="5555550399",
+            first_name="Admin",
+            last_name="Visibility",
+            is_staff=True,
+            is_superuser=True,
+        )
+        from django.test import RequestFactory
+
+        request = RequestFactory().get(reverse("admin:index"))
+        request.user = admin_user
+        app_names = [app["name"] for app in admin_site.get_app_list(request)]
+
+        self.assertNotIn("Authentication and Authorization", app_names)
+
     def test_admin_creation_masks_confirms_and_hashes_password(self):
         password = "mV3!qL8#zP0$rT9"
+        branch = Branch.objects.create(
+            name="Admin Assigned Branch",
+            slug="admin-assigned-branch",
+            city="Test City",
+            address="1 Admin Street",
+        )
         form_data = {
             "username": "admin_password_test",
             "email": "admin_password_test@example.com",
@@ -116,6 +156,7 @@ class AdminUserPasswordFormTests(TestCase):
             "phone_number_code": "+1",
             "phone_number": "5555550142",
             "role": User.Role.Employee,
+            "assigned_branch": str(branch.pk),
             "is_active": "on",
             "password1": password,
             "password2": password,
@@ -129,6 +170,7 @@ class AdminUserPasswordFormTests(TestCase):
         user = form.save()
         self.assertNotEqual(user.password, password)
         self.assertTrue(user.check_password(password))
+        self.assertEqual(user.assigned_branch, branch)
 
     def test_admin_creation_rejects_mismatched_passwords(self):
         form_data = {

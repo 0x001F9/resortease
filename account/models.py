@@ -139,6 +139,14 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     username = models.CharField(max_length=20, unique=True, validators=[UsernameValidator])
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.User)
+    assigned_branch = models.ForeignKey(
+        "dashboard.Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_employees",
+        help_text="Branch this employee can access in the dashboard.",
+    )
 
     phone_number_code = models.CharField(max_length=15, validators=[PhoneNumberCodeValidator])
     phone_number = models.CharField(max_length=20, unique=True, validators=[PhoneNumberValidator])
@@ -261,3 +269,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_user_superuser(self):
         return self.role != self.Role.User and self.is_superuser
+
+    @property
+    def can_view_financial_reports(self):
+        return self.role in (
+            self.Role.OperationManager,
+            self.Role.GeneralManager,
+        )

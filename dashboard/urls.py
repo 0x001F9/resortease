@@ -48,7 +48,7 @@ from dashboard.views.calendar_entries import (
 )
 
 urlpatterns = [
-    path('', DashboardRedirectView.as_view()),
+    path('', DashboardRedirectView.as_view(), name='dashboard-redirect'),
     path('<str:branch>/', DashboardView.as_view(), name='dashboard'),
     path(
         '<str:branch>/financial-reports/',

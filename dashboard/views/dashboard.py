@@ -25,7 +25,10 @@ from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
 from account.models import User
-from dashboard.decorations.branch_check import check_branch_dashboard
+from dashboard.decorations.branch_check import (
+    check_branch_dashboard,
+    financial_reports_access_required,
+)
 from dashboard.models import (
     Branch,
     Calendar,
@@ -69,6 +72,7 @@ class DashboardView(View):
             facility__branch=branch,
             reservation__isnull=False,
         )
+        can_view_financial_reports = request.user.can_view_financial_reports
         bookings = (
             branch_calendar.filter(
                 status=Calendar.Status.CONFIRMED,
@@ -94,29 +98,39 @@ class DashboardView(View):
             ends_at__gte=month_start,
             ends_at__lt=next_month_start,
         ).count()
-        month_payments = Payment.objects.filter(
-            reservation_id__facility__branch=branch,
-            status=Payment.Status.SUCCEEDED,
-            paid_at__gte=month_start,
-            paid_at__lt=next_month_start,
-        )
-        month_revenue = month_payments.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-
-        monthly_revenue = (
-            Payment.objects.filter(
+        month_revenue = Decimal("0.00")
+        revenue_by_month = {}
+        if can_view_financial_reports:
+            month_payments = Payment.objects.filter(
                 reservation_id__facility__branch=branch,
                 status=Payment.Status.SUCCEEDED,
-                paid_at__gte=year_start,
-                paid_at__lt=next_year_start,
+                paid_at__gte=month_start,
+                paid_at__lt=next_month_start,
             )
-            .annotate(month=TruncMonth("paid_at", tzinfo=timezone.get_current_timezone()))
-            .values("month")
-            .annotate(total=Sum("amount"))
-        )
-        revenue_by_month = {
-            row["month"].month: float(row["total"])
-            for row in monthly_revenue
-        }
+            month_revenue = (
+                month_payments.aggregate(total=Sum("amount"))["total"]
+                or Decimal("0.00")
+            )
+            monthly_revenue = (
+                Payment.objects.filter(
+                    reservation_id__facility__branch=branch,
+                    status=Payment.Status.SUCCEEDED,
+                    paid_at__gte=year_start,
+                    paid_at__lt=next_year_start,
+                )
+                .annotate(
+                    month=TruncMonth(
+                        "paid_at",
+                        tzinfo=timezone.get_current_timezone(),
+                    )
+                )
+                .values("month")
+                .annotate(total=Sum("amount"))
+            )
+            revenue_by_month = {
+                row["month"].month: float(row["total"])
+                for row in monthly_revenue
+            }
 
         overdue_assets = (
             InventoryAsset.objects.filter(
@@ -153,6 +167,7 @@ class DashboardView(View):
                 "active_reservations_count": active_reservations_count,
                 "bookings": bookings,
                 "month_completed_bookings": month_completed_bookings,
+                "can_view_financial_reports": can_view_financial_reports,
                 "month_revenue": month_revenue,
                 "revenue_chart_data": {
                     "months": [
@@ -172,6 +187,7 @@ class DashboardView(View):
         )
 
 
+@method_decorator(financial_reports_access_required, name="dispatch")
 @method_decorator(normal_user_not_allowed, name="dispatch")
 @method_decorator(check_branch_dashboard, name="dispatch")
 class FinancialReportView(View):
@@ -729,11 +745,28 @@ class FinancialReportView(View):
 @method_decorator(normal_user_not_allowed, name="dispatch")
 class DashboardRedirectView(View):
     def get(self, request):
-        if request.user.role == User.Role.OperationManager and not request.user.is_user_superuser:
+        if (
+            request.user.role
+            in (User.Role.Employee, User.Role.FrontDeskAgent)
+            and not request.user.is_user_superuser
+        ):
+            if request.user.assigned_branch_id is None:
+                return render(request, "employee_branch_unassigned.html")
+            branch = get_object_or_404(
+                Branch,
+                pk=request.user.assigned_branch_id,
+            )
+        elif (
+            request.user.role == User.Role.OperationManager
+            and not request.user.is_user_superuser
+        ):
             branches = Branch.objects.filter(manager_id=request.user).order_by("name")
+            branch = branches.first()
+            if branch is None:
+                return render(request, "employee_branch_unassigned.html")
         else:
             branches = Branch.objects.order_by("name")
-        branch = branches.first()
+            branch = branches.first()
 
         if branch is None:
             return render(request, "branch_null.html")
