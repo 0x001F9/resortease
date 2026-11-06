@@ -79,6 +79,78 @@ class NameAndTitleFormattingTests(TestCase):
         self.assertEqual(branch.name, "South  Branch")
 
 
+class CreateFacilityViewTests(TestCase):
+    rate_fields = (
+        "rate_24hours",
+        "rate_22hours",
+        "rate_morning",
+        "rate_evening",
+        "rate_per_extra_hour",
+    )
+
+    def setUp(self):
+        user = User.object.create(
+            username="facility_creator",
+            role=User.Role.GeneralManager,
+            phone_number_code="+1",
+            phone_number="5551234500",
+            email="facility_creator@example.com",
+            first_name="Facility",
+            last_name="Creator",
+        )
+        self.client.force_login(user)
+        self.branch = Branch.objects.create(
+            name="Facility Branch",
+            slug="facility-branch",
+            city="Test City",
+            address="1 Test Street",
+        )
+        self.url = reverse("add-facility", kwargs={"branch": self.branch.slug})
+        self.form_data = {
+            "name": "New Facility",
+            "facility_type": Facility.FacilityType.POOL,
+            "status": Facility.FacilityStatus.OPERATIONAL,
+            "capacity": "20",
+        }
+
+    def test_rates_are_required_when_creating_a_facility(self):
+        response = self.client.post(self.url, self.form_data)
+
+        self.assertEqual(response.status_code, 200)
+        for field in self.rate_fields:
+            with self.subTest(field=field):
+                self.assertIn(field, response.context["errors"])
+                self.assertContains(response, f'name="{field}"')
+        self.assertFalse(Facility.objects.filter(branch=self.branch).exists())
+
+    def test_rate_must_be_greater_than_one(self):
+        data = {
+            **self.form_data,
+            **{field: "10.00" for field in self.rate_fields},
+            "rate_morning": "1.00",
+        }
+
+        response = self.client.post(self.url, data)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("rate_morning", response.context["errors"])
+        self.assertFalse(Facility.objects.filter(branch=self.branch).exists())
+
+    def test_facility_is_created_with_valid_required_rates(self):
+        data = {
+            **self.form_data,
+            **{field: "10.25" for field in self.rate_fields},
+        }
+
+        response = self.client.post(self.url, data)
+
+        self.assertEqual(response.status_code, 302)
+        facility = Facility.objects.get(branch=self.branch)
+        for field in self.rate_fields:
+            with self.subTest(field=field):
+                self.assertEqual(getattr(facility, field), Decimal("10.25"))
+
+
 class CalendarEntryViewTests(TestCase):
     def setUp(self):
         self.user = User.object.create(

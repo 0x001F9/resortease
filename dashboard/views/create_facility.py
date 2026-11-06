@@ -49,9 +49,10 @@ class CreateFacilityView(View):
             self.get_context(request),
         )
 
-    def parse_optional_rate(self, form_data, field_name, errors, label):
+    def parse_rate(self, form_data, field_name, errors, label):
         value = form_data[field_name].strip()
         if not value:
+            errors[field_name] = f"Enter the {label}."
             return None
         try:
             parsed = Decimal(value)
@@ -111,18 +112,18 @@ class CreateFacilityView(View):
                 errors["capacity"] = "Capacity must be 2,147,483,647 or fewer."
 
         rates = {
-            field: self.parse_optional_rate(
+            field: self.parse_rate(
                 form_data,
                 field,
                 errors,
                 label,
             )
             for field, label in (
-                ("rate_24hours", "The 24-hour rate"),
-                ("rate_22hours", "The 22-hour rate"),
-                ("rate_morning", "The morning rate"),
-                ("rate_evening", "The evening rate"),
-                ("rate_per_extra_hour", "The extra-hour rate"),
+                ("rate_24hours", "24-hour rate"),
+                ("rate_22hours", "22-hour rate"),
+                ("rate_morning", "morning rate"),
+                ("rate_evening", "evening rate"),
+                ("rate_per_extra_hour", "extra-hour rate"),
             )
         }
 
