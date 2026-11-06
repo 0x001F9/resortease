@@ -217,12 +217,21 @@ class PublicReservationFlowTests(TestCase):
 
     def test_public_reservation_forms_expose_numeric_rates_to_preview(self):
         self.facility.rate_22hours = 800
-        self.facility.save(update_fields=["rate_22hours", "updated_at"])
+        self.facility.rate_per_extra_hour = 75
+        self.facility.save(
+            update_fields=[
+                "rate_22hours",
+                "rate_per_extra_hour",
+                "updated_at",
+            ]
+        )
 
         create_response = self.client.get(self.url)
         self.assertEqual(create_response.status_code, 200)
         self.assertContains(create_response, 'data-rate24-hours="1000"')
         self.assertContains(create_response, 'data-rate22-hours="800"')
+        self.assertContains(create_response, 'data-extra-hour-rate="75"')
+        self.assertContains(create_response, "Extra-hour surcharge")
 
         self.client.force_login(self.user)
         reservation = Reservation.objects.create(
@@ -241,6 +250,8 @@ class PublicReservationFlowTests(TestCase):
         self.assertEqual(edit_response.status_code, 200)
         self.assertContains(edit_response, 'data-rate24-hours="1000"')
         self.assertContains(edit_response, 'data-rate22-hours="800"')
+        self.assertContains(edit_response, 'data-extra-hour-rate="75"')
+        self.assertContains(edit_response, "Extra-hour surcharge")
 
     def test_public_layout_exposes_configured_philippine_timezone(self):
         response = self.client.get(self.url)
@@ -470,6 +481,9 @@ class PublicReservationFlowTests(TestCase):
                 "starts_at": timezone.localtime(new_starts_at).strftime(
                     "%Y-%m-%dT%H:%M"
                 ),
+                "ends_at": timezone.localtime(
+                    new_starts_at + timedelta(days=1)
+                ).strftime("%Y-%m-%dT%H:%M"),
                 "days": "1",
                 "party_size": "3",
                 "special_requests": "Please prepare towels.",
@@ -490,6 +504,100 @@ class PublicReservationFlowTests(TestCase):
         self.assertEqual(reservation.party_size, 3)
         self.assertEqual(reservation.special_requests, "Please prepare towels.")
         self.assertEqual(reservation.status, Reservation.Status.PENDING)
+
+    def test_guest_can_extend_public_reservation_by_whole_hours(self):
+        self.client.force_login(self.user)
+        self.facility.rate_per_extra_hour = Decimal("75.00")
+        self.facility.save(update_fields=["rate_per_extra_hour", "updated_at"])
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+            rate_package=Reservation.RatePackage.TWENTY_FOUR_HOURS,
+            party_size=2,
+        )
+        edit_url = reverse(
+            "edit-public-reservation",
+            kwargs={"reservation_id": reservation.pk},
+        )
+
+        response = self.client.post(
+            edit_url,
+            {
+                "facility": str(self.facility.pk),
+                "rate_package": Reservation.RatePackage.TWENTY_FOUR_HOURS,
+                "starts_at": timezone.localtime(self.starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(
+                    self.starts_at + timedelta(days=1, hours=2)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "days": "1",
+                "party_size": "2",
+                "special_requests": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        reservation.refresh_from_db()
+        self.assertEqual(
+            reservation.ends_at,
+            self.starts_at + timedelta(days=1, hours=2),
+        )
+        self.assertEqual(reservation.raw_amount, Decimal("1150.00"))
+        self.assertEqual(reservation.extra_hour_rate, Decimal("75.00"))
+        self.assertEqual(reservation.extra_hour_amount, Decimal("150.00"))
+        detail_response = self.client.get(
+            reverse(
+                "public-reservation-detail",
+                kwargs={"reservation_id": reservation.pk},
+            )
+        )
+        self.assertContains(detail_response, "75.00 per hour")
+        self.assertContains(detail_response, "150.00")
+
+    def test_guest_cannot_extend_public_reservation_by_partial_hour(self):
+        self.client.force_login(self.user)
+        self.facility.rate_per_extra_hour = Decimal("75.00")
+        self.facility.save(update_fields=["rate_per_extra_hour", "updated_at"])
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+            rate_package=Reservation.RatePackage.TWENTY_FOUR_HOURS,
+            party_size=2,
+        )
+        edit_url = reverse(
+            "edit-public-reservation",
+            kwargs={"reservation_id": reservation.pk},
+        )
+
+        response = self.client.post(
+            edit_url,
+            {
+                "facility": str(self.facility.pk),
+                "rate_package": Reservation.RatePackage.TWENTY_FOUR_HOURS,
+                "starts_at": timezone.localtime(self.starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(
+                    self.starts_at + timedelta(days=1, hours=1, minutes=30)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "days": "1",
+                "party_size": "2",
+                "special_requests": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ends_at", response.context["form"].errors)
+        reservation.refresh_from_db()
+        self.assertEqual(
+            reservation.ends_at,
+            self.starts_at + timedelta(days=1),
+        )
 
     def test_guest_cannot_edit_reservations_that_are_not_pending(self):
         reservation = Reservation.objects.create(

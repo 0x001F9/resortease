@@ -143,6 +143,12 @@ class EditReservationView(View):
                     if was_confirmed:
                         reservation.status = Reservation.Status.CONFIRMED
                     reservation.raw_amount = form.calculated_raw_amount
+                    reservation.extra_hour_amount = (
+                        form.calculated_extra_hour_amount
+                    )
+                    reservation.extra_hour_rate = (
+                        form.calculated_extra_hour_rate
+                    )
                     reservation.save()
                     if was_confirmed or status == Reservation.Status.CONFIRMED:
                         if calendar_entry is None:

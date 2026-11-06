@@ -21,6 +21,15 @@ def calculate_total_amount(facility, starts_at, ends_at, rate_package=None):
     )
 
 
+def calculate_extra_hour_amount(facility, starts_at, ends_at, rate_package):
+    return Reservation.objects.calculate_extra_hour_amount(
+        facility,
+        starts_at,
+        ends_at,
+        rate_package,
+    )
+
+
 def calculate_cancellation_refund(paid_total):
     return (Decimal(paid_total) * Decimal("0.50")).quantize(
         Decimal("0.01"),

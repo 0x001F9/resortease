@@ -5,7 +5,11 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from app.fields import TitleCaseFormField
-from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
+from dashboard.billing import (
+    RATE_REQUIRED_ERROR,
+    calculate_extra_hour_amount,
+    calculate_total_amount,
+)
 from dashboard.models import (
     Calendar,
     Inventory,
@@ -395,6 +399,7 @@ class ReservationEditForm(forms.ModelForm):
             starts_at != self.instance.starts_at
             or ends_at != self.instance.ends_at
         )
+        self.schedule_changed = schedule_changed
         if schedule_changed and self.instance.facility is None:
             self.add_error(
                 "ends_at",
@@ -413,6 +418,25 @@ class ReservationEditForm(forms.ModelForm):
                 self.add_error("ends_at", RATE_REQUIRED_ERROR)
                 return cleaned_data
         self.calculated_raw_amount = raw_amount
+        extra_hour_amount = (
+            calculate_extra_hour_amount(
+                self.instance.facility,
+                starts_at,
+                ends_at,
+                self.instance.rate_package,
+            )
+            if schedule_changed
+            else self.instance.extra_hour_amount
+        )
+        if extra_hour_amount is None:
+            self.add_error("ends_at", RATE_REQUIRED_ERROR)
+            return cleaned_data
+        self.calculated_extra_hour_amount = extra_hour_amount
+        self.calculated_extra_hour_rate = (
+            self.instance.facility.rate_per_extra_hour
+            if schedule_changed
+            else self.instance.extra_hour_rate
+        )
 
         if (
             discount is not None

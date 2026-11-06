@@ -16,6 +16,7 @@ from app.forms import PublicReservationForm
 from dashboard.billing import (
     RATE_REQUIRED_ERROR,
     calculate_cancellation_refund,
+    calculate_extra_hour_amount,
     calculate_total_amount,
 )
 from dashboard.models import (
@@ -63,7 +64,12 @@ def _reservation_edit_initial(reservation):
     local_start = timezone.localtime(starts_at)
     local_end = timezone.localtime(ends_at)
 
-    if duration > timedelta(0) and duration % timedelta(days=1) == timedelta(0):
+    if reservation.rate_package == Reservation.RatePackage.TWENTY_FOUR_HOURS:
+        rate_package = reservation.rate_package
+        days = max(1, duration // timedelta(days=1))
+    elif reservation.rate_package is not None:
+        rate_package, days = reservation.rate_package, 1
+    elif duration > timedelta(0) and duration % timedelta(days=1) == timedelta(0):
         rate_package = "24hours"
         days = duration // timedelta(days=1)
     elif duration == timedelta(hours=22):
@@ -87,6 +93,7 @@ def _reservation_edit_initial(reservation):
         "facility": reservation.facility_id,
         "rate_package": rate_package,
         "starts_at": local_start.strftime("%Y-%m-%dT%H:%M"),
+        "ends_at": local_end.strftime("%Y-%m-%dT%H:%M"),
         "days": days,
         "party_size": reservation.party_size,
         "special_requests": reservation.special_requests,
@@ -443,6 +450,7 @@ class EditPublicReservationView(View):
                 request.POST if request.method == "POST" else None,
                 facilities=facilities,
                 initial=initial,
+                allow_extra_hours=True,
             )
 
             if request.method == "POST" and form.is_valid():
@@ -481,6 +489,16 @@ class EditPublicReservationView(View):
                         "special_requests"
                     ]
                     reservation.raw_amount = raw_amount
+                    reservation.extra_hour_amount = (
+                        calculate_extra_hour_amount(
+                            facility,
+                            starts_at,
+                            ends_at,
+                            rate_package,
+                        )
+                        or Decimal("0.00")
+                    )
+                    reservation.extra_hour_rate = facility.rate_per_extra_hour
                     reservation.save(
                         update_fields=[
                             "facility",
@@ -490,6 +508,8 @@ class EditPublicReservationView(View):
                             "party_size",
                             "special_requests",
                             "raw_amount",
+                            "extra_hour_amount",
+                            "extra_hour_rate",
                             "updated_at",
                         ]
                     )

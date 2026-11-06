@@ -1,3 +1,5 @@
+from datetime import timedelta, timezone as datetime_timezone
+
 from django import forms
 from django.utils import timezone
 
@@ -26,6 +28,11 @@ class PublicReservationForm(forms.Form):
         widget=forms.HiddenInput(
             attrs={"data-start-input": ""},
         ),
+    )
+    ends_at = forms.DateTimeField(
+        required=False,
+        input_formats=["%Y-%m-%dT%H:%M"],
+        widget=forms.HiddenInput(attrs={"data-end-input": ""}),
     )
     days = forms.IntegerField(
         required=False,
@@ -66,9 +73,26 @@ class PublicReservationForm(forms.Form):
         ),
     )
 
-    def __init__(self, *args, facilities, **kwargs):
+    def __init__(
+        self,
+        *args,
+        facilities,
+        allow_extra_hours=False,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.fields["facility"].queryset = facilities
+        self.allow_extra_hours = allow_extra_hours
+        if allow_extra_hours:
+            self.fields["ends_at"].required = True
+            self.fields["ends_at"].widget = forms.DateTimeInput(
+                format="%Y-%m-%dT%H:%M",
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "type": "datetime-local",
+                    "data-end-input": "",
+                },
+            )
 
     def clean_starts_at(self):
         starts_at = self.cleaned_data["starts_at"]
@@ -108,6 +132,29 @@ class PublicReservationForm(forms.Form):
                 message = "Choose a valid reservation rate and duration."
             self.add_error("starts_at", message)
             return cleaned_data
+
+        if self.allow_extra_hours:
+            requested_end = cleaned_data.get("ends_at")
+            if requested_end is None:
+                return cleaned_data
+            duration = requested_end.astimezone(
+                datetime_timezone.utc
+            ) - starts_at.astimezone(datetime_timezone.utc)
+            package_duration = ends_at.astimezone(
+                datetime_timezone.utc
+            ) - starts_at.astimezone(datetime_timezone.utc)
+            extra_duration = duration - package_duration
+            if (
+                extra_duration < timedelta(0)
+                or extra_duration % timedelta(hours=1) != timedelta(0)
+            ):
+                self.add_error(
+                    "ends_at",
+                    "The end time must be after the selected package and any "
+                    "extension must use full-hour increments.",
+                )
+                return cleaned_data
+            ends_at = requested_end
 
         cleaned_data["ends_at"] = ends_at
         return cleaned_data

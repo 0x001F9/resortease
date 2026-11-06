@@ -92,6 +92,7 @@
         const startInput = form.elements.namedItem("starts_at");
         const endInput = form.elements.namedItem("ends_at");
         const endDisplay = form.querySelector("[data-end-display]");
+        const allowExtraHours = form.dataset.allowExtraHours === "true";
         const fixedStartTimes = {
             morning: { value: "08:00", label: "8:00 AM" },
             evening: { value: "19:00", label: "7:00 PM" },
@@ -167,10 +168,30 @@
             return null;
         }
 
-        const endTimestamp = startsAt.timestamp + duration;
+        const packageEndTimestamp = startsAt.timestamp + duration;
+        let endTimestamp = packageEndTimestamp;
+        if (allowExtraHours) {
+            const requestedEnd = parseLocalDateTime(endInput.value);
+            if (!requestedEnd) {
+                endDisplay.textContent = "Choose an end date and time";
+                return null;
+            }
+            endTimestamp = requestedEnd.timestamp;
+            const extraDuration = endTimestamp - packageEndTimestamp;
+            const hour = 60 * 60 * 1000;
+            if (extraDuration < 0 || extraDuration % hour !== 0) {
+                endDisplay.textContent = endDateTimeFormat.format(
+                    new Date(endTimestamp),
+                );
+                return {
+                    error: "The end time must be after the package and extensions must be in full-hour increments.",
+                };
+            }
+        } else {
+            const endParts = getDateTimeParts(new Date(packageEndTimestamp));
+            endInput.value = `${endParts.year}-${String(endParts.month).padStart(2, "0")}-${String(endParts.day).padStart(2, "0")}T${String(endParts.hour).padStart(2, "0")}:${String(endParts.minute).padStart(2, "0")}`;
+        }
         const endDate = new Date(endTimestamp);
-        const endParts = getDateTimeParts(endDate);
-        endInput.value = `${endParts.year}-${String(endParts.month).padStart(2, "0")}-${String(endParts.day).padStart(2, "0")}T${String(endParts.hour).padStart(2, "0")}:${String(endParts.minute).padStart(2, "0")}`;
 
         if (
             (selectedPackage === "morning" && startsAt.time !== "08:00")
@@ -181,7 +202,12 @@
         }
 
         endDisplay.textContent = endDateTimeFormat.format(endDate);
-        return { selectedPackage, startsAt, days: isDailyRate ? Number(daysInput.value) : 1 };
+        return {
+            selectedPackage,
+            startsAt,
+            days: isDailyRate ? Number(daysInput.value) : 1,
+            duration: endTimestamp - startsAt.timestamp,
+        };
     }
 
     function selectedRate(form, selected) {
@@ -209,9 +235,46 @@
             : null;
     }
 
+    function selectedExtraHourAmount(form, selected) {
+        if (!selected || selected.error) {
+            return null;
+        }
+        const option = form.elements.namedItem("facility")?.selectedOptions[0];
+        const rateValue = option?.dataset.extraHourRate;
+        const rate = rateValue ? Number(rateValue) : NaN;
+        const packageDuration = {
+            "24hours": 24 * 60 * 60 * 1000 * selected.days,
+            "22hours": 22 * 60 * 60 * 1000,
+            morning: 9 * 60 * 60 * 1000,
+            evening: 11 * 60 * 60 * 1000,
+        }[selected.selectedPackage];
+        const extraDuration = selected.duration - packageDuration;
+        const hour = 60 * 60 * 1000;
+        if (extraDuration < 0 || extraDuration % hour !== 0) {
+            return null;
+        }
+        if (extraDuration === 0) {
+            return 0;
+        }
+        if (!Number.isFinite(rate) || rate <= 0) {
+            return null;
+        }
+        return Math.round(rate * 100) * (extraDuration / hour);
+    }
+
     function updateRateLabels(form) {
         const facility = form.elements.namedItem("facility");
         const option = facility?.selectedOptions[0];
+        const extraHourRateLabel = form.querySelector(
+            "[data-price-extra-hour-rate]",
+        );
+        if (extraHourRateLabel) {
+            const rateValue = option?.dataset.extraHourRate;
+            const rate = rateValue ? Number(rateValue) : NaN;
+            extraHourRateLabel.textContent = Number.isFinite(rate) && rate > 0
+                ? `${money.format(rate)} per hour`
+                : "Not available";
+        }
         const rateKeys = {
             "24hours": "rate24Hours",
             "22hours": "rate22Hours",
@@ -245,7 +308,11 @@
 
         updateRateLabels(form);
         const selected = updateReservationEnd(form);
-        const rawAmount = selectedRate(form, selected);
+        const baseAmount = selectedRate(form, selected);
+        const extraHourAmount = selectedExtraHourAmount(form, selected);
+        const rawAmount = baseAmount !== null && extraHourAmount !== null
+            ? baseAmount + extraHourAmount
+            : null;
         const discountInput = form.elements.namedItem("discount");
         const discountValue = discountInput.value.trim() || "0";
         const discountIsValid = /^\d+(\.\d{1,2})?$/.test(discountValue);
@@ -254,7 +321,14 @@
             : null;
 
         preview.querySelector("[data-price-raw]").textContent = (
-            rawAmount === null ? "—" : money.format(rawAmount / 100)
+            baseAmount === null ? "—" : money.format(baseAmount / 100)
+        );
+        preview.querySelector(
+            "[data-price-extra-hour-amount]",
+        ).textContent = (
+            extraHourAmount === null
+                ? "—"
+                : money.format(extraHourAmount / 100)
         );
         preview.querySelector("[data-price-discount]").textContent = (
             discountCents === null ? "—" : `−${money.format(discountCents / 100)}`
@@ -268,7 +342,7 @@
                 || (!form.elements.namedItem("facility").value
                     ? "Choose a facility to preview the amount."
                     : selected
-                        ? "That rate is not configured for this facility."
+                        ? "The selected rate or extra-hour rate is unavailable, or the end time is not a full-hour increment."
                         : "Choose a rate and start time to preview the amount.");
         } else if (discountCents === null) {
             total.textContent = "—";
@@ -287,7 +361,10 @@
             return;
         }
 
-        ["facility", "days", "discount"].forEach((name) => {
+        ["facility", "days", "discount", "ends_at"].forEach((name) => {
+            if (!form.elements.namedItem(name)) {
+                return;
+            }
             form.elements.namedItem(name).addEventListener("input", () => updatePriceSummary(form));
             form.elements.namedItem(name).addEventListener("change", () => updatePriceSummary(form));
         });

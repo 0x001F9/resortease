@@ -12,7 +12,11 @@ from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
 from account.models import User
-from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
+from dashboard.billing import (
+    RATE_REQUIRED_ERROR,
+    calculate_extra_hour_amount,
+    calculate_total_amount,
+)
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.models import Calendar, Facility, Maintenance, Reservation
 
@@ -528,6 +532,15 @@ class EditCalendarEntryView(View):
             )
             if raw_amount is None:
                 errors["starts_at"] = RATE_REQUIRED_ERROR
+            else:
+                extra_hour_amount = calculate_extra_hour_amount(
+                    facility,
+                    starts_at,
+                    ends_at,
+                    reservation.rate_package,
+                )
+                if extra_hour_amount is None:
+                    errors["starts_at"] = RATE_REQUIRED_ERROR
 
         if (
             facility is not None
@@ -573,6 +586,8 @@ class EditCalendarEntryView(View):
                 reservation.starts_at = starts_at
                 reservation.ends_at = ends_at
                 reservation.raw_amount = raw_amount
+                reservation.extra_hour_amount = extra_hour_amount
+                reservation.extra_hour_rate = facility.rate_per_extra_hour
                 reservation.status = Reservation.Status.CONFIRMED
                 reservation.party_size = party_size
                 reservation.special_requests = special_requests
@@ -583,6 +598,8 @@ class EditCalendarEntryView(View):
                         "starts_at",
                         "ends_at",
                         "raw_amount",
+                        "extra_hour_amount",
+                        "extra_hour_rate",
                         "status",
                         "party_size",
                         "special_requests",

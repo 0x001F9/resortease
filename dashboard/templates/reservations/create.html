@@ -82,10 +82,12 @@
                                         value="{{ facility.pk }}"
                                         data-capacity="{{ facility.capacity }}"
                                         data-maintenance-in-progress="{{ facility.has_in_progress_maintenance|yesno:'true,false' }}"
-                                        data-rate24-hours="{{ facility.rate_24hours|default_if_none:'' }}"
-                                        data-rate22-hours="{{ facility.rate_22hours|default_if_none:'' }}"
-                                        data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}"
-                                        data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}"
+                                        data-rate24-hours="{{ facility.rate_24hours|default_if_none:''|floatformat:'-2' }}"
+                                        data-rate22-hours="{{ facility.rate_22hours|default_if_none:''|floatformat:'-2' }}"
+                                        data-rate-morning="{{ facility.rate_morning|default_if_none:''|floatformat:'-2' }}"
+                                        data-rate-evening="{{ facility.rate_evening|default_if_none:''|floatformat:'-2' }}"
+                                        data-extra-hour-rate="{{ facility.rate_per_extra_hour|default_if_none:''|floatformat:'-2' }}"
+                                        data-extra-hour-rate="{{ facility.rate_per_extra_hour|default_if_none:'' }}"
                                         {% if form_data.facility == facility.pk|stringformat:"s" %}selected{% endif %}
                                     >
                                         {{ facility.name }}

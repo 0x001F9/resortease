@@ -25,7 +25,7 @@
                             <select name="facility" data-capacity-select class="select select-bordered w-full {% if form.facility.errors %}select-error{% endif %}" required>
                                 <option value="">Choose a facility</option>
                                 {% for facility in facilities %}
-                                    <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" data-rate24-hours="{{ facility.rate_24hours|default_if_none:'' }}" data-rate22-hours="{{ facility.rate_22hours|default_if_none:'' }}" data-rate-morning="{{ facility.rate_morning|default_if_none:'' }}" data-rate-evening="{{ facility.rate_evening|default_if_none:'' }}" {% if form.facility.value|stringformat:"s" == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
+                                    <option value="{{ facility.pk }}" data-capacity="{{ facility.capacity }}" data-rate24-hours="{{ facility.rate_24hours|default_if_none:''|floatformat:'-2' }}" data-rate22-hours="{{ facility.rate_22hours|default_if_none:''|floatformat:'-2' }}" data-rate-morning="{{ facility.rate_morning|default_if_none:''|floatformat:'-2' }}" data-rate-evening="{{ facility.rate_evening|default_if_none:''|floatformat:'-2' }}" data-extra-hour-rate="{{ facility.rate_per_extra_hour|default_if_none:''|floatformat:'-2' }}" {% if form.facility.value|stringformat:"s" == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
                                 {% endfor %}
                             </select>
                             {% for error in form.facility.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
@@ -78,11 +78,12 @@
                             {% for error in form.starts_at.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
                         </label>
 
-                        <div class="form-control w-full sm:col-span-2" aria-label="Calculated reservation end time">
+                        <label class="form-control w-full sm:col-span-2">
                             <span class="label"><span class="label-text font-medium">Ends</span></span>
-                            <div class="input input-bordered flex w-full items-center" data-end-display role="status" aria-live="polite">Choose a rate and start time</div>
-                        </div>
-                        <input type="hidden" name="ends_at" value="">
+                            {{ form.ends_at }}
+                            {% for error in form.ends_at.errors %}<span class="mt-1 text-sm text-error">{{ error }}</span>{% endfor %}
+                            <span class="text-xs text-base-content/60" data-end-display>Choose an end date and time.</span>
+                        </label>
                         <input type="hidden" name="discount" value="{{ reservation.discount|default:'0.00' }}">
 
                         <label class="form-control w-full sm:col-span-2">
@@ -98,6 +99,16 @@
                             <span class="badge badge-ghost">Estimate</span>
                         </header>
                         <p class="mb-3 text-sm text-base-content/60" data-price-status>Choose a facility and rate-matching timeslot to preview the amount.</p>
+                        <dl class="space-y-2">
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-sm text-base-content/70">Extra-hour rate</dt>
+                                <dd class="font-medium" data-price-extra-hour-rate>—</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-sm text-base-content/70">Extra-hour surcharge</dt>
+                                <dd class="font-medium" data-price-extra-hour-amount>₱ 0.00</dd>
+                            </div>
+                        </dl>
                         <dl class="flex justify-between gap-4 border-t border-base-300 pt-3">
                             <dt class="font-semibold">Estimated total</dt>
                             <dd class="text-xl font-bold text-primary" data-price-total>—</dd>
@@ -122,6 +133,7 @@
 <script src="{% static 'js/facility-capacity.js' %}" defer></script>
 <script>
     const form = document.querySelector("main form");
+    form?.setAttribute("data-allow-extra-hours", "true");
     const startPicker = form?.querySelector("[data-start-picker]");
     const rateInputs = form?.querySelectorAll('input[name="rate_package"]');
     const syncStartAvailability = () => {

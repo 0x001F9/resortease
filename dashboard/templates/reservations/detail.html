@@ -135,8 +135,16 @@
                         </div>
                         <dl class="space-y-2">
                             <div class="flex justify-between gap-4">
-                                <dt class="text-base-content/70">Facility reserve fees</dt>
-                                <dd class="font-medium">{% if reservation.raw_amount is not None %}₱ {{ reservation.raw_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
+                                <dt class="text-base-content/70">Facility rate</dt>
+                                <dd class="font-medium">{% if reservation.base_amount is not None %}₱ {{ reservation.base_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-base-content/70">Extra-hour rate</dt>
+                                <dd class="font-medium">{% if reservation.extra_hour_rate is not None %}₱ {{ reservation.extra_hour_rate|floatformat:2 }} per hour{% else %}—{% endif %}</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="text-base-content/70">Extra-hour surcharge</dt>
+                                <dd class="font-medium">₱ {{ reservation.extra_hour_amount|floatformat:2 }}</dd>
                             </div>
                             <div class="flex justify-between gap-4">
                                 <dt class="text-base-content/70">Discount</dt>

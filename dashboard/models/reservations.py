@@ -121,6 +121,44 @@ class ReservationManager(models.Manager):
             amount += Decimal(extra_rate) * (extra_duration // extra_hour)
         return amount
 
+    def calculate_extra_hour_amount(
+        self,
+        facility,
+        starts_at,
+        ends_at,
+        rate_package,
+    ):
+        if rate_package is None:
+            return Decimal("0.00")
+
+        duration = ends_at.astimezone(datetime_timezone.utc) - starts_at.astimezone(
+            datetime_timezone.utc
+        )
+        package_durations = {
+            Reservation.RatePackage.TWENTY_FOUR_HOURS: timedelta(hours=24),
+            Reservation.RatePackage.TWENTY_TWO_HOURS: timedelta(hours=22),
+            Reservation.RatePackage.MORNING: timedelta(hours=9),
+            Reservation.RatePackage.EVENING: timedelta(hours=11),
+        }
+        package_duration = package_durations.get(rate_package)
+        if package_duration is None or duration < package_duration:
+            return Decimal("0.00")
+
+        if rate_package == Reservation.RatePackage.TWENTY_FOUR_HOURS:
+            extra_duration = duration % package_duration
+        else:
+            extra_duration = duration - package_duration
+        extra_hour = timedelta(hours=1)
+        if extra_duration % extra_hour != timedelta(0):
+            return None
+        if not extra_duration:
+            return Decimal("0.00")
+        if facility.rate_per_extra_hour is None:
+            return None
+        return Decimal(facility.rate_per_extra_hour) * (
+            extra_duration // extra_hour
+        )
+
     def create(self, **kwargs):
         reservation = self.model(**kwargs)
         if (
@@ -134,6 +172,16 @@ class ReservationManager(models.Manager):
                 reservation.ends_at,
                 reservation.rate_package,
             )
+            reservation.extra_hour_amount = (
+                self.calculate_extra_hour_amount(
+                    reservation.facility,
+                    reservation.starts_at,
+                    reservation.ends_at,
+                    reservation.rate_package,
+                )
+                or Decimal("0.00")
+            )
+            reservation.extra_hour_rate = reservation.facility.rate_per_extra_hour
         self._for_write = True
         reservation.save(force_insert=True, using=self.db)
         return reservation
@@ -170,6 +218,17 @@ class Reservation(models.Model):
         choices=RatePackage.choices,
         null=True,
         blank=True,
+    )
+    extra_hour_rate = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    extra_hour_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
     )
     party_size = models.PositiveIntegerField(default=1)
     special_requests = models.TextField(blank=True)
@@ -214,6 +273,12 @@ class Reservation(models.Model):
         if self.raw_amount is None:
             return None
         return max(self.raw_amount - self.discount, Decimal("0.00"))
+
+    @property
+    def base_amount(self):
+        if self.raw_amount is None:
+            return None
+        return self.raw_amount - self.extra_hour_amount
 
     @property
     def current_status(self):

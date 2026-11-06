@@ -154,14 +154,14 @@ class CreateFacilityViewTests(TestCase):
 
 class ReservationExtraHourPricingTests(TestCase):
     def setUp(self):
-        branch = Branch.objects.create(
+        self.branch = Branch.objects.create(
             name="Extra Hour Branch",
             slug="extra-hour-branch",
             city="Test City",
             address="1 Test Street",
         )
         self.facility = Facility.objects.create(
-            branch=branch,
+            branch=self.branch,
             name="Extra Hour Facility",
             slug="extra-hour-facility",
             rate_24hours=Decimal("100.00"),
@@ -179,6 +179,16 @@ class ReservationExtraHourPricingTests(TestCase):
             first_name="Extra",
             last_name="Guest",
         )
+        self.manager = User.object.create(
+            username="extra_hour_manager",
+            role=User.Role.GeneralManager,
+            phone_number_code="+1",
+            phone_number="5551234502",
+            email="extra_hour_manager@example.com",
+            first_name="Extra",
+            last_name="Manager",
+        )
+        self.client.force_login(self.manager)
         self.starts_at = timezone.make_aware(
             datetime.combine(
                 timezone.localdate() + timedelta(days=7),
@@ -245,6 +255,8 @@ class ReservationExtraHourPricingTests(TestCase):
             ends_at=self.starts_at + timedelta(hours=24),
             rate_package=Reservation.RatePackage.TWENTY_FOUR_HOURS,
         )
+        self.assertEqual(reservation.extra_hour_rate, Decimal("15.00"))
+        self.assertEqual(reservation.extra_hour_amount, Decimal("0.00"))
         form = ReservationEditForm(
             data={
                 "starts_at": timezone.localtime(self.starts_at).strftime(
@@ -263,6 +275,10 @@ class ReservationExtraHourPricingTests(TestCase):
 
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.calculated_raw_amount, Decimal("115.00"))
+        self.assertEqual(
+            form.calculated_extra_hour_amount,
+            Decimal("15.00"),
+        )
 
     def test_reservation_edit_rejects_partial_extra_hour(self):
         reservation = Reservation.objects.create(
@@ -290,6 +306,101 @@ class ReservationExtraHourPricingTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn("full-hour increments", form.errors["ends_at"][0])
+
+    def test_staff_edit_endpoint_saves_whole_hour_surcharge(self):
+        reservation = Reservation.objects.create(
+            guest=self.guest,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(hours=24),
+            rate_package=Reservation.RatePackage.TWENTY_FOUR_HOURS,
+        )
+        url = reverse(
+            "edit-reservation",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        response = self.client.post(
+            url,
+            {
+                "starts_at": timezone.localtime(self.starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(
+                    self.starts_at + timedelta(hours=25)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Reservation.Status.PENDING,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        reservation.refresh_from_db()
+        self.assertEqual(reservation.raw_amount, Decimal("115.00"))
+        self.assertEqual(reservation.extra_hour_rate, Decimal("15.00"))
+        self.assertEqual(reservation.extra_hour_amount, Decimal("15.00"))
+
+    def test_staff_edit_endpoint_updates_confirmed_reservation_calendar_and_surcharge(self):
+        reservation = Reservation.objects.create(
+            guest=self.guest,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(hours=24),
+            rate_package=Reservation.RatePackage.TWENTY_FOUR_HOURS,
+            status=Reservation.Status.CONFIRMED,
+        )
+        calendar_entry = Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+        )
+        url = reverse(
+            "edit-reservation",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        response = self.client.post(
+            url,
+            {
+                "starts_at": timezone.localtime(self.starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(
+                    self.starts_at + timedelta(hours=25)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Calendar.Status.CANCELLED,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        reservation.refresh_from_db()
+        calendar_entry.refresh_from_db()
+        self.assertEqual(reservation.raw_amount, Decimal("115.00"))
+        self.assertEqual(reservation.extra_hour_amount, Decimal("15.00"))
+        self.assertEqual(calendar_entry.ends_at, reservation.ends_at)
+        detail_response = self.client.get(
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            )
+        )
+        self.assertContains(detail_response, "15.00 per hour")
+        self.assertContains(detail_response, "15.00")
 
 
 class CalendarEntryViewTests(TestCase):
@@ -1642,7 +1753,15 @@ class CalendarEntryViewTests(TestCase):
     def test_reservation_and_booking_forms_expose_numeric_rates_to_preview(self):
         self.facility.rate_24hours = 120
         self.facility.rate_22hours = 110
-        self.facility.save(update_fields=["rate_24hours", "rate_22hours", "updated_at"])
+        self.facility.rate_per_extra_hour = 15
+        self.facility.save(
+            update_fields=[
+                "rate_24hours",
+                "rate_22hours",
+                "rate_per_extra_hour",
+                "updated_at",
+            ]
+        )
 
         for route_name in ("create-reservation", "create-booking"):
             with self.subTest(route_name=route_name):
@@ -1653,6 +1772,8 @@ class CalendarEntryViewTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, 'data-rate24-hours="120"')
                 self.assertContains(response, 'data-rate22-hours="110"')
+                self.assertContains(response, 'data-extra-hour-rate="15"')
+                self.assertContains(response, "Extra-hour surcharge")
 
     def test_calendar_booking_is_confirmed_and_added_to_calendar(self):
         self.facility.rate_morning = 90
