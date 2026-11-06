@@ -15,6 +15,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed
+from app.receipts import queue_ereceipt_email_on_commit
 from dashboard.billing import reservation_completion_payment_error
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.models import Calendar, Facility, Payment, Reservation
@@ -260,6 +261,7 @@ class MarkBookingCompletedView(View):
             if not completion_blocked:
                 entry.status = Calendar.Status.COMPLETED
                 entry.save(update_fields=["status", "updated_at"])
+                queue_ereceipt_email_on_commit(request, reservation.pk)
 
         if completion_blocked:
             return redirect(

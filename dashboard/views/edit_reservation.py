@@ -11,7 +11,10 @@ from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.forms import ReservationEditForm
 from dashboard.models import Calendar, Maintenance, Reservation
 from dashboard.views.calendar_entries import has_calendar_conflict
-from app.invoices import queue_einvoice_email_on_commit
+from app.invoices import (
+    queue_einvoice_email_on_commit,
+)
+from app.receipts import queue_ereceipt_email_on_commit
 
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
@@ -114,6 +117,10 @@ class EditReservationView(View):
             if form.is_valid():
                 status = form.cleaned_data["status"]
                 calendar_entry = getattr(reservation, "calendar_entry", None)
+                was_completed = (
+                    calendar_entry is not None
+                    and calendar_entry.status == Calendar.Status.COMPLETED
+                )
                 starts_at = form.cleaned_data["starts_at"]
                 ends_at = form.cleaned_data["ends_at"]
                 if self.has_conflict(
@@ -186,6 +193,14 @@ class EditReservationView(View):
                         and status == Reservation.Status.CONFIRMED
                     ):
                         queue_einvoice_email_on_commit(
+                            request,
+                            reservation.pk,
+                        )
+                    if (
+                        status == Calendar.Status.COMPLETED
+                        and not was_completed
+                    ):
+                        queue_ereceipt_email_on_commit(
                             request,
                             reservation.pk,
                         )

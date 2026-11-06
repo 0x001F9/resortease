@@ -49,6 +49,12 @@
                                 href="{% url 'reservation-einvoice' request.branch.slug reservation.pk %}"
                             >Download E-Invoice</a>
                         {% endif %}
+                        {% if can_download_ereceipt %}
+                            <a
+                                class="btn btn-success btn-sm"
+                                href="{% url 'reservation-ereceipt' request.branch.slug reservation.pk %}"
+                            >Download E-Receipt</a>
+                        {% endif %}
                     </div>
                     <dl class="grid gap-4 rounded-box border border-base-300 p-4 sm:grid-cols-2">
                         <div>

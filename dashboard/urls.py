@@ -31,6 +31,7 @@ from dashboard.views.reservations import (
 )
 from dashboard.views.reservation_detail import ReservationDetailView
 from dashboard.views.einvoice import ReservationEInvoiceDownloadView
+from dashboard.views.ereceipt import ReservationEReceiptDownloadView
 from dashboard.views.create_payment import (
     CreatePaymentView,
     UpdatePendingPaymentStatusView,
@@ -135,6 +136,11 @@ urlpatterns = [
         '<str:branch>/reservations/<int:reservation_id>/einvoice/',
         ReservationEInvoiceDownloadView.as_view(),
         name='reservation-einvoice',
+    ),
+    path(
+        '<str:branch>/reservations/<int:reservation_id>/ereceipt/',
+        ReservationEReceiptDownloadView.as_view(),
+        name='reservation-ereceipt',
     ),
     path(
         '<str:branch>/reservations/<int:reservation_id>/payments/new/',

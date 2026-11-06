@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from account.models import User
 from app.invoices import build_einvoice_context
+from app.receipts import build_ereceipt_context
 from dashboard.billing import calculate_total_amount
 from dashboard.models import (
     Branch,
@@ -1018,6 +1019,9 @@ class CalendarEntryViewTests(TestCase):
         entry.refresh_from_db()
         self.assertEqual(entry.status, Calendar.Status.CONFIRMED)
 
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
+    )
     def test_editing_past_confirmed_booking_completes_when_fully_paid(self):
         starts_at = timezone.localtime(timezone.now()).replace(
             second=0,
@@ -1038,24 +1042,24 @@ class CalendarEntryViewTests(TestCase):
             status=Payment.Status.SUCCEEDED,
         )
 
-        response = self.client.post(
-            reverse(
-                "edit-reservation",
-                kwargs={
-                    "branch": self.branch.slug,
-                    "reservation_id": reservation.pk,
-                },
-            ),
-            {
-                "ends_at": timezone.localtime(ends_at).strftime(
-                    "%Y-%m-%dT%H:%M"
-                ),
-                "party_size": "1",
-                "special_requests": "",
-                "discount": "0.00",
-                "status": Calendar.Status.COMPLETED,
+        edit_url = reverse(
+            "edit-reservation",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
             },
         )
+        post_data = {
+            "ends_at": timezone.localtime(ends_at).strftime(
+                "%Y-%m-%dT%H:%M"
+            ),
+            "party_size": "1",
+            "special_requests": "",
+            "discount": "0.00",
+            "status": Calendar.Status.COMPLETED,
+        }
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(edit_url, post_data)
 
         self.assertRedirects(
             response,
@@ -1071,6 +1075,20 @@ class CalendarEntryViewTests(TestCase):
         entry.refresh_from_db()
         self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
         self.assertEqual(entry.status, Calendar.Status.COMPLETED)
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [reservation.guest.email])
+        self.assertIn("E-Receipt", mail.outbox[0].subject)
+        attachment = mail.outbox[0].attachments[0]
+        self.assertEqual(attachment[0], f"e-receipt-{entry.booking_reference}.pdf")
+        self.assertEqual(attachment[2], "application/pdf")
+        self.assertTrue(attachment[1].startswith(b"%PDF-"))
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            repeated_response = self.client.post(edit_url, post_data)
+        self.assertEqual(repeated_response.status_code, 302)
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(mail.outbox), 1)
 
     def test_completion_checks_payment_balance_after_end_time_reprices_booking(self):
         self.facility.rate_24hours = Decimal("100.00")
@@ -1955,6 +1973,13 @@ class CalendarEntryViewTests(TestCase):
                 "reservation_id": reservation.pk,
             },
         )
+        receipt_url = reverse(
+            "reservation-ereceipt",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
 
         confirmed_detail = self.client.get(detail_url)
         confirmed_invoice = self.client.get(invoice_url)
@@ -1973,13 +1998,60 @@ class CalendarEntryViewTests(TestCase):
         completed_invoice = self.client.get(invoice_url)
         self.assertNotContains(completed_detail, "Download E-Invoice")
         self.assertEqual(completed_invoice.status_code, 404)
+        self.assertNotContains(completed_detail, "Download E-Receipt")
+        self.assertEqual(self.client.get(receipt_url).status_code, 404)
+
+        reservation.raw_amount = Decimal("100.00")
+        reservation.extra_hour_amount = Decimal("15.00")
+        reservation.save(
+            update_fields=["raw_amount", "extra_hour_amount", "updated_at"]
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Full payment",
+            amount=Decimal("100.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+        )
+        paid_completed_detail = self.client.get(detail_url)
+        receipt_response = self.client.get(receipt_url)
+        self.assertContains(paid_completed_detail, "Download E-Receipt")
+        self.assertEqual(receipt_response.status_code, 200)
+        self.assertEqual(receipt_response["Content-Type"], "application/pdf")
+        self.assertIn(
+            str(calendar_entry.booking_reference),
+            receipt_response["Content-Disposition"],
+        )
+        self.assertTrue(receipt_response.content.startswith(b"%PDF-"))
+        receipt_context = build_ereceipt_context(reservation)
+        self.assertEqual(
+            receipt_context["receipt_number"],
+            str(calendar_entry.booking_reference),
+        )
+        self.assertEqual(
+            [item["description"] for item in receipt_context["items"]],
+            ["Full Payment"],
+        )
+        self.assertEqual(receipt_context["items"][0]["method"], "cash")
+        self.assertEqual(
+            receipt_context["totals"]["paid"],
+            Decimal("100.00"),
+        )
+        self.assertEqual(
+            receipt_context["extra_hour_amount"],
+            Decimal("15.00"),
+        )
+        self.assertNotIn("balance", receipt_context)
 
         calendar_entry.status = Calendar.Status.CANCELLED
         calendar_entry.save(update_fields=["status", "updated_at"])
         cancelled_detail = self.client.get(detail_url)
         cancelled_invoice = self.client.get(invoice_url)
+        cancelled_receipt = self.client.get(receipt_url)
         self.assertNotContains(cancelled_detail, "Download E-Invoice")
+        self.assertNotContains(cancelled_detail, "Download E-Receipt")
         self.assertEqual(cancelled_invoice.status_code, 404)
+        self.assertEqual(cancelled_receipt.status_code, 404)
 
     def test_reservation_detail_page_shows_booking_and_payment_details(self):
         starts_at = timezone.make_aware(
@@ -5952,6 +6024,9 @@ class DashboardAndFinancialReportTests(TestCase):
             )
         self.assertContains(response, "Mark completed")
 
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
+    )
     def test_mark_booking_completed_changes_only_past_confirmed_branch_booking(self):
         reservation, _payment = self.create_reservation_with_payment(
             self.branch,
@@ -5967,13 +6042,14 @@ class DashboardAndFinancialReportTests(TestCase):
             ends_at=timezone.now() - timedelta(hours=2),
         )
 
-        response = self.client.post(
-            reverse(
-                "mark-booking-completed",
-                kwargs={"branch": self.branch.slug, "entry_id": entry.pk},
-            ),
-            {"return_to": "dashboard"},
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse(
+                    "mark-booking-completed",
+                    kwargs={"branch": self.branch.slug, "entry_id": entry.pk},
+                ),
+                {"return_to": "dashboard"},
+            )
 
         entry.refresh_from_db()
         reservation.refresh_from_db()
@@ -5983,6 +6059,10 @@ class DashboardAndFinancialReportTests(TestCase):
         )
         self.assertEqual(entry.status, Calendar.Status.COMPLETED)
         self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("E-Receipt", mail.outbox[0].subject)
+        self.assertTrue(mail.outbox[0].attachments[0][1].startswith(b"%PDF-"))
 
     def test_mark_booking_completed_redirects_to_detail_when_balance_remains(self):
         reservation, payment = self.create_reservation_with_payment(

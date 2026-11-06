@@ -177,6 +177,9 @@
                 {% if can_download_einvoice %}
                     <a class="btn btn-primary" href="{% url 'public-reservation-einvoice' reservation.pk %}">Download E-Invoice</a>
                 {% endif %}
+                {% if can_download_ereceipt %}
+                    <a class="btn btn-success" href="{% url 'public-reservation-ereceipt' reservation.pk %}">Download E-Receipt</a>
+                {% endif %}
                 {% if can_edit %}
                     <a class="btn btn-outline" href="{% url 'edit-public-reservation' reservation.pk %}">Edit reservation</a>
                 {% endif %}

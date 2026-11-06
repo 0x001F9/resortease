@@ -735,6 +735,10 @@ class PublicReservationFlowTests(TestCase):
             "public-reservation-einvoice",
             kwargs={"reservation_id": reservation.pk},
         )
+        receipt_url = reverse(
+            "public-reservation-ereceipt",
+            kwargs={"reservation_id": reservation.pk},
+        )
 
         detail_response = self.client.get(detail_url)
         invoice_response = self.client.get(invoice_url)
@@ -747,6 +751,21 @@ class PublicReservationFlowTests(TestCase):
         completed_detail_response = self.client.get(detail_url)
         self.assertNotContains(completed_detail_response, "Download E-Invoice")
         self.assertEqual(self.client.get(invoice_url).status_code, 404)
+        self.assertNotContains(completed_detail_response, "Download E-Receipt")
+        self.assertEqual(self.client.get(receipt_url).status_code, 404)
+
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Full payment",
+            amount=Decimal("100.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+        )
+        paid_completed_detail_response = self.client.get(detail_url)
+        receipt_response = self.client.get(receipt_url)
+        self.assertContains(paid_completed_detail_response, "Download E-Receipt")
+        self.assertEqual(receipt_response.status_code, 200)
+        self.assertTrue(receipt_response.content.startswith(b"%PDF-"))
 
         calendar_entry.status = Calendar.Status.CONFIRMED
         calendar_entry.save(update_fields=["status", "updated_at"])

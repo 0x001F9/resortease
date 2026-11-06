@@ -10,6 +10,7 @@ from dashboard.billing import calculate_cancellation_refund
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.models import Calendar, Payment, Reservation
 from dashboard.views.calendar_entries import has_calendar_conflict
+from app.receipts import can_generate_ereceipt
 
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
@@ -80,6 +81,7 @@ class ReservationDetailView(View):
                 "can_download_einvoice": (
                     reservation.current_status == Calendar.Status.CONFIRMED
                 ),
+                "can_download_ereceipt": can_generate_ereceipt(reservation),
                 "availability_conflict": availability_conflict,
                 "payments": payments,
                 "pending_payments": pending_payments,

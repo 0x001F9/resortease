@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>E-Receipt {{ receipt_number }}</title>
+  <meta name="author" content="ResortEase Authors">
+  <meta name="description" content="Receipt {{ receipt_number }} for {{ client.name }}">
+  <style>
+    {{ css | safe }}
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="brand">
+      <div class="brand-text">
+        <div class="brand-name">ResortEase Software</div>
+        <div class="muted">Make room for a slower day.</div>
+      </div>
+    </div>
+    <div class="doc-title">
+      <h1>Receipt</h1>
+      <div class="receipt-number">{{ receipt_number }}</div>
+    </div>
+  </header>
+
+  <section class="paid-banner">
+    <span>Payment received in full</span>
+    <strong>₱{{ totals.paid|amount_format }}</strong>
+  </section>
+
+  <section class="receipt-details">
+    <div>
+      <h2>Received by</h2>
+      <p class="strong">{{ branch.name }}</p>
+      <p>{{ branch.address }}{% if branch.city %}, {{ branch.city }}{% endif %}</p>
+      {% if branch.email %}<p>{{ branch.email }}</p>{% endif %}
+      {% if branch.phone_number %}<p>{{ branch.phone_number }}</p>{% endif %}
+    </div>
+    <div>
+      <h2>Received from</h2>
+      <p class="strong">{{ client.name }}</p>
+      <p>{{ client.number }}</p>
+      <p>{{ client.email }}</p>
+    </div>
+    <div>
+      <h2>Reservation</h2>
+      <p><span class="muted">Facility:</span> {{ facility_name }}</p>
+      <p><span class="muted">Stay:</span> {{ party_start }} – {{ party_end }}</p>
+      {% if extra_hour_amount %}
+      <p><span class="muted">Extra-hour surcharge:</span> ₱{{ extra_hour_amount|amount_format }}</p>
+      {% endif %}
+      <p><span class="muted">Issued:</span> {{ issue_date }}</p>
+    </div>
+  </section>
+
+  <table class="receipt-items">
+    <thead>
+      <tr>
+        <th class="col-payment">Payment</th>
+        <th class="col-method">Method</th>
+        <th class="col-date">Date received</th>
+        <th class="col-reference">Reference</th>
+        <th class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.description }}</td>
+        <td>{{ item.method }}</td>
+        <td>{{ item.date }}</td>
+        <td>{{ item.reference or "—" }}</td>
+        <td class="num">₱{{ item.amount|amount_format }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No successful payments have been recorded.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="receipt-total">
+    Total received: ₱{{ totals.paid|amount_format }}
+  </div>
+
+  <p class="receipt-note">
+    This receipt confirms full payment for the reservation shown above.
+  </p>
+</body>
+</html>

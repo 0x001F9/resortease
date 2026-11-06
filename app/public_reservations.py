@@ -15,6 +15,7 @@ from django.views import View
 from account.models import User
 from app.forms import PublicReservationForm
 from app.invoices import einvoice_pdf_response
+from app.receipts import can_generate_ereceipt, ereceipt_pdf_response
 from dashboard.billing import (
     RATE_REQUIRED_ERROR,
     calculate_cancellation_refund,
@@ -382,6 +383,10 @@ class PublicReservationDetailView(View):
                     reservation.facility_id is not None
                     and reservation.current_status == Calendar.Status.CONFIRMED
                 ),
+                "can_download_ereceipt": (
+                    reservation.facility_id is not None
+                    and can_generate_ereceipt(reservation)
+                ),
                 "payments": payments,
                 "pending_payments": pending_payments,
                 "show_payment_info": show_payment_info,
@@ -424,6 +429,25 @@ class PublicReservationEInvoiceDownloadView(View):
             raise Http404
 
         return einvoice_pdf_response(reservation)
+
+
+@method_decorator(login_required(login_url="login"), name="dispatch")
+class PublicReservationEReceiptDownloadView(View):
+    def get(self, request, reservation_id):
+        reservation = get_object_or_404(
+            Reservation.objects.select_related(
+                "guest",
+                "facility__branch",
+                "calendar_entry",
+            ),
+            pk=reservation_id,
+            guest=request.user,
+            facility__isnull=False,
+        )
+        if not can_generate_ereceipt(reservation):
+            raise Http404
+
+        return ereceipt_pdf_response(reservation)
 
 
 @method_decorator(login_required(login_url="login"), name="dispatch")
