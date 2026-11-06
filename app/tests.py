@@ -119,6 +119,19 @@ class PublicResortPagesTests(TestCase):
             "Currently closed for seasonal work.",
         )
 
+    @override_settings(DEBUG=False)
+    def test_missing_pages_render_custom_404_template(self):
+        response = self.client.get("/this-page-does-not-exist/")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertTemplateUsed(response, "404.html")
+        self.assertContains(
+            response,
+            "This page wandered off.",
+            status_code=404,
+        )
+        self.assertContains(response, "ResortEase", status_code=404)
+
     def test_operational_facility_detail_links_to_preselected_reservation(self):
         response = self.client.get(
             reverse(

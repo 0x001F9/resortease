@@ -4,6 +4,15 @@ from django.views import View
 from dashboard.models import Branch, Facility
 
 
+def page_not_found(request, exception=None):
+    return render(
+        request,
+        "404.html",
+        {"title": "Page not found"},
+        status=404,
+    )
+
+
 BRANCH_IMAGE_FALLBACK = (
     "https://images.unsplash.com/photo-1571896349842-33c89424de2d"
     "?auto=format&fit=crop&w=1800&q=85"

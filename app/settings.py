@@ -25,10 +25,17 @@ load_dotenv()
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "django-insecure-uxappkg-$=&bo^fhn_0851-n18$9a47+r7-l$ugxrrnuxu%-az"
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Set DJANGO_DEBUG=True to enable Django's technical debug pages locally.
+DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in {"true", "1", "yes"}
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv(
+        "DJANGO_ALLOWED_HOSTS",
+        "localhost,127.0.0.1,[::1],testserver",
+    ).split(",")
+    if host.strip()
+]
 
 
 # Application definition

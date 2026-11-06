@@ -15,6 +15,8 @@ from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
 from django.utils.http import url_has_allowed_host_and_scheme
 
+handler404 = "app.views.page_not_found"
+
 
 @require_POST
 @with_theme
