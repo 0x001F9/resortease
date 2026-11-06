@@ -6,6 +6,7 @@ from app.public_reservations import (
     CancelPublicReservationView,
     EditPublicReservationView,
     PublicReservationDetailView,
+    PublicReservationEInvoiceDownloadView,
     PublicReservationView,
     ResumePublicReservationView,
 )
@@ -60,6 +61,11 @@ urlpatterns = [
         "reservations/<int:reservation_id>/",
         PublicReservationDetailView.as_view(),
         name="public-reservation-detail",
+    ),
+    path(
+        "reservations/<int:reservation_id>/einvoice/",
+        PublicReservationEInvoiceDownloadView.as_view(),
+        name="public-reservation-einvoice",
     ),
     path(
         "reservations/<int:reservation_id>/edit/",

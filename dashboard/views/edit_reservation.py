@@ -11,6 +11,7 @@ from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.forms import ReservationEditForm
 from dashboard.models import Calendar, Maintenance, Reservation
 from dashboard.views.calendar_entries import has_calendar_conflict
+from app.invoices import queue_einvoice_email_on_commit
 
 
 @method_decorator(normal_user_not_allowed, name="dispatch")
@@ -180,6 +181,14 @@ class EditReservationView(View):
                             Reservation.objects.decline_conflicts(reservation)
                         elif status == Calendar.Status.CANCELLED:
                             Reservation.objects.cancel_pending_payments(reservation)
+                    if (
+                        not was_confirmed
+                        and status == Reservation.Status.CONFIRMED
+                    ):
+                        queue_einvoice_email_on_commit(
+                            request,
+                            reservation.pk,
+                        )
 
                     return redirect(
                         reverse(

@@ -56,7 +56,7 @@
             <div class="card-body p-4">
                 <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">Inventory value</p>
                 <div class="mt-2 flex items-end justify-between">
-                    <span class="text-3xl font-bold">₱ {{ total_stock_value|compact_number }}</span>
+                    <span class="text-3xl font-bold">₱ {{ total_stock_value|amount_format }}</span>
                     <span class="badge badge-accent badge-soft">Stock</span>
                 </div>
             </div>

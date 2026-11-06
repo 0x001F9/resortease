@@ -192,10 +192,10 @@
 			})
 		}
 		revenueChart.setOption({
-			tooltip: { trigger: "axis", valueFormatter: (value) => `₱ ${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+			tooltip: { trigger: "axis", valueFormatter: (value) => `₱ ${Number(value).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
 			grid: { left: 16, right: 24, top: 24, bottom: 58, containLabel: true },
 			xAxis: { type: "category", data: chartData.months, boundaryGap: false },
-			yAxis: { type: "value", min: 0, axisLabel: { formatter: (value) => `₱ ${Number(value).toLocaleString()}` } },
+			yAxis: { type: "value", min: 0, axisLabel: { formatter: (value) => `₱ ${Number(value).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` } },
 			dataZoom: [
 				{
 					type: "inside",

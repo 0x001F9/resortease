@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q, Sum
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -13,6 +14,7 @@ from django.views import View
 
 from account.models import User
 from app.forms import PublicReservationForm
+from app.invoices import einvoice_pdf_response
 from dashboard.billing import (
     RATE_REQUIRED_ERROR,
     calculate_cancellation_refund,
@@ -376,6 +378,10 @@ class PublicReservationDetailView(View):
             "public/reservation_detail.html",
             {
                 "reservation": reservation,
+                "can_download_einvoice": (
+                    reservation.facility_id is not None
+                    and reservation.current_status == Calendar.Status.CONFIRMED
+                ),
                 "payments": payments,
                 "pending_payments": pending_payments,
                 "show_payment_info": show_payment_info,
@@ -399,6 +405,25 @@ class PublicReservationDetailView(View):
                 "title": f"Reservation {reservation.pk} | ResortEase",
             },
         )
+
+
+@method_decorator(login_required(login_url="login"), name="dispatch")
+class PublicReservationEInvoiceDownloadView(View):
+    def get(self, request, reservation_id):
+        reservation = get_object_or_404(
+            Reservation.objects.select_related(
+                "guest",
+                "facility__branch",
+                "calendar_entry",
+            ),
+            pk=reservation_id,
+            guest=request.user,
+            facility__isnull=False,
+        )
+        if reservation.current_status != Calendar.Status.CONFIRMED:
+            raise Http404
+
+        return einvoice_pdf_response(reservation)
 
 
 @method_decorator(login_required(login_url="login"), name="dispatch")

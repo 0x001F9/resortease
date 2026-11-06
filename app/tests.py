@@ -709,6 +709,60 @@ class PublicReservationFlowTests(TestCase):
         self.assertContains(response, "₱ 5.50")
         self.assertContains(response, "public-payment-receipt")
 
+    def test_only_confirmed_guest_reservations_can_download_einvoice(self):
+        self.client.force_login(self.user)
+        reservation = Reservation.objects.create(
+            guest=self.user,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(days=1),
+            status=Reservation.Status.CONFIRMED,
+        )
+        reservation.raw_amount = Decimal("100.00")
+        reservation.save(update_fields=["raw_amount", "updated_at"])
+        calendar_entry = Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+            status=Calendar.Status.CONFIRMED,
+        )
+        detail_url = reverse(
+            "public-reservation-detail",
+            kwargs={"reservation_id": reservation.pk},
+        )
+        invoice_url = reverse(
+            "public-reservation-einvoice",
+            kwargs={"reservation_id": reservation.pk},
+        )
+
+        detail_response = self.client.get(detail_url)
+        invoice_response = self.client.get(invoice_url)
+        self.assertContains(detail_response, "Download E-Invoice")
+        self.assertEqual(invoice_response.status_code, 200)
+        self.assertTrue(invoice_response.content.startswith(b"%PDF-"))
+
+        calendar_entry.status = Calendar.Status.COMPLETED
+        calendar_entry.save(update_fields=["status", "updated_at"])
+        completed_detail_response = self.client.get(detail_url)
+        self.assertNotContains(completed_detail_response, "Download E-Invoice")
+        self.assertEqual(self.client.get(invoice_url).status_code, 404)
+
+        calendar_entry.status = Calendar.Status.CONFIRMED
+        calendar_entry.save(update_fields=["status", "updated_at"])
+        other_user = User.objects.create_user(
+            username="einvoice_other_guest",
+            email="einvoice-other@example.com",
+            password="test-password",
+            first_name="Other",
+            last_name="Guest",
+            phone_number_code="+1",
+            phone_number="5555550617",
+            email_confirmed_at=timezone.now(),
+        )
+        self.client.force_login(other_user)
+        self.assertEqual(self.client.get(invoice_url).status_code, 404)
+
     def test_pending_reservation_shows_pending_payment_items(self):
         self.client.force_login(self.user)
         reservation = Reservation.objects.create(

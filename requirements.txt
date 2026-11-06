@@ -12,3 +12,5 @@ langchain-google-genai
 langchain-core
 langchain-text-splitters
 numpy
+weasyprint>=62.0
+jinja2>=3.1

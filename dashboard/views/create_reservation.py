@@ -13,6 +13,7 @@ from django.views import View
 
 from account.decoration.role_required import normal_user_not_allowed, role_required
 from account.models import User
+from app.invoices import queue_einvoice_email_on_commit
 from dashboard.decorations.branch_check import check_branch_dashboard
 from dashboard.billing import RATE_REQUIRED_ERROR, calculate_total_amount
 from dashboard.models import Calendar, Facility, Reservation
@@ -316,6 +317,8 @@ class CreateReservationView(View):
                 self.template_name,
                 self.get_form_context(request, form_data, errors),
             )
+        if status == Reservation.Status.CONFIRMED:
+            queue_einvoice_email_on_commit(request, reservation.pk)
         reservations_url = reverse(
             "reservations",
             kwargs={"branch": request.branch.slug},

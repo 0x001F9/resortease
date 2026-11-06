@@ -2,11 +2,13 @@ from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from account.models import User
+from app.invoices import build_einvoice_context
 from dashboard.billing import calculate_total_amount
 from dashboard.models import (
     Branch,
@@ -385,7 +387,7 @@ class ReservationExtraHourPricingTests(TestCase):
                 "party_size": "1",
                 "special_requests": "",
                 "discount": "0.00",
-                "status": Calendar.Status.CANCELLED,
+                "status": Calendar.Status.CONFIRMED,
             },
         )
 
@@ -1780,6 +1782,9 @@ class CalendarEntryViewTests(TestCase):
                 self.assertContains(response, 'data-extra-hour-rate="15"')
                 self.assertContains(response, "Extra-hour surcharge")
 
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
+    )
     def test_calendar_booking_is_confirmed_and_added_to_calendar(self):
         self.facility.rate_morning = 90
         self.facility.save()
@@ -1793,19 +1798,20 @@ class CalendarEntryViewTests(TestCase):
             last_name="Booking",
         )
         starts_at = timezone.localdate() + timedelta(days=1)
-        response = self.client.post(
-            reverse(
-                "create-booking",
-                kwargs={"branch": self.branch.slug},
-            ),
-            {
-                "facility": str(self.facility.pk),
-                "guest": str(guest.pk),
-                "starts_at": f"{starts_at.isoformat()}T08:00",
-                "rate_package": "morning",
-                "status": Reservation.Status.PENDING,
-            },
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                reverse(
+                    "create-booking",
+                    kwargs={"branch": self.branch.slug},
+                ),
+                {
+                    "facility": str(self.facility.pk),
+                    "guest": str(guest.pk),
+                    "starts_at": f"{starts_at.isoformat()}T08:00",
+                    "rate_package": "morning",
+                    "status": Reservation.Status.PENDING,
+                },
+            )
 
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(
@@ -1818,6 +1824,162 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(reservation.party_size, 1)
         self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
         self.assertEqual(calendar_entry.status, Calendar.Status.CONFIRMED)
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        attachment = mail.outbox[0].attachments[0]
+        self.assertEqual(
+            attachment[0],
+            f"e-invoice-{calendar_entry.booking_reference}.pdf",
+        )
+        self.assertEqual(attachment[2], "application/pdf")
+        self.assertTrue(attachment[1].startswith(b"%PDF-"))
+
+    def test_einvoice_lists_pending_and_succeeded_payments_pending_first(self):
+        self.facility.rate_24hours = Decimal("1000.00")
+        self.facility.save(update_fields=["rate_24hours", "updated_at"])
+        guest = User.object.create(
+            username="einvoice_payment_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234507",
+            email="einvoice_payment_guest@example.com",
+            first_name="Invoice",
+            last_name="Guest",
+        )
+        starts_at = timezone.now() + timedelta(days=2)
+        reservation = Reservation.objects.create(
+            guest=guest,
+            facility=self.facility,
+            starts_at=starts_at,
+            ends_at=starts_at + timedelta(hours=24),
+            rate_package=Reservation.RatePackage.TWENTY_FOUR_HOURS,
+            status=Reservation.Status.CONFIRMED,
+            discount=Decimal("50.00"),
+        )
+        Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Paid first",
+            amount=Decimal("100.00"),
+            method="cash",
+            status=Payment.Status.SUCCEEDED,
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Awaiting payment",
+            amount=Decimal("50.00"),
+            method="cash",
+            status=Payment.Status.PENDING,
+        )
+        Payment.objects.create(
+            reservation_id=reservation,
+            name="Cancelled payment",
+            amount=Decimal("25.00"),
+            method="cash",
+            status=Payment.Status.CANCELLED,
+        )
+
+        context = build_einvoice_context(reservation)
+
+        self.assertEqual(
+            context["invoice"]["number"],
+            str(reservation.calendar_entry.booking_reference),
+        )
+        self.assertEqual(
+            [item["description"] for item in context["items"]],
+            [
+                f"Facility reservation - {self.facility.name}",
+                "Awaiting Payment",
+                "Paid First",
+            ],
+        )
+        self.assertEqual(
+            [item["status"] for item in context["items"]],
+            ["Charge", "Pending", "Succeeded"],
+        )
+        self.assertEqual(
+            [item["amount"] for item in context["items"]],
+            [
+                Decimal("1000.00"),
+                Decimal("50.00"),
+                Decimal("100.00"),
+            ],
+        )
+        self.assertEqual(context["totals"]["paid"], Decimal("100.00"))
+        self.assertEqual(context["totals"]["pending"], Decimal("50.00"))
+        self.assertEqual(context["totals"]["total"], Decimal("950.00"))
+        self.assertEqual(context["balance"], Decimal("850.00"))
+        self.assertEqual(context["invoice"]["notes"], "")
+
+    def test_only_confirmed_reservations_can_download_einvoice(self):
+        guest = User.object.create(
+            username="einvoice_download_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234508",
+            email="einvoice_download_guest@example.com",
+            first_name="Download",
+            last_name="Guest",
+        )
+        starts_at = timezone.now() + timedelta(days=2)
+        reservation = Reservation.objects.create(
+            guest=guest,
+            facility=self.facility,
+            starts_at=starts_at,
+            ends_at=starts_at + timedelta(hours=24),
+            status=Reservation.Status.CONFIRMED,
+        )
+        calendar_entry = Calendar.objects.create(
+            reservation=reservation,
+            facility=self.facility,
+            starts_at=reservation.starts_at,
+            ends_at=reservation.ends_at,
+            status=Calendar.Status.CONFIRMED,
+        )
+        detail_url = reverse(
+            "reservation-detail",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+        invoice_url = reverse(
+            "reservation-einvoice",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        confirmed_detail = self.client.get(detail_url)
+        confirmed_invoice = self.client.get(invoice_url)
+        self.assertContains(confirmed_detail, "Download E-Invoice")
+        self.assertEqual(confirmed_invoice.status_code, 200)
+        self.assertEqual(confirmed_invoice["Content-Type"], "application/pdf")
+        self.assertTrue(confirmed_invoice.content.startswith(b"%PDF-"))
+        self.assertIn(
+            str(calendar_entry.booking_reference),
+            confirmed_invoice["Content-Disposition"],
+        )
+
+        calendar_entry.status = Calendar.Status.COMPLETED
+        calendar_entry.save(update_fields=["status", "updated_at"])
+        completed_detail = self.client.get(detail_url)
+        completed_invoice = self.client.get(invoice_url)
+        self.assertNotContains(completed_detail, "Download E-Invoice")
+        self.assertEqual(completed_invoice.status_code, 404)
+
+        calendar_entry.status = Calendar.Status.CANCELLED
+        calendar_entry.save(update_fields=["status", "updated_at"])
+        cancelled_detail = self.client.get(detail_url)
+        cancelled_invoice = self.client.get(invoice_url)
+        self.assertNotContains(cancelled_detail, "Download E-Invoice")
+        self.assertEqual(cancelled_invoice.status_code, 404)
 
     def test_reservation_detail_page_shows_booking_and_payment_details(self):
         starts_at = timezone.make_aware(
@@ -2388,6 +2550,9 @@ class CalendarEntryViewTests(TestCase):
             Reservation.Status.PENDING,
         )
 
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend"
+    )
     def test_editing_pending_reservation_can_confirm_and_create_calendar_entry(self):
         starts_at = timezone.localtime(timezone.now()).replace(
             second=0,
@@ -2418,21 +2583,22 @@ class CalendarEntryViewTests(TestCase):
             },
         )
 
-        response = self.client.post(
-            url,
-            {
-                "starts_at": timezone.localtime(starts_at).strftime(
-                    "%Y-%m-%dT%H:%M"
-                ),
-                "ends_at": timezone.localtime(ends_at).strftime(
-                    "%Y-%m-%dT%H:%M"
-                ),
-                "party_size": "1",
-                "special_requests": "",
-                "discount": "0.00",
-                "status": Reservation.Status.CONFIRMED,
-            },
-        )
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            response = self.client.post(
+                url,
+                {
+                    "starts_at": timezone.localtime(starts_at).strftime(
+                        "%Y-%m-%dT%H:%M"
+                    ),
+                    "ends_at": timezone.localtime(ends_at).strftime(
+                        "%Y-%m-%dT%H:%M"
+                    ),
+                    "party_size": "1",
+                    "special_requests": "",
+                    "discount": "0.00",
+                    "status": Reservation.Status.CONFIRMED,
+                },
+            )
 
         self.assertRedirects(
             response,
@@ -2452,6 +2618,29 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(calendar_entry.starts_at, starts_at)
         self.assertEqual(calendar_entry.ends_at, ends_at)
         self.assertEqual(calendar_entry.notes, reservation.special_requests)
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [guest.email])
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            repeated_edit_response = self.client.post(
+                url,
+                {
+                    "starts_at": timezone.localtime(starts_at).strftime(
+                        "%Y-%m-%dT%H:%M"
+                    ),
+                    "ends_at": timezone.localtime(ends_at).strftime(
+                        "%Y-%m-%dT%H:%M"
+                    ),
+                    "party_size": "1",
+                    "special_requests": "",
+                    "discount": "0.00",
+                    "status": Calendar.Status.CANCELLED,
+                },
+            )
+        self.assertEqual(repeated_edit_response.status_code, 302)
+        self.assertEqual(len(callbacks), 0)
+        self.assertEqual(len(mail.outbox), 1)
 
     def test_edit_reservation_allows_party_size_above_facility_capacity(self):
         self.facility.capacity = 4
@@ -4186,19 +4375,19 @@ class InventoryViewTests(TestCase):
             reverse("user-profile", kwargs={"username": self.user.username}),
         )
 
-    def test_inventory_value_uses_compact_number_format(self):
+    def test_inventory_value_uses_thousands_separators(self):
         self.inventory_item.quantity_on_hand = 2000
         self.inventory_item.unit_cost = Decimal("1.50")
         self.inventory_item.save(update_fields=["quantity_on_hand", "unit_cost"])
         url = reverse("inventory", kwargs={"branch": self.branch.slug})
 
         thousand_response = self.client.get(url)
-        self.assertContains(thousand_response, "₱ 3K")
+        self.assertContains(thousand_response, "₱ 3,000.00")
 
         self.inventory_item.unit_cost = Decimal("1500.00")
         self.inventory_item.save(update_fields=["unit_cost"])
         million_response = self.client.get(url)
-        self.assertContains(million_response, "₱ 3M")
+        self.assertContains(million_response, "₱ 3,000,000.00")
 
     def test_inventory_page_shows_overdue_assets_card_linking_to_asset_activity(self):
         self.asset.due_date = timezone.now() - timedelta(minutes=1)
@@ -6487,6 +6676,8 @@ class DashboardAndFinancialReportTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "₱550.00")
+        self.assertContains(response, "₱295.00")
         self.assertEqual(response.context["discounts"], Decimal("10.00"))
         self.assertEqual(response.context["total_revenue"], Decimal("295.00"))
         self.assertEqual(response.context["payments_collected"], Decimal("550.00"))

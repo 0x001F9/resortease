@@ -1,0 +1,212 @@
+/* ---------- Design tokens ---------- */
+:root {
+  --accent: #1f4fd8;
+  --accent-soft: #eef2fe;
+  --ink: #1b1f2a;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --paid: #15803d;
+  --unpaid: #b45309;
+  --overdue: #b91c1c;
+}
+
+/* ---------- Page setup (WeasyPrint @page) ---------- */
+@page {
+  size: 8.5in 13in;
+  margin: 12mm 16mm 16mm 16mm;
+
+  @bottom-left {
+    content: "Thank you for your business";
+    font: 8pt "Helvetica", "Arial", sans-serif;
+    color: #6b7280;
+  }
+  @bottom-right {
+    content: "Page " counter(page) " of " counter(pages);
+    font: 8pt "Helvetica", "Arial", sans-serif;
+    color: #6b7280;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html {
+  font-family: "Helvetica Neue", "Helvetica", "Arial", sans-serif;
+  font-size: 9pt;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+body { margin: 0; }
+p { margin: 0; }
+h1, h2 { margin: 0; }
+
+.muted { color: var(--muted); font-size: 8.5pt; }
+.muted-light { color: var(--muted); }
+.strong { font-weight: 700; }
+
+/* ---------- Header ---------- */
+.header {
+  display: table;
+  width: 100%;
+  padding-bottom: 6mm;
+  border-bottom: 2px solid var(--accent);
+}
+.brand, .doc-title { display: table-cell; vertical-align: middle; }
+.brand { width: 60%; }
+.doc-title { text-align: right; width: 40%; }
+
+.logo {
+  display: inline-block;
+  vertical-align: middle;
+  width: 12mm; height: 12mm;
+  line-height: 12mm;
+  text-align: center;
+  background: var(--accent);
+  color: #fff;
+  font-size: 18pt;
+  font-weight: 700;
+  border-radius: 3mm;
+}
+.brand-text { display: inline-block; vertical-align: middle; }
+.brand-name { font-size: 13pt; font-weight: 700; }
+
+h1 {
+  font-size: 26pt;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  line-height: 1;
+}
+.invoice-number { margin-top: 2mm; font-size: 10.5pt; font-weight: 600; }
+
+.badge {
+  display: inline-block;
+  margin-top: 2.5mm;
+  padding: 0.8mm 3.5mm;
+  border-radius: 10mm;
+  border: 1px solid currentColor;
+  font-size: 7.5pt;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.badge-paid    { color: var(--paid); }
+.badge-unpaid  { color: var(--unpaid); }
+.badge-overdue { color: var(--overdue); }
+
+/* ---------- Parties ---------- */
+.parties {
+  display: table;
+  width: 100%;
+  margin-top: 6mm;
+  table-layout: fixed;
+}
+.party { display: table-cell; vertical-align: top; padding-right: 6mm; }
+.party.meta { padding-right: 0; }
+
+h2 {
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin-bottom: 2mm;
+}
+h2.spaced { margin-top: 5mm; }
+
+.meta-table { width: 100%; border-collapse: collapse; }
+.meta-table th {
+  text-align: left; font-weight: 400; color: var(--muted);
+  padding: 0.8mm 0;
+}
+.meta-table td { text-align: right; font-weight: 600; padding: 0.8mm 0; }
+
+/* ---------- Amount due banner ---------- */
+.amount-due {
+  margin-top: 6mm;
+  padding: 3mm 5mm;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 1.5mm;
+}
+.amount-due span:first-child {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 8pt;
+  color: var(--muted);
+  margin-right: 4mm;
+}
+.amount-due strong { font-size: 16pt; color: var(--accent); margin-right: 3mm; }
+
+/* ---------- Line items ---------- */
+table.items {
+  width: 100%;
+  margin-top: 6mm;
+  border-collapse: collapse;
+}
+table.items thead { display: table-header-group; } /* repeats header on each page */
+table.items th {
+  text-align: left;
+  font-size: 7.5pt;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #fff;
+  background: var(--accent);
+  padding: 2.5mm 3mm;
+  border: 0;
+}
+table.items td {
+  padding: 1.9mm 3mm;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+table.items tr { break-inside: avoid; page-break-inside: avoid; }
+table.items tbody tr:nth-child(even) td { background: #fafafa; }
+
+.num { text-align: right !important; white-space: nowrap; }
+.col-num   { width: 8mm; color: var(--muted); }
+.col-total { width: 28mm; }
+
+.item-title   { font-weight: 600; }
+.item-details { color: var(--muted); font-size: 8.5pt; margin-top: 0.5mm; }
+
+/* ---------- Payment details + totals ---------- */
+.totals-row {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+  margin-top: 6mm;
+  break-inside: avoid;
+}
+.cell-left  { display: table-cell; vertical-align: top; width: 52%; padding-right: 8mm; }
+.cell-right { display: table-cell; vertical-align: top; width: 48%; }
+
+table.summary { width: 100%; border-collapse: collapse; text-align: left; }
+table.summary th { font-weight: 400; color: var(--muted); padding: 1.1mm 3mm; }
+table.summary td { text-align: right; padding: 1.1mm 3mm; }
+table.summary tr.grand th,
+table.summary tr.grand td {
+  border-top: 2px solid var(--ink);
+  padding-top: 3mm;
+  font-size: 12pt;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* ---------- Footer blocks ---------- */
+.footer-blocks {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+  margin-top: 4mm;
+  padding-top: 3mm;
+  border-top: 1px solid var(--line);
+  break-inside: avoid;
+}
+.block { display: table-cell; vertical-align: top; padding-right: 8mm; }
+.block:last-child { padding-right: 0; }
+
+table.kv { border-collapse: collapse; width: 100%; }
+table.kv th {
+  text-align: left; font-weight: 400; color: var(--muted);
+  padding: 0.8mm 3mm 0.8mm 0; white-space: nowrap; width: 28mm;
+}
+table.kv td { font-weight: 600; padding: 0.8mm 0; }

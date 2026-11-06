@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>E-Invoice {{ invoice.number }}</title>
+  <meta name="author" content="ResortEase Authors">
+  <meta name="description" content="Invoice {{ invoice.number }} for {{ client.name }}">
+  <style>
+    {{ css | safe }}
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div class="brand">
+      <div class="brand-text">
+        <div class="brand-name">ResortEase Software</div>
+        <div class="muted">Make room for a slower day.</div>
+      </div>
+    </div>
+    <div class="doc-title">
+      <h1>Invoice</h1>
+      <div class="invoice-number">{{ invoice.number }}</div>
+    </div>
+  </header>
+
+  <section class="parties">
+    <div class="party">
+      <h2>From</h2>
+      <p class="strong">{{ branch.name }}</p>
+      <p>{{ branch.address }}{% if branch.city %}, {{ branch.city }}{% endif %}</p>
+      {% if branch.email %}<p>{{ branch.email }}</p>{% endif %}
+      {% if branch.phone_number %}<p>{{ branch.phone_number }}</p>{% endif %}
+    </div>
+    <div class="party">
+      <h2>Billed to</h2>
+      <p class="strong">{{ client.name }}</p>
+      <p>{{ client.number }}</p>
+      <p>{{ client.address }}</p>
+      <p>{{ client.email }}</p>
+    </div>
+    <div class="party meta">
+      <table class="meta-table">
+        <tr><th>Issue Date</th><td>{{ issue_date }}</td></tr>
+        <tr><th>Party Start</th><td>{{ party_start }}</td></tr>
+        <tr><th>Party End</th><td>{{ party_end }}</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section class="amount-due">
+    <span>Amount due</span>
+    <strong>{% if balance is not none %}₱{{ balance|amount_format }}{% else %}Rate not set{% endif %}</strong>
+    <span class="muted-light">by {{ party_end }}</span>
+  </section>
+
+  <table class="items">
+    <thead>
+      <tr>
+        <th class="col-num">#</th>
+        <th class="col-desc">Description</th>
+        <th>Status</th>
+        <th class="col-total num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td class="col-num">{{ loop.index }}</td>
+        <td class="col-desc">
+          <div class="item-title">{{ item.description }}</div>
+        </td>
+        <td>{{ item.status }}</td>
+        <td class="num">₱{{ item.amount|amount_format }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No pending or succeeded payments have been recorded.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <section class="totals-row">
+    <div class="cell-left">
+      <h2>Payment methods</h2>
+      <table class="kv">
+        <tr><th>GCash</th><td>ResortEase</td></tr>
+        <tr><th>Maya</th><td>ResortEase</td></tr>
+        <tr><th>MariBank</th><td>ResortEase</td></tr>
+        <tr><th>Cash</th><td>{{ branch_address }}</td></tr>
+      </table>
+    </div>
+    <div class="cell-right">
+      <table class="summary">
+        <tr><th>Subtotal</th><td>{% if totals.subtotal is not none %}₱{{ totals.subtotal|amount_format }}{% else %}—{% endif %}</td></tr>
+        {% if totals.discount %}
+        <tr><th>Discount</th><td>&minus; ₱{{ totals.discount|amount_format }}</td></tr>
+        {% endif %}
+        <tr><th>Total paid</th><td>₱{{ totals.paid|amount_format }}</td></tr>
+        {% if totals.pending %}
+        <tr><th>Pending payments</th><td>₱{{ totals.pending|amount_format }}</td></tr>
+        {% endif %}
+        <tr class="grand"><th>Balance due</th><td>{% if balance is not none %}₱{{ balance|amount_format }}{% else %}—{% endif %}</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section class="footer-blocks">
+    <div class="block">
+      <h2>Notes</h2>
+      <p>Please contact {{ branch.name }} before making payment.</p>
+      {% if invoice.notes %}<p>{{ invoice.notes }}</p>{% endif %}
+    </div>
+    <div class="block">
+      <h2>Terms</h2>
+      <p>If this reservation is cancelled, the refund is 50% of successful payments received. Contact {{ branch.name }} to arrange the refund. Payment status reflects records available on the issue date.</p>
+    </div>
+  </section>
+
+</body>
+</html>

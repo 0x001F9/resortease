@@ -77,6 +77,9 @@ class ReservationDetailView(View):
             {
                 "reservation": reservation,
                 "calendar_entry": calendar_entry,
+                "can_download_einvoice": (
+                    reservation.current_status == Calendar.Status.CONFIRMED
+                ),
                 "availability_conflict": availability_conflict,
                 "payments": payments,
                 "pending_payments": pending_payments,
