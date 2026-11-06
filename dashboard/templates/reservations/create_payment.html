@@ -1,4 +1,5 @@
 {% extends "../partials/layout.html" %}
+{% load compact_numbers %}
 
 {% block content %}
 <main class="px-4 py-6 sm:px-6 lg:px-8">
@@ -24,21 +25,21 @@
                 <dl class="grid gap-3 rounded-box border border-base-300 p-4 sm:grid-cols-3">
                     <div>
                         <dt class="text-sm text-base-content/60">Reservation total</dt>
-                        <dd class="font-semibold">{% if reservation.total_amount is not None %}₱ {{ reservation.total_amount|floatformat:2 }}{% else %}—{% endif %}</dd>
+                        <dd class="font-semibold">{% if reservation.total_amount is not None %}₱ {{ reservation.total_amount|amount_format }}{% else %}—{% endif %}</dd>
                     </div>
                     <div>
                         <dt class="text-sm text-base-content/60">Paid so far</dt>
-                        <dd class="font-semibold">₱ {{ paid_total|floatformat:2 }}</dd>
+                        <dd class="font-semibold">₱ {{ paid_total|amount_format }}</dd>
                     </div>
                     {% if is_refund %}
                         <div>
                             <dt class="text-sm text-base-content/60">Refund (50% of amount paid)</dt>
-                            <dd class="font-semibold">₱ {{ refund_amount|floatformat:2 }}</dd>
+                            <dd class="font-semibold">₱ {{ refund_amount|amount_format }}</dd>
                         </div>
                     {% else %}
                         <div>
                             <dt class="text-sm text-base-content/60">Remaining balance</dt>
-                            <dd class="font-semibold">{% if remaining_balance is not None %}₱ {{ remaining_balance|floatformat:2 }}{% else %}—{% endif %}</dd>
+                            <dd class="font-semibold">{% if remaining_balance is not None %}₱ {{ remaining_balance|amount_format }}{% else %}—{% endif %}</dd>
                         </div>
                     {% endif %}
                 </dl>

@@ -72,6 +72,6 @@ def reservation_completion_payment_error(
     if remaining_balance:
         return (
             "The booking cannot be completed until its balance is paid. "
-            f"Remaining balance: ₱{remaining_balance:.2f}."
+            f"Remaining balance: ₱{remaining_balance:,.2f}."
         )
     return None

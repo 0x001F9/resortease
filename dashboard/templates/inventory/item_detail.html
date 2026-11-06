@@ -1,4 +1,5 @@
 {% extends "../partials/layout.html" %}
+{% load compact_numbers %}
 
 {% block content %}
 <main class="mx-auto max-w-[100rem] p-4 pb-10 sm:p-5 lg:p-7">
@@ -27,15 +28,15 @@
         <div class="card border border-base-content/10 bg-base-100 shadow-sm">
             <div class="card-body p-4">
                 <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">Total sold amount</p>
-                <div class="mt-2 text-3xl font-bold">₱ {{ total_sold_amount|floatformat:2 }}</div>
+                <div class="mt-2 text-3xl font-bold">₱ {{ total_sold_amount|amount_format }}</div>
                 <div class="mt-1 text-sm text-base-content/60">From consumed transactions this month</div>
             </div>
         </div>
         <div class="card border border-base-content/10 bg-base-100 shadow-sm">
             <div class="card-body p-4">
                 <p class="text-xs uppercase tracking-[0.18em] text-base-content/60">Stock value</p>
-                <div class="mt-2 text-3xl font-bold">{% if item.stock_value is not None %}₱ {{ item.stock_value|floatformat:2 }}{% else %}—{% endif %}</div>
-                <div class="mt-1 text-sm text-base-content/60">{% if item.unit_cost %}₱ {{ item.unit_cost|floatformat:2 }} each{% else %}No unit cost{% endif %}</div>
+                <div class="mt-2 text-3xl font-bold">{% if item.stock_value is not None %}₱ {{ item.stock_value|amount_format }}{% else %}—{% endif %}</div>
+                <div class="mt-1 text-sm text-base-content/60">{% if item.unit_cost %}₱ {{ item.unit_cost|amount_format }} each{% else %}No unit cost{% endif %}</div>
             </div>
         </div>
     </section>
@@ -95,11 +96,11 @@
             </div>
             <div>
                 <dt class="text-sm text-base-content/60">Unit cost</dt>
-                <dd class="mt-1 font-medium">{% if item.unit_cost != None %}₱ {{ item.unit_cost|floatformat:2 }}{% else %}—{% endif %}</dd>
+                <dd class="mt-1 font-medium">{% if item.unit_cost != None %}₱ {{ item.unit_cost|amount_format }}{% else %}—{% endif %}</dd>
             </div>
             <div>
                 <dt class="text-sm text-base-content/60">Stock value</dt>
-                <dd class="mt-1 font-medium">{% if item.stock_value != None %}₱ {{ item.stock_value|floatformat:2 }}{% else %}—{% endif %}</dd>
+                <dd class="mt-1 font-medium">{% if item.stock_value != None %}₱ {{ item.stock_value|amount_format }}{% else %}—{% endif %}</dd>
             </div>
             <div>
                 <dt class="text-sm text-base-content/60">Last updated</dt>
@@ -140,7 +141,7 @@
                         <td>{{ transaction.get_transaction_type_display }}</td>
                         <td>{% if transaction.quantity_change > 0 %}+{% endif %}{{ transaction.quantity_change }}</td>
                         <td>{{ transaction.balance_after }}</td>
-                        <td>{% if transaction.unit_cost != None %}₱ {{ transaction.unit_cost|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td>{% if transaction.unit_cost != None %}₱ {{ transaction.unit_cost|amount_format }}{% else %}—{% endif %}</td>
                         <td>{{ transaction.reference|default:"—" }}</td>
                         <td>{% include "partials/account_link.html" with account_user=transaction.performed_by account_link_class="link link-hover" %}</td>
                         <td>{{ transaction.notes|default:"—" }}</td>

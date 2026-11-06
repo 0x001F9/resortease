@@ -31,3 +31,16 @@ def compact_number(value):
             return f"{formatted}{suffix}"
 
     return format(number, ".2f")
+
+
+@register.filter
+def amount_format(value):
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return value
+
+    if not number.is_finite():
+        return value
+
+    return format(number, ",.2f")

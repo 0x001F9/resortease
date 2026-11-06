@@ -73,7 +73,7 @@ class PaymentForm(forms.ModelForm):
             self.fields["amount"].widget.attrs["max"] = f"{refund_limit:.2f}"
             self.fields["amount"].help_text = (
                 f"Refunds cannot exceed the remaining amount paid: "
-                f"₱ {refund_limit:.2f}."
+                f"₱ {refund_limit:,.2f}."
             )
         selected_status = (
             self.data.get(self.add_prefix("status"))

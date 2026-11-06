@@ -26,9 +26,14 @@ from dashboard.forms import (
     PaymentForm,
     ReservationEditForm,
 )
+from dashboard.templatetags.compact_numbers import amount_format
 
 
 class NameAndTitleFormattingTests(TestCase):
+    def test_amount_format_adds_thousands_separators(self):
+        self.assertEqual(amount_format(Decimal("1234.5")), "1,234.50")
+        self.assertEqual(amount_format(Decimal("-1234567.89")), "-1,234,567.89")
+
     def test_form_fields_normalize_names_and_titles_before_save(self):
         test_values = (
             (InventoryItemCreateForm(), "name"),

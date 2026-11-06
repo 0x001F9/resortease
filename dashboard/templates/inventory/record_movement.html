@@ -271,6 +271,10 @@
         const unitCostField = document.getElementById("movement-unit-cost-field");
         const consumedTotalField = document.getElementById("movement-consumed-total-field");
         const consumedTotal = document.getElementById("movement-consumed-total");
+        const amountFormat = new Intl.NumberFormat("en-PH", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
         const inventoryQuantities = JSON.parse(document.getElementById("inventory-quantities").textContent);
         const quantityByInventory = new Map(
             inventoryQuantities.map((inventory) => [
@@ -309,7 +313,7 @@
             } else if (!Number.isInteger(quantity) || quantity < 1) {
                 consumedTotal.textContent = "Enter a quantity";
             } else {
-                consumedTotal.textContent = `₱ ${(Number(unitCost) * quantity).toFixed(2)}`;
+                consumedTotal.textContent = `₱ ${amountFormat.format(Number(unitCost) * quantity)}`;
             }
         };
         transactionType.addEventListener("change", updateInventoryFields);

@@ -1,4 +1,5 @@
 {% extends "partials/layout.html" %}
+{% load compact_numbers %}
 
 {% block extra_head %}
 	{% load static %}
@@ -29,7 +30,7 @@
 			{% if can_view_financial_reports %}
 				<a class="card border border-base-300 bg-base-100 p-5 transition hover:border-primary/50 hover:shadow-md" href="{% url 'financial-reports' request.branch.slug %}?branch={{ request.branch.slug }}">
 					<span class="text-xs font-bold uppercase tracking-wider text-base-content/60">Reservation revenue</span>
-					<span class="mt-2 text-3xl font-bold">₱ {{ month_revenue|floatformat:2 }}</span>
+					<span class="mt-2 text-3xl font-bold">₱ {{ month_revenue|amount_format }}</span>
 					<span class="mt-1 text-sm text-base-content/65">Payments received this month</span>
 				</a>
 			{% endif %}
