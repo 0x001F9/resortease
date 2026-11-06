@@ -16,11 +16,11 @@ The scheduling domain uses two connected models:
 - `Calendar.status` uses `confirmed`, `cancelled`, `completed`, or `unavailable`.
 - Keep these status domains separate. Do not write a Calendar status into `Reservation.status`.
 - Every Reservation linked to a Calendar entry must have `Reservation.status == confirmed`, regardless of whether the Calendar status is confirmed, cancelled, or completed.
-- For pending or declined reservations, edit the form using Reservation statuses and do not create or update a Calendar entry.
+- For pending or declined reservations, edit the form using Reservation statuses. When a pending reservation is confirmed, create its Calendar entry as part of the edit; declined reservations do not create or update a Calendar entry.
+- Guests may edit only their own pending reservations. Confirmed and declined reservations are not guest-editable; staff dashboard reservation editing remains separate.
 - For confirmed reservations, edit the form using Calendar statuses and preserve `Reservation.status == confirmed`.
 - `Calendar.Status.UNAVAILABLE` is invalid for reservation-backed entries.
-- For an end date that is not passed (`ends_at >= timezone.now()`), hide and reject `Confirmed`; normally `Cancelled` and `Completed` remain valid for confirmed reservations.
-- When a Reservation is confirmed and its end date is not passed, hide and reject both `Confirmed` and `Completed` in the edit form. This applies regardless of the linked Calendar entry's current status.
+- When a Reservation is confirmed and its end date is not passed, hide and reject `Completed` in the edit form. `Confirmed` remains available, regardless of the linked Calendar entry's current status.
 - Passed confirmed reservations may show `Confirmed`, `Cancelled`, or `Completed`; they must never show `Unavailable`.
 
 ### Effective status

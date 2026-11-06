@@ -190,64 +190,47 @@ class ReservationEditForm(forms.ModelForm):
             )
         if (
             self.instance.pk
-            and (
-                self.instance.status == Reservation.Status.PENDING
-                or (
-                    self.instance.status == Reservation.Status.CONFIRMED
-                    and self.instance.ends_at >= timezone.now()
-                )
-            )
+            and self.instance.status == Reservation.Status.PENDING
         ):
-            if self.instance.status == Reservation.Status.PENDING:
-                self.fields["status"].choices = [
-                    choice
-                    for choice in Reservation.Status.choices
-                    if choice[0] != Reservation.Status.CONFIRMED
-                ]
-            else:
-                excluded_statuses = {
-                    Calendar.Status.UNAVAILABLE,
-                    Calendar.Status.CONFIRMED,
-                    Calendar.Status.COMPLETED,
-                }
-                self.fields["status"].choices = [
-                    choice
-                    for choice in Calendar.Status.choices
-                    if choice[0] not in excluded_statuses
-                ]
-        elif self.instance.pk and self.instance.status == Reservation.Status.CONFIRMED:
+            status_choices = (
+                Reservation.Status.PENDING,
+                Reservation.Status.DECLINED,
+                Reservation.Status.CONFIRMED,
+            )
+            labels = dict(Reservation.Status.choices)
+            self.fields["status"].choices = [
+                (status, labels[status]) for status in status_choices
+            ]
+        elif (
+            self.instance.pk
+            and self.instance.status == Reservation.Status.CONFIRMED
+        ):
+            ends_at = self.instance.ends_at
+            excluded_statuses = {Calendar.Status.UNAVAILABLE}
+            if ends_at >= timezone.now():
+                excluded_statuses.add(Calendar.Status.COMPLETED)
             self.fields["status"].choices = [
                 choice
                 for choice in Calendar.Status.choices
-                if choice[0] != Calendar.Status.UNAVAILABLE
+                if choice[0] not in excluded_statuses
             ]
-        elif self.instance.pk:
-            self.fields["status"].choices = Reservation.Status.choices
-            if self.instance.status == Reservation.Status.DECLINED:
-                self.fields["status"].choices = [
-                    choice
-                    for choice in Reservation.Status.choices
-                    if choice[0] != Reservation.Status.CONFIRMED
-                ]
+        elif (
+            self.instance.pk
+            and self.instance.status == Reservation.Status.DECLINED
+        ):
+            self.fields["status"].choices = [
+                choice
+                for choice in Reservation.Status.choices
+                if choice[0] != Reservation.Status.CONFIRMED
+            ]
 
         if self.instance.pk:
             current_status = self.instance.current_status
 
             choices = list(self.fields["status"].choices)
             choice_values = {value for value, _label in choices}
-            if (
-                current_status != Calendar.Status.UNAVAILABLE
-                and current_status not in choice_values
-            ):
-                current_label = dict(Calendar.Status.choices).get(
-                    current_status
-                )
-                if current_label is None:
-                    current_label = dict(Reservation.Status.choices).get(
-                        current_status
-                    )
-                if current_label is not None:
-                    choices.append((current_status, current_label))
+            if current_status not in choice_values:
+                choices.insert(0, ("", "Select a status"))
 
             self.fields["status"].choices = [
                 (
@@ -271,6 +254,8 @@ class ReservationEditForm(forms.ModelForm):
                 and current_status in choice_values
             ):
                 self.initial["status"] = current_status
+            elif current_status not in choice_values:
+                self.initial["status"] = ""
         if facility is not None and facility.capacity > 0:
             self.fields["party_size"].help_text = (
                 f"Facility capacity: {facility.capacity} guests. "
@@ -338,6 +323,16 @@ class ReservationEditForm(forms.ModelForm):
     def clean_status(self):
         status = self.cleaned_data["status"]
         if self.instance.status == Reservation.Status.PENDING:
+            valid_statuses = {
+                Reservation.Status.PENDING,
+                Reservation.Status.DECLINED,
+                Reservation.Status.CONFIRMED,
+            }
+            if status not in valid_statuses:
+                raise forms.ValidationError(
+                    "Select a valid status for this reservation."
+                )
+        elif self.instance.status == Reservation.Status.DECLINED:
             if status == Reservation.Status.CONFIRMED:
                 raise forms.ValidationError(
                     "Confirmed is not available for this reservation."
@@ -349,18 +344,8 @@ class ReservationEditForm(forms.ModelForm):
                 if value != Calendar.Status.UNAVAILABLE
             }
             ends_at = self.cleaned_data.get("ends_at", self.instance.ends_at)
-            calendar_entry = getattr(self.instance, "calendar_entry", None)
             if ends_at >= timezone.now():
-                valid_statuses.discard(Calendar.Status.CONFIRMED)
                 valid_statuses.discard(Calendar.Status.COMPLETED)
-                if (
-                    calendar_entry is not None
-                    and calendar_entry.status in {
-                        Calendar.Status.CONFIRMED,
-                        Calendar.Status.COMPLETED,
-                    }
-                ):
-                    valid_statuses.add(calendar_entry.status)
             if status not in valid_statuses:
                 raise forms.ValidationError(
                     "Select a valid status for this booking."
@@ -422,6 +407,7 @@ class ReservationEditForm(forms.ModelForm):
                 self.instance.facility,
                 starts_at,
                 ends_at,
+                self.instance.rate_package,
             )
             if raw_amount is None:
                 self.add_error("ends_at", RATE_REQUIRED_ERROR)

@@ -40,36 +40,86 @@ class ReservationManager(models.Manager):
             updated_at=timezone.now(),
         )
 
-    def calculate_raw_amount(self, facility, starts_at, ends_at):
+    def calculate_raw_amount(
+        self,
+        facility,
+        starts_at,
+        ends_at,
+        rate_package=None,
+    ):
         duration = ends_at.astimezone(datetime_timezone.utc) - starts_at.astimezone(
             datetime_timezone.utc
         )
-        rate = None
-
         day_length = timedelta(hours=24)
-        if duration >= day_length and duration % day_length == timedelta(0):
-            rate = facility.rate_24hours
-            if rate is not None:
-                rate *= duration // day_length
-        elif duration == timedelta(hours=22):
-            rate = facility.rate_22hours
-        else:
-            local_start = timezone.localtime(starts_at)
-            local_end = timezone.localtime(ends_at)
-            if (
-                local_start.time() == time(8)
-                and local_end.time() == time(17)
-                and local_start.date() == local_end.date()
-            ):
-                rate = facility.rate_morning
-            elif (
-                local_start.time() == time(19)
-                and local_end.time() == time(6)
-                and local_end.date() == local_start.date() + timedelta(days=1)
-            ):
-                rate = facility.rate_evening
 
-        return Decimal(rate) if rate is not None else None
+        if rate_package is None:
+            rate = None
+            if duration >= day_length and duration % day_length == timedelta(0):
+                rate = facility.rate_24hours
+                if rate is not None:
+                    rate *= duration // day_length
+            elif duration == timedelta(hours=22):
+                rate = facility.rate_22hours
+            else:
+                local_start = timezone.localtime(starts_at)
+                local_end = timezone.localtime(ends_at)
+                if (
+                    local_start.time() == time(8)
+                    and local_end.time() == time(17)
+                    and local_start.date() == local_end.date()
+                ):
+                    rate = facility.rate_morning
+                elif (
+                    local_start.time() == time(19)
+                    and local_end.time() == time(6)
+                    and local_end.date() == local_start.date() + timedelta(days=1)
+                ):
+                    rate = facility.rate_evening
+
+            return Decimal(rate) if rate is not None else None
+
+        package_durations = {
+            Reservation.RatePackage.TWENTY_FOUR_HOURS: day_length,
+            Reservation.RatePackage.TWENTY_TWO_HOURS: timedelta(hours=22),
+            Reservation.RatePackage.MORNING: timedelta(hours=9),
+            Reservation.RatePackage.EVENING: timedelta(hours=11),
+        }
+        package_rates = {
+            Reservation.RatePackage.TWENTY_FOUR_HOURS: facility.rate_24hours,
+            Reservation.RatePackage.TWENTY_TWO_HOURS: facility.rate_22hours,
+            Reservation.RatePackage.MORNING: facility.rate_morning,
+            Reservation.RatePackage.EVENING: facility.rate_evening,
+        }
+        package_duration = package_durations.get(rate_package)
+        rate = package_rates.get(rate_package)
+        if package_duration is None or rate is None or duration < package_duration:
+            return None
+
+        if rate_package == Reservation.RatePackage.MORNING:
+            if timezone.localtime(starts_at).time() != time(8):
+                return None
+        elif rate_package == Reservation.RatePackage.EVENING:
+            if timezone.localtime(starts_at).time() != time(19):
+                return None
+
+        if rate_package == Reservation.RatePackage.TWENTY_FOUR_HOURS:
+            package_count = duration // day_length
+            extra_duration = duration % day_length
+        else:
+            package_count = 1
+            extra_duration = duration - package_duration
+
+        extra_hour = timedelta(hours=1)
+        if extra_duration % extra_hour != timedelta(0):
+            return None
+
+        amount = Decimal(rate) * package_count
+        if extra_duration:
+            extra_rate = facility.rate_per_extra_hour
+            if extra_rate is None:
+                return None
+            amount += Decimal(extra_rate) * (extra_duration // extra_hour)
+        return amount
 
     def create(self, **kwargs):
         reservation = self.model(**kwargs)
@@ -82,6 +132,7 @@ class ReservationManager(models.Manager):
                 reservation.facility,
                 reservation.starts_at,
                 reservation.ends_at,
+                reservation.rate_package,
             )
         self._for_write = True
         reservation.save(force_insert=True, using=self.db)
@@ -93,6 +144,12 @@ class Reservation(models.Model):
         PENDING = "pending", "Pending"
         CONFIRMED = "confirmed", "Confirmed"
         DECLINED = "declined", "Declined"
+
+    class RatePackage(models.TextChoices):
+        TWENTY_FOUR_HOURS = "24hours", "24-hour rate"
+        TWENTY_TWO_HOURS = "22hours", "22-hour rate"
+        MORNING = "morning", "Morning rate"
+        EVENING = "evening", "Evening rate"
 
     guest = models.ForeignKey(
         "account.User",
@@ -108,6 +165,12 @@ class Reservation(models.Model):
     )
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
+    rate_package = models.CharField(
+        max_length=20,
+        choices=RatePackage.choices,
+        null=True,
+        blank=True,
+    )
     party_size = models.PositiveIntegerField(default=1)
     special_requests = models.TextField(blank=True)
     status = models.CharField(

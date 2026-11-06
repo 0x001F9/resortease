@@ -512,7 +512,10 @@ class EditCalendarEntryView(View):
             and ends_at > starts_at
         ):
             raw_amount = calculate_total_amount(
-                facility, starts_at, ends_at
+                facility,
+                starts_at,
+                ends_at,
+                reservation.rate_package,
             )
             if raw_amount is None:
                 errors["starts_at"] = RATE_REQUIRED_ERROR

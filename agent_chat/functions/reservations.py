@@ -60,7 +60,13 @@ def _validated_request(
     facility = reservation_data["facility"]
     starts_at = reservation_data["starts_at"]
     ends_at = reservation_data["ends_at"]
-    if calculate_total_amount(facility, starts_at, ends_at) is None:
+    rate_package = reservation_data["rate_package"]
+    if calculate_total_amount(
+        facility,
+        starts_at,
+        ends_at,
+        rate_package,
+    ) is None:
         return None, "That rate is not available for the selected time."
     if has_calendar_conflict(facility, starts_at, ends_at):
         return None, "That time is unavailable for this facility."
@@ -168,6 +174,7 @@ def add_pending_reservation(
                 facility=facility,
                 starts_at=reservation_data["starts_at"],
                 ends_at=reservation_data["ends_at"],
+                rate_package=reservation_data["rate_package"],
                 party_size=reservation_data["party_size"],
                 special_requests=reservation_data["special_requests"],
                 status=Reservation.Status.PENDING,

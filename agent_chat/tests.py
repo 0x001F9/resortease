@@ -150,6 +150,10 @@ class AgentToolTests(TestCase):
         self.assertIn("pending confirmation", result)
         self.assertEqual(reservation.guest, self.guest)
         self.assertEqual(reservation.status, Reservation.Status.PENDING)
+        self.assertEqual(
+            reservation.rate_package,
+            Reservation.RatePackage.MORNING,
+        )
         self.assertEqual(reservation.special_requests, "Near the shallow end.")
         self.assertFalse(context.requires_auth_actions)
 

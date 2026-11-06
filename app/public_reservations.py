@@ -116,7 +116,13 @@ def resume_pending_public_reservation(request):
     facility = form.cleaned_data["facility"]
     starts_at = form.cleaned_data["starts_at"]
     ends_at = form.cleaned_data["ends_at"]
-    if calculate_total_amount(facility, starts_at, ends_at) is None:
+    rate_package = form.cleaned_data["rate_package"]
+    if calculate_total_amount(
+        facility,
+        starts_at,
+        ends_at,
+        rate_package,
+    ) is None:
         return (
             None,
             branch,
@@ -152,6 +158,7 @@ def resume_pending_public_reservation(request):
             facility=facility,
             starts_at=starts_at,
             ends_at=ends_at,
+            rate_package=rate_package,
             party_size=form.cleaned_data["party_size"],
             status=Reservation.Status.PENDING,
             special_requests=form.cleaned_data["special_requests"],
@@ -204,7 +211,13 @@ class PublicReservationView(View):
             facility = form.cleaned_data["facility"]
             starts_at = form.cleaned_data["starts_at"]
             ends_at = form.cleaned_data["ends_at"]
-            raw_amount = calculate_total_amount(facility, starts_at, ends_at)
+            rate_package = form.cleaned_data["rate_package"]
+            raw_amount = calculate_total_amount(
+                facility,
+                starts_at,
+                ends_at,
+                rate_package,
+            )
             if raw_amount is None:
                 form.add_error("rate_package", RATE_REQUIRED_ERROR)
             elif (
@@ -238,6 +251,7 @@ class PublicReservationView(View):
                             facility=facility,
                             starts_at=starts_at,
                             ends_at=ends_at,
+                            rate_package=rate_package,
                             party_size=form.cleaned_data["party_size"],
                             status=Reservation.Status.PENDING,
                             special_requests=form.cleaned_data["special_requests"],
@@ -371,10 +385,7 @@ class PublicReservationDetailView(View):
                     and reservation.facility_id is not None
                 ),
                 "can_edit": (
-                    reservation.status
-                    in {Reservation.Status.PENDING, Reservation.Status.CONFIRMED}
-                    and reservation.current_status
-                    not in {Calendar.Status.CANCELLED, Calendar.Status.COMPLETED}
+                    reservation.status == Reservation.Status.PENDING
                     and reservation.starts_at > timezone.now()
                 ),
                 "calendar_notes": calendar_entry.notes if calendar_entry else "",
@@ -401,20 +412,9 @@ class EditPublicReservationView(View):
                 reservations,
                 pk=reservation_id,
                 guest=request.user,
-                status__in=(
-                    Reservation.Status.PENDING,
-                    Reservation.Status.CONFIRMED,
-                ),
+                status=Reservation.Status.PENDING,
             )
             if reservation.starts_at <= timezone.now():
-                return redirect(
-                    "public-reservation-detail",
-                    reservation_id=reservation.pk,
-                )
-            if reservation.current_status in {
-                Calendar.Status.CANCELLED,
-                Calendar.Status.COMPLETED,
-            }:
                 return redirect(
                     "public-reservation-detail",
                     reservation_id=reservation.pk,
@@ -449,7 +449,13 @@ class EditPublicReservationView(View):
                 facility = form.cleaned_data["facility"]
                 starts_at = form.cleaned_data["starts_at"]
                 ends_at = form.cleaned_data["ends_at"]
-                raw_amount = calculate_total_amount(facility, starts_at, ends_at)
+                rate_package = form.cleaned_data["rate_package"]
+                raw_amount = calculate_total_amount(
+                    facility,
+                    starts_at,
+                    ends_at,
+                    rate_package,
+                )
                 calendar_entry = getattr(reservation, "calendar_entry", None)
                 if raw_amount is None:
                     form.add_error("rate_package", RATE_REQUIRED_ERROR)
@@ -469,6 +475,7 @@ class EditPublicReservationView(View):
                     reservation.facility = facility
                     reservation.starts_at = starts_at
                     reservation.ends_at = ends_at
+                    reservation.rate_package = rate_package
                     reservation.party_size = form.cleaned_data["party_size"]
                     reservation.special_requests = form.cleaned_data[
                         "special_requests"
@@ -479,6 +486,7 @@ class EditPublicReservationView(View):
                             "facility",
                             "starts_at",
                             "ends_at",
+                            "rate_package",
                             "party_size",
                             "special_requests",
                             "raw_amount",

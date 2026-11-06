@@ -314,6 +314,10 @@ class PublicReservationFlowTests(TestCase):
         reservation = Reservation.objects.get()
         self.assertEqual(reservation.guest.username, "res_guest_new")
         self.assertEqual(reservation.status, Reservation.Status.PENDING)
+        self.assertEqual(
+            reservation.rate_package,
+            Reservation.RatePackage.TWENTY_FOUR_HOURS,
+        )
         self.assertEqual(reservation.party_size, 3)
         self.assertEqual(reservation.special_requests, "Please prepare towels.")
         self.assertEqual(reservation.discount, 0)
@@ -487,7 +491,7 @@ class PublicReservationFlowTests(TestCase):
         self.assertEqual(reservation.special_requests, "Please prepare towels.")
         self.assertEqual(reservation.status, Reservation.Status.PENDING)
 
-    def test_guest_can_edit_own_confirmed_upcoming_reservation_only(self):
+    def test_guest_cannot_edit_reservations_that_are_not_pending(self):
         reservation = Reservation.objects.create(
             guest=self.user,
             facility=self.facility,
@@ -512,15 +516,26 @@ class PublicReservationFlowTests(TestCase):
         self.assertEqual(self.client.get(edit_url).status_code, 404)
 
         self.client.force_login(self.user)
-        reservation.status = Reservation.Status.CONFIRMED
-        reservation.save(update_fields=["status", "updated_at"])
-        response = self.client.get(edit_url)
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Edit reservation")
+        detail_url = reverse(
+            "public-reservation-detail",
+            kwargs={"reservation_id": reservation.pk},
+        )
+        for status in (
+            Reservation.Status.CONFIRMED,
+            Reservation.Status.DECLINED,
+        ):
+            with self.subTest(status=status):
+                reservation.status = status
+                reservation.save(update_fields=["status", "updated_at"])
 
-        reservation.starts_at = timezone.now() - timedelta(hours=1)
-        reservation.save(update_fields=["starts_at", "updated_at"])
-        self.assertEqual(self.client.get(edit_url).status_code, 302)
+                self.assertEqual(self.client.get(edit_url).status_code, 404)
+                self.assertEqual(
+                    self.client.post(edit_url, {}).status_code,
+                    404,
+                )
+                detail_response = self.client.get(detail_url)
+                self.assertEqual(detail_response.status_code, 200)
+                self.assertNotContains(detail_response, "Edit reservation")
 
     def test_confirmed_reservation_shows_payment_history_and_balance(self):
         self.client.force_login(self.user)

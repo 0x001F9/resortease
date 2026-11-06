@@ -137,11 +137,14 @@ class EditReservationView(View):
                         form.add_error("status", completion_error)
                 if not form.errors:
                     reservation = form.save(commit=False)
-                    if original_status == Reservation.Status.CONFIRMED:
+                    was_confirmed = (
+                        original_status == Reservation.Status.CONFIRMED
+                    )
+                    if was_confirmed:
                         reservation.status = Reservation.Status.CONFIRMED
                     reservation.raw_amount = form.calculated_raw_amount
                     reservation.save()
-                    if original_status == Reservation.Status.CONFIRMED:
+                    if was_confirmed or status == Reservation.Status.CONFIRMED:
                         if calendar_entry is None:
                             Calendar.objects.create(
                                 reservation=reservation,

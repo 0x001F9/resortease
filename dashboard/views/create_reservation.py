@@ -235,7 +235,10 @@ class CreateReservationView(View):
             and ends_at is not None
         ):
             raw_amount = calculate_total_amount(
-                facility, starts_at, ends_at
+                facility,
+                starts_at,
+                ends_at,
+                rate_package,
             )
             if raw_amount is None:
                 errors["rate_package"] = RATE_REQUIRED_ERROR
@@ -292,6 +295,7 @@ class CreateReservationView(View):
                     facility=facility,
                     starts_at=starts_at,
                     ends_at=ends_at,
+                    rate_package=rate_package,
                     party_size=party_size,
                     discount=discount,
                     status=status,

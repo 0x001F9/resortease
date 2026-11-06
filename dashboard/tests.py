@@ -7,6 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from account.models import User
+from dashboard.billing import calculate_total_amount
 from dashboard.models import (
     Branch,
     Calendar,
@@ -149,6 +150,146 @@ class CreateFacilityViewTests(TestCase):
         for field in self.rate_fields:
             with self.subTest(field=field):
                 self.assertEqual(getattr(facility, field), Decimal("10.25"))
+
+
+class ReservationExtraHourPricingTests(TestCase):
+    def setUp(self):
+        branch = Branch.objects.create(
+            name="Extra Hour Branch",
+            slug="extra-hour-branch",
+            city="Test City",
+            address="1 Test Street",
+        )
+        self.facility = Facility.objects.create(
+            branch=branch,
+            name="Extra Hour Facility",
+            slug="extra-hour-facility",
+            rate_24hours=Decimal("100.00"),
+            rate_22hours=Decimal("80.00"),
+            rate_morning=Decimal("50.00"),
+            rate_evening=Decimal("60.00"),
+            rate_per_extra_hour=Decimal("15.00"),
+        )
+        self.guest = User.object.create(
+            username="extra_hour_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234501",
+            email="extra_hour_guest@example.com",
+            first_name="Extra",
+            last_name="Guest",
+        )
+        self.starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=7),
+                time(hour=9),
+            )
+        )
+
+    def test_extra_hours_are_charged_at_the_configured_rate(self):
+        cases = (
+            (
+                Reservation.RatePackage.TWENTY_FOUR_HOURS,
+                timedelta(hours=25),
+                Decimal("115.00"),
+            ),
+            (
+                Reservation.RatePackage.TWENTY_TWO_HOURS,
+                timedelta(hours=24),
+                Decimal("110.00"),
+            ),
+            (
+                Reservation.RatePackage.MORNING,
+                timedelta(hours=10),
+                Decimal("65.00"),
+            ),
+            (
+                Reservation.RatePackage.EVENING,
+                timedelta(hours=12),
+                Decimal("75.00"),
+            ),
+        )
+
+        for package, duration, expected_amount in cases:
+            with self.subTest(package=package):
+                starts_at = self.starts_at
+                if package == Reservation.RatePackage.MORNING:
+                    starts_at = starts_at.replace(hour=8)
+                elif package == Reservation.RatePackage.EVENING:
+                    starts_at = starts_at.replace(hour=19)
+                self.assertEqual(
+                    calculate_total_amount(
+                        self.facility,
+                        starts_at,
+                        starts_at + duration,
+                        package,
+                    ),
+                    expected_amount,
+                )
+
+    def test_partial_extra_hour_is_rejected(self):
+        self.assertIsNone(
+            calculate_total_amount(
+                self.facility,
+                self.starts_at,
+                self.starts_at + timedelta(hours=24, minutes=30),
+                Reservation.RatePackage.TWENTY_FOUR_HOURS,
+            )
+        )
+
+    def test_reservation_edit_accepts_whole_hour_extension_and_updates_amount(self):
+        reservation = Reservation.objects.create(
+            guest=self.guest,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(hours=24),
+            rate_package=Reservation.RatePackage.TWENTY_FOUR_HOURS,
+        )
+        form = ReservationEditForm(
+            data={
+                "starts_at": timezone.localtime(self.starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(
+                    self.starts_at + timedelta(hours=25)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Reservation.Status.PENDING,
+            },
+            instance=reservation,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.calculated_raw_amount, Decimal("115.00"))
+
+    def test_reservation_edit_rejects_partial_extra_hour(self):
+        reservation = Reservation.objects.create(
+            guest=self.guest,
+            facility=self.facility,
+            starts_at=self.starts_at,
+            ends_at=self.starts_at + timedelta(hours=24),
+            rate_package=Reservation.RatePackage.TWENTY_FOUR_HOURS,
+        )
+        form = ReservationEditForm(
+            data={
+                "starts_at": timezone.localtime(self.starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(
+                    self.starts_at + timedelta(hours=24, minutes=30)
+                ).strftime("%Y-%m-%dT%H:%M"),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Reservation.Status.PENDING,
+            },
+            instance=reservation,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("full-hour increments", form.errors["ends_at"][0])
 
 
 class CalendarEntryViewTests(TestCase):
@@ -340,7 +481,7 @@ class CalendarEntryViewTests(TestCase):
         )
         return reservation, entry
 
-    def test_upcoming_confirmed_booking_hides_confirmed_and_completed_statuses(self):
+    def test_upcoming_confirmed_booking_hides_completed_status(self):
         starts_at = timezone.now() + timedelta(days=1)
         reservation, _entry = self.create_calendar_reservation(
             starts_at,
@@ -350,13 +491,11 @@ class CalendarEntryViewTests(TestCase):
         form = ReservationEditForm(instance=reservation)
         choices = {value for value, _label in form.fields["status"].choices}
 
-        self.assertIn(Calendar.Status.CONFIRMED, choices)
-        self.assertIn(Calendar.Status.CANCELLED, choices)
-        self.assertEqual(form.initial["status"], Calendar.Status.CONFIRMED)
-        self.assertIn(
-            (Calendar.Status.CONFIRMED, "Confirmed (Current)"),
-            list(form.fields["status"].choices),
+        self.assertEqual(
+            choices,
+            {Calendar.Status.CONFIRMED, Calendar.Status.CANCELLED},
         )
+        self.assertEqual(form.initial["status"], Calendar.Status.CONFIRMED)
 
         reservation.status = Reservation.Status.PENDING
         reservation.save(update_fields=["status", "updated_at"])
@@ -369,7 +508,20 @@ class CalendarEntryViewTests(TestCase):
             {
                 Reservation.Status.PENDING,
                 Reservation.Status.DECLINED,
+                Reservation.Status.CONFIRMED,
             },
+        )
+        self.assertEqual(
+            [
+                value
+                for value, _label in form.fields["status"].choices
+                if value
+            ],
+            [
+                Reservation.Status.PENDING,
+                Reservation.Status.DECLINED,
+                Reservation.Status.CONFIRMED,
+            ],
         )
         self.assertEqual(form.initial["status"], Reservation.Status.PENDING)
         self.assertIn(
@@ -381,7 +533,15 @@ class CalendarEntryViewTests(TestCase):
         reservation.save(update_fields=["status", "updated_at"])
 
         form = ReservationEditForm(instance=reservation)
+        choices = {value for value, _label in form.fields["status"].choices}
 
+        self.assertEqual(
+            choices,
+            {
+                Reservation.Status.PENDING,
+                Reservation.Status.DECLINED,
+            },
+        )
         self.assertEqual(form.initial["status"], Reservation.Status.DECLINED)
         self.assertIn(
             (Reservation.Status.DECLINED, "Declined (Current)"),
@@ -398,12 +558,79 @@ class CalendarEntryViewTests(TestCase):
         entry.save(update_fields=["status", "updated_at"])
 
         form = ReservationEditForm(instance=reservation)
+        choices = {value for value, _label in form.fields["status"].choices}
 
+        self.assertEqual(
+            choices,
+            {
+                Calendar.Status.CONFIRMED,
+                Calendar.Status.CANCELLED,
+                Calendar.Status.COMPLETED,
+            },
+        )
         self.assertEqual(form.initial["status"], Calendar.Status.COMPLETED)
         self.assertIn(
             (Calendar.Status.COMPLETED, "Completed (Current)"),
             list(form.fields["status"].choices),
         )
+
+    def test_upcoming_confirmed_reservation_allows_confirmed_and_rejects_completed(self):
+        starts_at = timezone.localtime(timezone.now()).replace(
+            second=0,
+            microsecond=0,
+        ) + timedelta(days=1)
+        ends_at = starts_at + timedelta(hours=24)
+        reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            ends_at,
+        )
+        edit_url = reverse(
+            "edit-reservation",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        form = ReservationEditForm(instance=reservation)
+        choices = {value for value, _label in form.fields["status"].choices}
+        self.assertIn(Calendar.Status.CONFIRMED, choices)
+        self.assertNotIn(Calendar.Status.COMPLETED, choices)
+
+        confirmed_response = self.client.post(
+            edit_url,
+            {
+                "starts_at": timezone.localtime(starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(ends_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Calendar.Status.CONFIRMED,
+            },
+        )
+        self.assertEqual(confirmed_response.status_code, 302)
+
+        completed_response = self.client.post(
+            edit_url,
+            {
+                "starts_at": timezone.localtime(starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(ends_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Calendar.Status.COMPLETED,
+            },
+        )
+        self.assertEqual(completed_response.status_code, 200)
+        self.assertIn("status", completed_response.context["form"].errors)
 
     def test_edit_reservation_endpoint_defaults_to_current_calendar_status(self):
         starts_at = timezone.now() - timedelta(days=2)
@@ -1933,7 +2160,7 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(payment.method, "")
         self.assertIsNone(payment.paid_at)
 
-    def test_edit_pending_reservation_excludes_confirmed_status(self):
+    def test_edit_pending_reservation_offers_confirmed_status(self):
         self.facility.rate_24hours = 100
         self.facility.capacity = 5
         self.facility.save(update_fields=["rate_24hours", "capacity", "updated_at"])
@@ -1943,9 +2170,21 @@ class CalendarEntryViewTests(TestCase):
                 time(hour=8),
             )
         )
-        reservation, _entry = self.create_calendar_reservation(
-            starts_at,
-            starts_at + timedelta(hours=24),
+        pending_guest = User.object.create(
+            username="pending_edit_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234503",
+            email="pending_edit_guest@example.com",
+            first_name="Pending",
+            last_name="Edit",
+        )
+        reservation = Reservation.objects.create(
+            guest=pending_guest,
+            facility=self.facility,
+            starts_at=starts_at,
+            ends_at=starts_at + timedelta(hours=24),
+            status=Reservation.Status.PENDING,
         )
         new_starts_at = starts_at + timedelta(days=2)
         conflicting_guest = User.object.create(
@@ -1964,9 +2203,6 @@ class CalendarEntryViewTests(TestCase):
             ends_at=new_starts_at + timedelta(hours=24),
             status=Reservation.Status.PENDING,
         )
-        reservation.status = Reservation.Status.PENDING
-        reservation.raw_amount = Decimal("100.00")
-        reservation.save(update_fields=["status", "raw_amount", "updated_at"])
         url = reverse(
             "edit-reservation",
             kwargs={
@@ -1975,7 +2211,11 @@ class CalendarEntryViewTests(TestCase):
             },
         )
         edit_response = self.client.get(url)
-        self.assertNotContains(edit_response, '<option value="confirmed">Confirmed</option>', html=True)
+        self.assertContains(
+            edit_response,
+            '<option value="confirmed">Confirmed</option>',
+            html=True,
+        )
 
         response = self.client.post(
             url,
@@ -2013,15 +2253,79 @@ class CalendarEntryViewTests(TestCase):
         self.assertEqual(reservation.status, Reservation.Status.PENDING)
         self.assertEqual(reservation.starts_at, new_starts_at)
         self.assertEqual(reservation.raw_amount, Decimal("100.00"))
-        entry = Calendar.objects.get(reservation=reservation)
-        self.assertEqual(entry.status, Calendar.Status.CANCELLED)
-        self.assertEqual(entry.starts_at, new_starts_at)
-        self.assertEqual(entry.ends_at, new_starts_at + timedelta(hours=24))
+        self.assertFalse(
+            Calendar.objects.filter(reservation=reservation).exists()
+        )
         conflicting_reservation.refresh_from_db()
         self.assertEqual(
             conflicting_reservation.status,
             Reservation.Status.PENDING,
         )
+
+    def test_editing_pending_reservation_can_confirm_and_create_calendar_entry(self):
+        starts_at = timezone.localtime(timezone.now()).replace(
+            second=0,
+            microsecond=0,
+        ) + timedelta(days=1)
+        ends_at = starts_at + timedelta(hours=24)
+        guest = User.object.create(
+            username="pending_confirmation_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234502",
+            email="pending_confirmation_guest@example.com",
+            first_name="Pending",
+            last_name="Confirmation",
+        )
+        reservation = Reservation.objects.create(
+            guest=guest,
+            facility=self.facility,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            status=Reservation.Status.PENDING,
+        )
+        url = reverse(
+            "edit-reservation",
+            kwargs={
+                "branch": self.branch.slug,
+                "reservation_id": reservation.pk,
+            },
+        )
+
+        response = self.client.post(
+            url,
+            {
+                "starts_at": timezone.localtime(starts_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "ends_at": timezone.localtime(ends_at).strftime(
+                    "%Y-%m-%dT%H:%M"
+                ),
+                "party_size": "1",
+                "special_requests": "",
+                "discount": "0.00",
+                "status": Reservation.Status.CONFIRMED,
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse(
+                "reservation-detail",
+                kwargs={
+                    "branch": self.branch.slug,
+                    "reservation_id": reservation.pk,
+                },
+            ),
+        )
+        reservation.refresh_from_db()
+        calendar_entry = Calendar.objects.get(reservation=reservation)
+        self.assertEqual(reservation.status, Reservation.Status.CONFIRMED)
+        self.assertEqual(calendar_entry.status, Calendar.Status.CONFIRMED)
+        self.assertEqual(calendar_entry.facility, reservation.facility)
+        self.assertEqual(calendar_entry.starts_at, starts_at)
+        self.assertEqual(calendar_entry.ends_at, ends_at)
+        self.assertEqual(calendar_entry.notes, reservation.special_requests)
 
     def test_edit_reservation_allows_party_size_above_facility_capacity(self):
         self.facility.capacity = 4
@@ -2694,6 +2998,7 @@ class CalendarEntryViewTests(TestCase):
                     reservation.raw_amount,
                     expected_amount,
                 )
+                self.assertEqual(reservation.rate_package, rate_package)
                 self.assertEqual(
                     reservation.status,
                     reservation_status or Reservation.Status.CONFIRMED,
