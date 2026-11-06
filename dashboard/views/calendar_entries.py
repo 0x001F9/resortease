@@ -1,7 +1,7 @@
 from datetime import date, datetime, time, timedelta
 
 from django.db import transaction
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Q
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -50,7 +50,16 @@ def has_calendar_conflict(facility, starts_at, ends_at, exclude_entry_id=None):
         facility=facility,
         starts_at__lt=ends_at,
         ends_at__gt=starts_at,
-    ).exclude(status=Calendar.Status.CANCELLED)
+    ).filter(
+        Q(
+            reservation__isnull=False,
+            status=Calendar.Status.CONFIRMED,
+        )
+        | Q(
+            reservation__isnull=True,
+            status=Calendar.Status.UNAVAILABLE,
+        ),
+    )
     if exclude_entry_id is not None:
         entries = entries.exclude(pk=exclude_entry_id)
     return entries.exists()

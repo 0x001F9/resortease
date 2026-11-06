@@ -3335,7 +3335,7 @@ class CalendarEntryViewTests(TestCase):
 
         response = self.client.post(
             reverse(
-                "create-reservation",
+                "create-booking",
                 kwargs={"branch": self.branch.slug},
             ),
             {
@@ -3354,6 +3354,93 @@ class CalendarEntryViewTests(TestCase):
             "This facility already has an entry during that time.",
         )
         self.assertEqual(Calendar.objects.count(), 1)
+
+    def test_reservation_can_overlap_cancelled_calendar_entry(self):
+        self.facility.rate_morning = 90
+        self.facility.save()
+        guest = User.object.create(
+            username="cancelled_overlap_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234591",
+            email="cancelled_overlap_guest@example.com",
+            first_name="Cancelled",
+            last_name="Overlap",
+        )
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=9),
+            )
+        )
+        _reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=2),
+        )
+        entry.status = Calendar.Status.CANCELLED
+        entry.save()
+
+        response = self.client.post(
+            reverse(
+                "create-booking",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {
+                "facility": str(self.facility.pk),
+                "guest": str(guest.pk),
+                "starts_at": f"{starts_at.date().isoformat()}T08:00",
+                "rate_package": "morning",
+                "party_size": "1",
+                "status": Reservation.Status.CONFIRMED,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Reservation.objects.filter(guest=guest).exists())
+        self.assertEqual(Calendar.objects.count(), 2)
+
+    def test_reservation_can_overlap_completed_calendar_entry(self):
+        self.facility.rate_morning = 90
+        self.facility.save()
+        guest = User.object.create(
+            username="completed_overlap_guest",
+            role=User.Role.User,
+            phone_number_code="+1",
+            phone_number="5551234592",
+            email="completed_overlap_guest@example.com",
+            first_name="Completed",
+            last_name="Overlap",
+        )
+        starts_at = timezone.make_aware(
+            datetime.combine(
+                timezone.localdate() + timedelta(days=1),
+                time(hour=9),
+            )
+        )
+        _reservation, entry = self.create_calendar_reservation(
+            starts_at,
+            starts_at + timedelta(hours=2),
+        )
+        entry.status = Calendar.Status.COMPLETED
+        entry.save()
+
+        response = self.client.post(
+            reverse(
+                "create-booking",
+                kwargs={"branch": self.branch.slug},
+            ),
+            {
+                "facility": str(self.facility.pk),
+                "guest": str(guest.pk),
+                "starts_at": f"{starts_at.date().isoformat()}T08:00",
+                "rate_package": "morning",
+                "party_size": "1",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Reservation.objects.filter(guest=guest).exists())
+        self.assertEqual(Calendar.objects.count(), 2)
 
     def test_staff_creation_rejects_guest_overlap_across_facilities(self):
         self.facility.rate_24hours = 100
