@@ -8,8 +8,8 @@ Most resort establishments nowadays rely on manual logbooks, isolated spreadshee
 # Authors
 - Arabe, John Del Jay T.
 - Ilao, Jasmine Rose M.
-- Laxamana, Prince Jorge T.     ([princeaceayanna](https://github.com/princeaceayanna))
-- Mondero, Jhon Mark M.         ([0x00194](https://github.com/0x001F9/), [0x001F9](https://github.com/0x00194/))
+- Laxamana, Prince Jorge T.
+- Mondero, Jhon Mark M.
 - Sebastian, Rhenz Chyron G.
 - Triñanes, Dennies R.
 
